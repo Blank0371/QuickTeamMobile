@@ -1,0 +1,12 @@
+{
+  "auth": {
+    "host": "Gastgeber",
+    "employee": "Mitarbeiter",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "signIn": "Anmelden",
+    "signUp": "Registrieren",
+    "inviteCode": "Code eingeben",
+    "enter": "Bestätigen" 
+  }
+}

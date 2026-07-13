@@ -1,0 +1,12 @@
+{
+  "auth": {
+    "host": "Host",
+    "employee": "Employee",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "inviteCode": "Input Code",
+    "enter": "Enter" 
+  }
+}

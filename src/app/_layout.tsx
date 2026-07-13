@@ -2,6 +2,8 @@
 import { Stack } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 import { AuthProvider, useAuth } from "../context/auth";
+import { I18nProvider } from "../i18n/I18nProvider";
+import { ThemeProvider } from "../theme/ThemeProvider";
 
 function RootNav() {
   const { user, loading } = useAuth();
@@ -16,11 +18,12 @@ function RootNav() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      {/*
       <Stack.Protected guard={!user}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-
-      <Stack.Protected guard={!!user}>
+      */}
+      <Stack.Protected guard={!user}> {/*needs to be changed back to !!user */}
         <Stack.Screen name="(accounts)" />
         <Stack.Screen name="(tabs)" />
       </Stack.Protected>
@@ -30,8 +33,12 @@ function RootNav() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootNav />
-    </AuthProvider>
+    <ThemeProvider>
+      <I18nProvider>
+        <AuthProvider>
+          <RootNav />
+        </AuthProvider>
+      </I18nProvider>
+    </ThemeProvider>
   );
 }
