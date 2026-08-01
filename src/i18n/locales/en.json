@@ -7,6 +7,45 @@
     "signIn": "Sign in",
     "signUp": "Sign up",
     "inviteCode": "Input Code",
-    "enter": "Enter" 
+    "enter": "Enter"
+  },
+  "tabs": {
+  "messages": "Messages",
+  "todos": "To-dos",
+  "manager": "Manager",
+  "main": "Home",
+  "calendar": "Calendar",
+  "settings": "Settings"
+  },
+  "settings":{
+    "title":"Settings",
+    "account": "Account",
+    "manageAccounts":"Manage Accounts",
+    "appearance": "Appearance",
+    "mode":{
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "language":"Language",
+    "lang":{
+      "en": "English",
+      "de": "German"
+    }
+  },
+  "calendar":{
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "time": "Time",
+    "date": "Date",
+    "coworkers": "Coworkers",
+    "comment": "Comment",
+    "monday": "Mon",
+    "tuesday": "Tue",
+    "wednesday":"Wed",
+    "thursday": "Thu",
+    "friday":"Fri",
+    "saturday":"Sat"
   }
 }

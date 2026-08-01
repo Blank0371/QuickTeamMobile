@@ -15,6 +15,8 @@ const supabase = createClient(
   }
 );
 
+const MOCK = true;
+
 type AuthContextType = {
   user: Session["user"] | null;
   loading: boolean;
@@ -28,10 +30,16 @@ const Ctx = createContext<AuthContextType>({} as AuthContextType);
 export const useAuth = () => useContext(Ctx);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<Session["user"] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<Session["user"] | null>(
+  MOCK ? ({ id: "mock-id", email: "test@host.dev",role:"host" } as any) : null
+  );
+  const [loading, setLoading] = useState(!MOCK);
+  
+  //console.log("MOCK:", MOCK, "user:", user, "loading:", loading);
 
   useEffect(() => {
+     if (MOCK) return;   // ← add this
+
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
       setLoading(false);
@@ -50,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const hostSignIn = async (email: string, password: string) => {
+    if (MOCK) { setUser({ id: "mock-id", email } as any); return; }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
   };
@@ -71,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (MOCK) { setUser(null); return; }
     await supabase.auth.signOut();
   };
 

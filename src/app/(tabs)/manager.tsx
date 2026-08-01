@@ -1,10 +1,9 @@
 import { Text, View } from "react-native"
 
-
-export default function AccountManagment(){
+export default function Manager(){
     return(
         <View>
-            <Text>lul</Text>
+            <Text>Manager</Text>
         </View>
     )
 }

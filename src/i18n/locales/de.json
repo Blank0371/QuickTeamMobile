@@ -7,6 +7,31 @@
     "signIn": "Anmelden",
     "signUp": "Registrieren",
     "inviteCode": "Code eingeben",
-    "enter": "Bestätigen" 
+    "enter": "Bestätigen"
+  },
+  "tabs": {
+  "messages": "Nachrichten",
+  "todos": "Aufgaben",
+  "manager": "Manager",
+  "main": "Start",
+  "calendar": "Kalender",
+  "settings": "Einstellungen"
+},
+"settings":{
+    "title":"Einstellungen",
+    "account": "Profil",
+    "manageAccounts":"Profile verwalten",
+    "appearance": "Erscheinung",
+    "mode":{
+      "system": "System",
+      "light": "Hell",
+      "dark": "Dunkel"
+    },
+    "language":"Sprache",
+    "lang":{
+      "en": "Englisch",
+      "de": "Deutsch"
+    }
   }
 }
+

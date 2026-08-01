@@ -18,14 +18,18 @@ function RootNav() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {/*
       <Stack.Protected guard={!user}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-      */}
-      <Stack.Protected guard={!user}> {/*needs to be changed back to !!user */}
-        <Stack.Screen name="(accounts)" />
+    
+      <Stack.Protected guard={!!user}>
+        
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="accounts"
+          options={{ presentation: "modal", headerShown: true, title: "Account" }}
+        />
+        <Stack.Screen name="shift/[id]" options={{ presentation: "modal", headerShown: true, title: "Shift" }} />
       </Stack.Protected>
     </Stack>
   );
