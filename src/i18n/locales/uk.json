@@ -71,7 +71,10 @@
   },
   "notifications": {
     "title": "Сповіщення",
-    "cat": { "messages": "Повідомлення", "schedule": "Розклад" },
+    "cat": {
+      "messages": "Повідомлення",
+      "schedule": "Розклад"
+    },
     "item": {
       "announcement": "Оголошення",
       "tasks": "Списки завдань",
@@ -114,13 +117,15 @@
     "afternoon": "День",
     "evening": "Вечір",
     "night": "Ніч",
-    "priorityOff": "Обов'язково вихідний",
-    "preferredOff": "Бажано вихідний",
+    "priorityOff": "Бажаю працювати",
+    "preferredOff": "Бажаю відпочивати",
     "requestVacation": "Запросити відпустку",
     "clearDay": "Очистити",
     "updatePreferences": "Оновити вподобання",
-    "calendarHint": "Торкніться дня, щоб задати вподобання",
-    "preferencesUpdated": "Вподобання оновлено"
+    "calendarHint": "Торкніться дня, щоб задати вподобання. \nЧим більше ви виберете, тим менше враховується кожне.",
+    "preferencesUpdated": "Вподобання оновлено",
+    "earlyShift": "Рання зміна",
+    "lateShift": "Пізня зміна"
   },
   "settings": {
     "title": "Налаштування",

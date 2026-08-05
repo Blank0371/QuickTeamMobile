@@ -71,7 +71,10 @@
   },
   "notifications": {
     "title": "Notifications",
-    "cat": { "messages": "Messages", "schedule": "Planning" },
+    "cat": {
+      "messages": "Messages",
+      "schedule": "Planning"
+    },
     "item": {
       "announcement": "Annonces",
       "tasks": "Listes de tâches",
@@ -114,13 +117,15 @@
     "afternoon": "Après-midi",
     "evening": "Soir",
     "night": "Nuit",
-    "priorityOff": "Absolument libre",
-    "preferredOff": "De préférence libre",
+    "priorityOff": "Préfère travailler",
+    "preferredOff": "Préfère se reposer",
     "requestVacation": "Demander des congés",
     "clearDay": "Effacer",
     "updatePreferences": "Mettre à jour les préférences",
-    "calendarHint": "Touchez un jour pour définir une préférence",
-    "preferencesUpdated": "Préférences mises à jour"
+    "calendarHint": "Touchez un jour pour définir une préférence. \nPlus vous en sélectionnez, moins chaque choix compte.",
+    "preferencesUpdated": "Préférences mises à jour",
+    "earlyShift": "Poste du matin",
+    "lateShift": "Poste du soir"
   },
   "settings": {
     "title": "Paramètres",

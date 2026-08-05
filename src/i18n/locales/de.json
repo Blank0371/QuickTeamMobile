@@ -71,7 +71,10 @@
   },
   "notifications": {
     "title": "Benachrichtigungen",
-    "cat": { "messages": "Nachrichten", "schedule": "Dienstplan" },
+    "cat": {
+      "messages": "Nachrichten",
+      "schedule": "Dienstplan"
+    },
     "item": {
       "announcement": "Ankündigungen",
       "tasks": "Aufgabenlisten",
@@ -85,15 +88,15 @@
     }
   },
   "tabs": {
-  "messages": "Nachrichten",
-  "todos": "Aufgaben",
-  "manager": "Manager",
-  "main": "Start",
-  "scheduling": "Planung",
-  "calendar": "Kalender",
-  "settings": "Einstellungen"
-},
-"scheduling": {
+    "messages": "Nachrichten",
+    "todos": "Aufgaben",
+    "manager": "Manager",
+    "main": "Start",
+    "scheduling": "Planung",
+    "calendar": "Kalender",
+    "settings": "Einstellungen"
+  },
+  "scheduling": {
     "title": "Planung",
     "availability": "Wöchentliche Verfügbarkeit",
     "availabilityHint": "Tippe auf einen Tag, um zu markieren, wann du nicht kannst",
@@ -114,16 +117,18 @@
     "afternoon": "Nachmittag",
     "evening": "Abend",
     "night": "Nacht",
-    "priorityOff": "Unbedingt frei",
+    "priorityOff": "Bevorzugt arbeiten",
     "preferredOff": "Bevorzugt frei",
     "requestVacation": "Urlaub beantragen",
     "clearDay": "Löschen",
     "updatePreferences": "Präferenzen aktualisieren",
-    "calendarHint": "Tippe auf einen Tag, um eine Präferenz zu setzen",
-    "preferencesUpdated": "Präferenzen aktualisiert"
+    "calendarHint": "Tippe auf einen Tag, um eine Präferenz zu setzen. \nJe mehr du auswählst, desto weniger zählt jede einzelne.",
+    "preferencesUpdated": "Präferenzen aktualisiert",
+    "earlyShift": "Frühschicht",
+    "lateShift": "Spätschicht"
   },
-"settings":{
-    "title":"Einstellungen",
+  "settings": {
+    "title": "Einstellungen",
     "connections": "Verbindungen",
     "manageConnections": "Verbindungen verwalten",
     "manageConnectionsSub": "Betrieb wechseln, Einladungen annehmen oder abmelden",
@@ -131,13 +136,13 @@
     "holdToConfirm": "3 Sekunden gedrückt halten",
     "notifications": "Benachrichtigungen verwalten",
     "appearance": "Erscheinung",
-    "mode":{
+    "mode": {
       "system": "System",
       "light": "Hell",
       "dark": "Dunkel"
     },
-    "language":"Sprache",
-    "lang":{
+    "language": "Sprache",
+    "lang": {
       "en": "Englisch",
       "de": "Deutsch",
       "ru": "Russisch",
@@ -164,4 +169,3 @@
     "sunday": "So"
   }
 }
-

@@ -1,14 +1,13 @@
 // src/app/(tabs)/scheduling.tsx — employee self-service: absence requests and
 // per-day scheduling preferences on future (unplanned) months. UI-only for now
 // (local state); no absence/preference persistence exists in the backend yet.
-import { CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react-native";
+import { CalendarClock, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react-native";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 
-const TIMES = ["morning", "afternoon", "evening", "night"] as const;
 const ABSENCE = ["sick", "vacation", "other"] as const;
 const WEEKDAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 const MONTHS_AHEAD = 12; // how far ahead preferences may be set (from next month)
@@ -17,11 +16,19 @@ const BLOCKED = "#dc2626"; // color for a disabled navigation direction
 const monthIndex = (d: Date) => d.getFullYear() * 12 + d.getMonth();
 
 type DayPref = "priority" | "preferred" | "vacation";
+type ShiftPref = "early" | "late";
+type DayEntry = { off?: DayPref; shift?: ShiftPref };
+
 const PREF_COLOR: Record<DayPref, string> = {
-  priority: "#dc2626",  // red
-  preferred: "#d97706", // amber
+  priority: "#16a34a",  // green — preferred work
+  preferred: "#dc2626", // red — preferred rest
   vacation: "#2563eb",  // blue
 };
+const SHIFT_COLOR: Record<ShiftPref, string> = {
+  early: "#0891b2", // cyan
+  late: "#7c3aed",  // purple
+};
+const SHIFT_LETTER: Record<ShiftPref, string> = { early: "E", late: "L" };
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -36,13 +43,10 @@ export default function SchedulingScreen() {
   const [toDate, setToDate] = useState<string | null>(null);
   const [absSent, setAbsSent] = useState(false);
 
-  // ---- calendar day preferences ----
-  const [dayPrefs, setDayPrefs] = useState<Record<string, DayPref>>({});
+  // ---- calendar day preferences (per day: an "off" preference and/or a shift-time preference) ----
+  const [dayPrefs, setDayPrefs] = useState<Record<string, DayEntry>>({});
   const [pickDay, setPickDay] = useState<string | null>(null);
   const [prefsSaved, setPrefsSaved] = useState(false);
-
-  // ---- time-of-day preferences ----
-  const [times, setTimes] = useState<Set<string>>(new Set());
 
   const fmtDate = (d: string) =>
     new Date(d + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" });
@@ -75,28 +79,35 @@ export default function SchedulingScreen() {
     setTimeout(() => setAbsSent(false), 2500);
   };
 
-  const setDay = (pref: DayPref | null) => {
+  // toggle one field of the selected day's entry; clears the day when it becomes empty
+  const patchDay = (patch: (e: DayEntry) => DayEntry) => {
     if (!pickDay) return;
     setDayPrefs((prev) => {
       const next = { ...prev };
-      if (pref) next[pickDay] = pref; else delete next[pickDay];
+      const entry = patch(prev[pickDay] ?? {});
+      if (entry.off || entry.shift) next[pickDay] = entry; else delete next[pickDay];
+      return next;
+    });
+  };
+  const toggleOff = (off: DayPref) =>
+    patchDay((e) => ({ ...e, off: e.off === off ? undefined : off }));
+  const toggleShift = (shift: ShiftPref) =>
+    patchDay((e) => ({ ...e, shift: e.shift === shift ? undefined : shift }));
+  const clearDay = () => {
+    if (!pickDay) return;
+    setDayPrefs((prev) => {
+      const next = { ...prev };
+      delete next[pickDay];
       return next;
     });
     setPickDay(null);
   };
 
   const updatePreferences = () => {
-    // TODO: persist day preferences + time-of-day prefs to Supabase
+    // TODO: persist day preferences to Supabase
     setPrefsSaved(true);
     setTimeout(() => setPrefsSaved(false), 2500);
   };
-
-  const toggleTime = (time: string) =>
-    setTimes((prev) => {
-      const next = new Set(prev);
-      next.has(time) ? next.delete(time) : next.add(time);
-      return next;
-    });
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
@@ -175,6 +186,14 @@ export default function SchedulingScreen() {
                 </Text>
               </View>
             ))}
+            {(["early", "late"] as ShiftPref[]).map((s) => (
+              <View key={s} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: SHIFT_COLOR[s] }]} />
+                <Text style={{ color: theme.muted, fontSize: 12 }}>
+                  {t(s === "early" ? "scheduling.earlyShift" : "scheduling.lateShift")}
+                </Text>
+              </View>
+            ))}
           </View>
 
           {/* month navigation — bounded to next month .. +MONTHS_AHEAD */}
@@ -198,26 +217,6 @@ export default function SchedulingScreen() {
             </Text>
           </Pressable>
         </View>
-
-        {/* ---- Time-of-day preferences ---- */}
-        <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("scheduling.preferencesHint")}</Text>
-        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <View style={styles.chips}>
-            {TIMES.map((time) => {
-              const on = times.has(time);
-              return (
-                <Pressable
-                  key={time}
-                  onPress={() => toggleTime(time)}
-                  style={[styles.chip, { borderColor: theme.border }, on && { backgroundColor: theme.accent, borderColor: theme.accent }]}
-                >
-                  {on && <Check color="#fff" size={15} />}
-                  <Text style={{ color: on ? "#fff" : theme.text, fontWeight: "600" }}>{t(`scheduling.${time}`)}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
       </ScrollView>
 
       {/* day-preference picker */}
@@ -229,9 +228,9 @@ export default function SchedulingScreen() {
               <Pressable onPress={() => setPickDay(null)} hitSlop={10}><X color={theme.muted} size={22} /></Pressable>
             </View>
             {(["priority", "preferred", "vacation"] as DayPref[]).map((p) => {
-              const active = pickDay ? dayPrefs[pickDay] === p : false;
+              const active = pickDay ? dayPrefs[pickDay]?.off === p : false;
               return (
-                <Pressable key={p} style={[styles.sheetItem, { borderColor: PREF_COLOR[p] }, active && { backgroundColor: PREF_COLOR[p] }]} onPress={() => setDay(p)}>
+                <Pressable key={p} style={[styles.sheetItem, { borderColor: PREF_COLOR[p] }, active && { backgroundColor: PREF_COLOR[p] }]} onPress={() => toggleOff(p)}>
                   <View style={[styles.legendDot, { backgroundColor: active ? "#fff" : PREF_COLOR[p] }]} />
                   <Text style={{ color: active ? "#fff" : theme.text, fontWeight: "700" }}>
                     {t(p === "priority" ? "scheduling.priorityOff" : p === "preferred" ? "scheduling.preferredOff" : "scheduling.requestVacation")}
@@ -239,7 +238,24 @@ export default function SchedulingScreen() {
                 </Pressable>
               );
             })}
-            <Pressable style={styles.sheetClear} onPress={() => setDay(null)}>
+
+            <View style={[styles.sheetDivider, { backgroundColor: theme.border }]} />
+
+            <View style={styles.sheetShiftRow}>
+              {(["early", "late"] as ShiftPref[]).map((s) => {
+                const active = pickDay ? dayPrefs[pickDay]?.shift === s : false;
+                return (
+                  <Pressable key={s} style={[styles.sheetItem, styles.sheetShiftItem, { borderColor: SHIFT_COLOR[s] }, active && { backgroundColor: SHIFT_COLOR[s] }]} onPress={() => toggleShift(s)}>
+                    <View style={[styles.legendDot, { backgroundColor: active ? "#fff" : SHIFT_COLOR[s] }]} />
+                    <Text style={{ color: active ? "#fff" : theme.text, fontWeight: "700" }}>
+                      {t(s === "early" ? "scheduling.earlyShift" : "scheduling.lateShift")}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Pressable style={styles.sheetClear} onPress={clearDay}>
               <Text style={{ color: theme.muted, fontWeight: "600" }}>{t("scheduling.clearDay")}</Text>
             </Pressable>
           </Pressable>
@@ -252,7 +268,7 @@ export default function SchedulingScreen() {
 // ---------- month grid ----------
 function MonthGrid({ month, theme, t, dayPrefs, onPickDay }: {
   month: Date; theme: any; t: (k: string) => string;
-  dayPrefs: Record<string, DayPref>; onPickDay: (d: string) => void;
+  dayPrefs: Record<string, DayEntry>; onPickDay: (d: string) => void;
 }) {
   const year = month.getFullYear();
   const mon = month.getMonth();
@@ -276,11 +292,19 @@ function MonthGrid({ month, theme, t, dayPrefs, onPickDay }: {
         {cells.map((d, i) => {
           if (!d) return <View key={i} style={styles.cell} />;
           const key = isoDay(d);
-          const pref = dayPrefs[key];
+          const entry = dayPrefs[key];
+          const fill = entry?.off ? PREF_COLOR[entry.off] : entry?.shift ? SHIFT_COLOR[entry.shift] : null;
+          const marked = !!fill;
           return (
             <Pressable key={i} style={styles.cell} onPress={() => onPickDay(key)}>
-              <View style={[styles.day, pref && { backgroundColor: PREF_COLOR[pref] }]}>
-                <Text style={{ color: pref ? "#fff" : theme.text, fontWeight: pref ? "700" : "400" }}>{d.getDate()}</Text>
+              <View style={[styles.day, fill && { backgroundColor: fill }]}>
+                <Text style={{ color: marked ? "#fff" : theme.text, fontWeight: marked ? "700" : "400" }}>{d.getDate()}</Text>
+                {/* if the day carries both an off-pref and a shift-pref, badge the shift */}
+                {entry?.off && entry?.shift && (
+                  <View style={[styles.shiftBadge, { backgroundColor: SHIFT_COLOR[entry.shift], borderColor: theme.surface }]}>
+                    <Text style={styles.shiftBadgeText}>{SHIFT_LETTER[entry.shift]}</Text>
+                  </View>
+                )}
               </View>
             </Pressable>
           );
@@ -356,12 +380,17 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap" },
   cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: "center", justifyContent: "center" },
   day: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  shiftBadge: { position: "absolute", top: -3, right: -3, width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  shiftBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
 
   backdrop: { flex: 1, backgroundColor: "#00000088", alignItems: "center", justifyContent: "center", padding: 24 },
   sheet: { width: "100%", borderWidth: 1.5, borderRadius: 16, padding: 16, gap: 10 },
   sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sheetTitle: { fontSize: 17, fontWeight: "700", textTransform: "capitalize" },
   sheetItem: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1.5, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16 },
+  sheetDivider: { height: StyleSheet.hairlineWidth, marginVertical: 2 },
+  sheetShiftRow: { flexDirection: "row", gap: 10 },
+  sheetShiftItem: { flex: 1, justifyContent: "center" },
   sheetClear: { alignItems: "center", paddingVertical: 10 },
 
   dropSheet: { width: "100%", maxHeight: "70%", borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 4 },

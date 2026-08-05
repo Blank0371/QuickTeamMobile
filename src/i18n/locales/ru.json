@@ -71,7 +71,10 @@
   },
   "notifications": {
     "title": "Уведомления",
-    "cat": { "messages": "Сообщения", "schedule": "График" },
+    "cat": {
+      "messages": "Сообщения",
+      "schedule": "График"
+    },
     "item": {
       "announcement": "Объявления",
       "tasks": "Списки задач",
@@ -114,13 +117,15 @@
     "afternoon": "День",
     "evening": "Вечер",
     "night": "Ночь",
-    "priorityOff": "Обязательно выходной",
-    "preferredOff": "Желательно выходной",
+    "priorityOff": "Предпочитаю работать",
+    "preferredOff": "Предпочитаю отдых",
     "requestVacation": "Запросить отпуск",
     "clearDay": "Очистить",
     "updatePreferences": "Обновить предпочтения",
-    "calendarHint": "Нажмите на день, чтобы задать предпочтение",
-    "preferencesUpdated": "Предпочтения обновлены"
+    "calendarHint": "Нажмите на день, чтобы задать предпочтение. \nЧем больше вы выберете, тем меньше учитывается каждое.",
+    "preferencesUpdated": "Предпочтения обновлены",
+    "earlyShift": "Ранняя смена",
+    "lateShift": "Поздняя смена"
   },
   "settings": {
     "title": "Настройки",

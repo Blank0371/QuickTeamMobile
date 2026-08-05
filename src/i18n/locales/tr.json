@@ -71,7 +71,10 @@
   },
   "notifications": {
     "title": "Bildirimler",
-    "cat": { "messages": "Mesajlar", "schedule": "Vardiya planı" },
+    "cat": {
+      "messages": "Mesajlar",
+      "schedule": "Vardiya planı"
+    },
     "item": {
       "announcement": "Duyurular",
       "tasks": "Görev listeleri",
@@ -114,13 +117,15 @@
     "afternoon": "Öğleden sonra",
     "evening": "Akşam",
     "night": "Gece",
-    "priorityOff": "Kesinlikle izinli",
-    "preferredOff": "Tercihen izinli",
+    "priorityOff": "Çalışmayı tercih",
+    "preferredOff": "Dinlenmeyi tercih",
     "requestVacation": "İzin talep et",
     "clearDay": "Temizle",
     "updatePreferences": "Tercihleri güncelle",
-    "calendarHint": "Tercih ayarlamak için bir güne dokun",
-    "preferencesUpdated": "Tercihler güncellendi"
+    "calendarHint": "Tercih ayarlamak için bir güne dokun. \nNe kadar çok seçersen, her seçim o kadar az dikkate alınır.",
+    "preferencesUpdated": "Tercihler güncellendi",
+    "earlyShift": "Erken vardiya",
+    "lateShift": "Geç vardiya"
   },
   "settings": {
     "title": "Ayarlar",

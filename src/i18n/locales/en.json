@@ -71,7 +71,10 @@
   },
   "notifications": {
     "title": "Notifications",
-    "cat": { "messages": "Messages", "schedule": "Schedule" },
+    "cat": {
+      "messages": "Messages",
+      "schedule": "Schedule"
+    },
     "item": {
       "announcement": "Announcement",
       "tasks": "Task list",
@@ -85,13 +88,13 @@
     }
   },
   "tabs": {
-  "messages": "Messages",
-  "todos": "To-dos",
-  "manager": "Manager",
-  "main": "Home",
-  "scheduling": "Scheduling",
-  "calendar": "Calendar",
-  "settings": "Settings"
+    "messages": "Messages",
+    "todos": "To-dos",
+    "manager": "Manager",
+    "main": "Home",
+    "scheduling": "Scheduling",
+    "calendar": "Calendar",
+    "settings": "Settings"
   },
   "scheduling": {
     "title": "Scheduling",
@@ -114,16 +117,18 @@
     "afternoon": "Afternoon",
     "evening": "Evening",
     "night": "Night",
-    "priorityOff": "Priority off",
-    "preferredOff": "Preferred off",
+    "priorityOff": "Preferred work",
+    "preferredOff": "Preferred rest",
     "requestVacation": "Request vacation",
     "clearDay": "Clear",
     "updatePreferences": "Update preferences",
-    "calendarHint": "Tap a day to set a preference",
-    "preferencesUpdated": "Preferences updated"
+    "calendarHint": "Tap a day to set a preference. \nThe more you select, the less each choice counts.",
+    "preferencesUpdated": "Preferences updated",
+    "earlyShift": "Early shift",
+    "lateShift": "Late shift"
   },
-  "settings":{
-    "title":"Settings",
+  "settings": {
+    "title": "Settings",
     "connections": "Connections",
     "manageConnections": "Manage connections",
     "manageConnectionsSub": "Switch business, accept invites, or sign out",
@@ -131,13 +136,13 @@
     "holdToConfirm": "Press and hold for 3 seconds",
     "notifications": "Manage notifications",
     "appearance": "Appearance",
-    "mode":{
+    "mode": {
       "system": "System",
       "light": "Light",
       "dark": "Dark"
     },
-    "language":"Language",
-    "lang":{
+    "language": "Language",
+    "lang": {
       "en": "English",
       "de": "German",
       "ru": "Russian",
@@ -146,7 +151,7 @@
       "uk": "Ukrainian"
     }
   },
-  "calendar":{
+  "calendar": {
     "day": "Day",
     "week": "Week",
     "month": "Month",
@@ -157,10 +162,10 @@
     "noShifts": "No shifts",
     "monday": "Mon",
     "tuesday": "Tue",
-    "wednesday":"Wed",
+    "wednesday": "Wed",
     "thursday": "Thu",
-    "friday":"Fri",
-    "saturday":"Sat",
+    "friday": "Fri",
+    "saturday": "Sat",
     "sunday": "Sun"
   }
 }
