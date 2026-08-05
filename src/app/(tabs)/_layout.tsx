@@ -1,6 +1,6 @@
 // src/app/(tabs)/_layout.tsx
 import { Tabs } from "expo-router";
-import { Briefcase, Calendar, Home, ListTodo, MessageCircle, Settings } from "lucide-react-native";
+import { Briefcase, Calendar, CalendarClock, Home, ListTodo, MessageCircle, Settings } from "lucide-react-native";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -34,6 +34,14 @@ export default function TabsLayout() {
         options={{
           title: t("tabs.messages"),
           tabBarIcon: ({ color, size }) => <MessageCircle color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="scheduling"
+        options={{
+          href: isChef ? null : "/scheduling", // employees only
+          title: t("tabs.scheduling"),
+          tabBarIcon: ({ color, size }) => <CalendarClock color={color} size={size} />,
         }}
       />
       <Tabs.Screen
