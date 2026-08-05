@@ -3,9 +3,14 @@ import * as Localization from "expo-localization";
 import { createContext, useContext, useEffect, useState } from "react";
 import de from "./locales/de.json";
 import en from "./locales/en.json";
+import fr from "./locales/fr.json";
+import ru from "./locales/ru.json";
+import tr from "./locales/tr.json";
+import uk from "./locales/uk.json";
 
-const resources: Record<string, any> = { en, de };
-type Lang = "en" | "de";
+const resources: Record<string, any> = { en, de, ru, fr, tr, uk };
+type Lang = "en" | "de" | "ru" | "fr" | "tr" | "uk";
+const SUPPORTED: Lang[] = ["en", "de", "ru", "fr", "tr", "uk"];
 
 type I18nContextType = {
   lang: Lang;
@@ -29,7 +34,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     AsyncStorage.getItem("lang").then((v) => {
-      if (v === "en" || v === "de") setLangState(v);
+      if (v && SUPPORTED.includes(v as Lang)) setLangState(v as Lang);
     });
   }, []);
 

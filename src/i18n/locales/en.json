@@ -1,13 +1,88 @@
 {
   "auth": {
-    "host": "Host",
-    "employee": "Employee",
     "email": "Email",
     "password": "Password",
+    "confirmPassword": "Confirm password",
     "signIn": "Sign in",
     "signUp": "Sign up",
-    "inviteCode": "Input Code",
-    "enter": "Enter"
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "alreadyRegistered": "This email is already registered — sign in instead.",
+    "pwRuleLength": "At least 8 characters",
+    "pwRuleUpper": "One uppercase letter",
+    "pwRuleLower": "One lowercase letter",
+    "pwRuleMatch": "Passwords match",
+    "verifyTitle": "Check your email",
+    "verifySubtitle": "Enter the 6-digit code sent to",
+    "code": "Code",
+    "verify": "Verify",
+    "resend": "Resend code",
+    "codeResent": "A new code has been sent.",
+    "back": "Back"
+  },
+  "select": {
+    "title": "Your businesses",
+    "joined": "Joined",
+    "invites": "Invitations",
+    "accept": "Join",
+    "signOut": "Sign out",
+    "refresh": "Refresh",
+    "empty": "No invitations yet",
+    "emptyHint": "Ask your manager to invite this email address, then pull to refresh.",
+    "loadError": "Could not load your businesses.",
+    "role": {
+      "chef": "Manager",
+      "mitarbeiter": "Employee"
+    }
+  },
+  "messages": {
+    "empty": "No messages yet",
+    "done": "Done",
+    "votes": "votes",
+    "anonymous": "Anonymous",
+    "mock": "Example (mockup)",
+    "mockWants": "wants to swap a shift",
+    "mockAvailable": "Available",
+    "mockCanTake": "You can take this",
+    "new": "New message",
+    "titleField": "Title",
+    "textField": "Message",
+    "addItem": "Add item",
+    "addOption": "Add option",
+    "multipleChoice": "Multiple choice",
+    "post": "Post",
+    "search": "Search",
+    "sortNewest": "Newest",
+    "sortRelevant": "Relevant",
+    "priority": "Priority",
+    "prioNormal": "Normal",
+    "prioWichtig": "Important",
+    "prioDringend": "Urgent",
+    "swapGive": "Shift to hand over",
+    "swapWant": "Day you'd like to work",
+    "selectShift": "Select a shift",
+    "selectDate": "Select a day",
+    "noUpcomingShifts": "No upcoming shifts",
+    "noFreeDates": "No free days"
+  },
+  "manager": {
+    "title": "Manager",
+    "inDevelopment": "Still in development"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "cat": { "messages": "Messages", "schedule": "Schedule" },
+    "item": {
+      "announcement": "Announcement",
+      "tasks": "Task list",
+      "shiftSwitch": "Shift switching",
+      "polls": "Poll",
+      "documents": "Documents",
+      "planPublished": "Plan published",
+      "shiftChanged": "Shift changed",
+      "availabilityReminder": "Availability reminder",
+      "understaffing": "Understaffing"
+    }
   },
   "tabs": {
   "messages": "Messages",
@@ -19,8 +94,12 @@
   },
   "settings":{
     "title":"Settings",
-    "account": "Account",
-    "manageAccounts":"Manage Accounts",
+    "connections": "Connections",
+    "manageConnections": "Manage connections",
+    "manageConnectionsSub": "Switch business, accept invites, or sign out",
+    "signOut": "Sign out",
+    "holdToConfirm": "Press and hold for 3 seconds",
+    "notifications": "Manage notifications",
     "appearance": "Appearance",
     "mode":{
       "system": "System",
@@ -30,7 +109,11 @@
     "language":"Language",
     "lang":{
       "en": "English",
-      "de": "German"
+      "de": "German",
+      "ru": "Russian",
+      "fr": "French",
+      "tr": "Turkish",
+      "uk": "Ukrainian"
     }
   },
   "calendar":{
@@ -41,11 +124,13 @@
     "date": "Date",
     "coworkers": "Coworkers",
     "comment": "Comment",
+    "noShifts": "No shifts",
     "monday": "Mon",
     "tuesday": "Tue",
     "wednesday":"Wed",
     "thursday": "Thu",
     "friday":"Fri",
-    "saturday":"Sat"
+    "saturday":"Sat",
+    "sunday": "Sun"
   }
 }

@@ -1,0 +1,136 @@
+{
+  "auth": {
+    "email": "Эл. почта",
+    "password": "Пароль",
+    "confirmPassword": "Подтвердите пароль",
+    "signIn": "Войти",
+    "signUp": "Регистрация",
+    "noAccount": "Нет аккаунта?",
+    "haveAccount": "Уже есть аккаунт?",
+    "alreadyRegistered": "Эта почта уже зарегистрирована — войдите вместо этого.",
+    "pwRuleLength": "Не менее 8 символов",
+    "pwRuleUpper": "Одна заглавная буква",
+    "pwRuleLower": "Одна строчная буква",
+    "pwRuleMatch": "Пароли совпадают",
+    "verifyTitle": "Проверьте почту",
+    "verifySubtitle": "Введите 6-значный код, отправленный на",
+    "code": "Код",
+    "verify": "Подтвердить",
+    "resend": "Отправить код повторно",
+    "codeResent": "Новый код отправлен.",
+    "back": "Назад"
+  },
+  "select": {
+    "title": "Ваши компании",
+    "joined": "Присоединён",
+    "invites": "Приглашения",
+    "accept": "Присоединиться",
+    "signOut": "Выйти",
+    "refresh": "Обновить",
+    "empty": "Пока нет приглашений",
+    "emptyHint": "Попросите руководителя пригласить этот адрес, затем потяните вниз для обновления.",
+    "loadError": "Не удалось загрузить ваши компании.",
+    "role": {
+      "chef": "Руководитель",
+      "mitarbeiter": "Сотрудник"
+    }
+  },
+  "messages": {
+    "empty": "Пока нет сообщений",
+    "done": "Готово",
+    "votes": "голосов",
+    "anonymous": "Анонимно",
+    "mock": "Пример (макет)",
+    "mockWants": "хочет поменяться сменой",
+    "mockAvailable": "Доступен",
+    "mockCanTake": "Вы можете взять это",
+    "new": "Новое сообщение",
+    "titleField": "Заголовок",
+    "textField": "Сообщение",
+    "addItem": "Добавить пункт",
+    "addOption": "Добавить вариант",
+    "multipleChoice": "Несколько вариантов",
+    "post": "Отправить",
+    "search": "Поиск",
+    "sortNewest": "Новые",
+    "sortRelevant": "Актуальные",
+    "priority": "Приоритет",
+    "prioNormal": "Обычный",
+    "prioWichtig": "Важный",
+    "prioDringend": "Срочный",
+    "swapGive": "Смена для передачи",
+    "swapWant": "День, когда хочешь работать",
+    "selectShift": "Выберите смену",
+    "selectDate": "Выберите день",
+    "noUpcomingShifts": "Нет предстоящих смен",
+    "noFreeDates": "Нет свободных дней"
+  },
+  "manager": {
+    "title": "Менеджер",
+    "inDevelopment": "В разработке"
+  },
+  "notifications": {
+    "title": "Уведомления",
+    "cat": { "messages": "Сообщения", "schedule": "График" },
+    "item": {
+      "announcement": "Объявления",
+      "tasks": "Списки задач",
+      "shiftSwitch": "Обмен сменами",
+      "polls": "Опросы",
+      "documents": "Документы",
+      "planPublished": "План опубликован",
+      "shiftChanged": "Смена изменена",
+      "availabilityReminder": "Напоминание о доступности",
+      "understaffing": "Нехватка персонала"
+    }
+  },
+  "tabs": {
+    "messages": "Сообщения",
+    "todos": "Задачи",
+    "manager": "Менеджер",
+    "main": "Главная",
+    "calendar": "Календарь",
+    "settings": "Настройки"
+  },
+  "settings": {
+    "title": "Настройки",
+    "connections": "Подключения",
+    "manageConnections": "Управление подключениями",
+    "manageConnectionsSub": "Сменить компанию, принять приглашения или выйти",
+    "signOut": "Выйти",
+    "holdToConfirm": "Удерживайте 3 секунды",
+    "notifications": "Управление уведомлениями",
+    "appearance": "Оформление",
+    "mode": {
+      "system": "Системная",
+      "light": "Светлая",
+      "dark": "Тёмная"
+    },
+    "language": "Язык",
+    "lang": {
+      "en": "Английский",
+      "de": "Немецкий",
+      "ru": "Русский",
+      "fr": "Французский",
+      "tr": "Турецкий",
+      "uk": "Украинский"
+    }
+  },
+  "calendar": {
+    "day": "День",
+    "week": "Неделя",
+    "month": "Месяц",
+    "time": "Время",
+    "date": "Дата",
+    "coworkers": "Коллеги",
+    "comment": "Комментарий",
+    "noShifts": "Нет смен",
+    "monday": "Пн",
+    "tuesday": "Вт",
+    "wednesday": "Ср",
+    "thursday": "Чт",
+    "friday": "Пт",
+    "saturday": "Сб",
+    "sunday": "Вс"
+  }
+}

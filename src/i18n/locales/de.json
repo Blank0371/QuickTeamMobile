@@ -1,13 +1,88 @@
 {
   "auth": {
-    "host": "Gastgeber",
-    "employee": "Mitarbeiter",
     "email": "E-Mail",
     "password": "Passwort",
+    "confirmPassword": "Passwort bestätigen",
     "signIn": "Anmelden",
     "signUp": "Registrieren",
-    "inviteCode": "Code eingeben",
-    "enter": "Bestätigen"
+    "noAccount": "Noch kein Konto?",
+    "haveAccount": "Bereits ein Konto?",
+    "alreadyRegistered": "Diese E-Mail ist bereits registriert – bitte melde dich an.",
+    "pwRuleLength": "Mindestens 8 Zeichen",
+    "pwRuleUpper": "Ein Großbuchstabe",
+    "pwRuleLower": "Ein Kleinbuchstabe",
+    "pwRuleMatch": "Passwörter stimmen überein",
+    "verifyTitle": "E-Mail bestätigen",
+    "verifySubtitle": "Gib den 6-stelligen Code ein, gesendet an",
+    "code": "Code",
+    "verify": "Bestätigen",
+    "resend": "Code erneut senden",
+    "codeResent": "Ein neuer Code wurde gesendet.",
+    "back": "Zurück"
+  },
+  "select": {
+    "title": "Deine Betriebe",
+    "joined": "Beigetreten",
+    "invites": "Einladungen",
+    "accept": "Beitreten",
+    "signOut": "Abmelden",
+    "refresh": "Aktualisieren",
+    "empty": "Noch keine Einladungen",
+    "emptyHint": "Bitte deinen Chef, diese E-Mail-Adresse einzuladen, dann nach unten ziehen zum Aktualisieren.",
+    "loadError": "Betriebe konnten nicht geladen werden.",
+    "role": {
+      "chef": "Chef",
+      "mitarbeiter": "Mitarbeiter"
+    }
+  },
+  "messages": {
+    "empty": "Noch keine Nachrichten",
+    "done": "Erledigt",
+    "votes": "Stimmen",
+    "anonymous": "Anonym",
+    "mock": "Beispiel (Mockup)",
+    "mockWants": "möchte eine Schicht tauschen",
+    "mockAvailable": "Verfügbar",
+    "mockCanTake": "Du kannst das übernehmen",
+    "new": "Neue Nachricht",
+    "titleField": "Titel",
+    "textField": "Nachricht",
+    "addItem": "Punkt hinzufügen",
+    "addOption": "Option hinzufügen",
+    "multipleChoice": "Mehrfachauswahl",
+    "post": "Senden",
+    "search": "Suchen",
+    "sortNewest": "Neueste",
+    "sortRelevant": "Relevant",
+    "priority": "Priorität",
+    "prioNormal": "Normal",
+    "prioWichtig": "Wichtig",
+    "prioDringend": "Dringend",
+    "swapGive": "Abzugebende Schicht",
+    "swapWant": "Tag, an dem du arbeiten möchtest",
+    "selectShift": "Schicht auswählen",
+    "selectDate": "Tag auswählen",
+    "noUpcomingShifts": "Keine anstehenden Schichten",
+    "noFreeDates": "Keine freien Tage"
+  },
+  "manager": {
+    "title": "Manager",
+    "inDevelopment": "Noch in Entwicklung"
+  },
+  "notifications": {
+    "title": "Benachrichtigungen",
+    "cat": { "messages": "Nachrichten", "schedule": "Dienstplan" },
+    "item": {
+      "announcement": "Ankündigungen",
+      "tasks": "Aufgabenlisten",
+      "shiftSwitch": "Schichttausch",
+      "polls": "Umfragen",
+      "documents": "Dokumente",
+      "planPublished": "Plan veröffentlicht",
+      "shiftChanged": "Schicht geändert",
+      "availabilityReminder": "Verfügbarkeits-Erinnerung",
+      "understaffing": "Unterbesetzung"
+    }
   },
   "tabs": {
   "messages": "Nachrichten",
@@ -19,8 +94,12 @@
 },
 "settings":{
     "title":"Einstellungen",
-    "account": "Profil",
-    "manageAccounts":"Profile verwalten",
+    "connections": "Verbindungen",
+    "manageConnections": "Verbindungen verwalten",
+    "manageConnectionsSub": "Betrieb wechseln, Einladungen annehmen oder abmelden",
+    "signOut": "Abmelden",
+    "holdToConfirm": "3 Sekunden gedrückt halten",
+    "notifications": "Benachrichtigungen verwalten",
     "appearance": "Erscheinung",
     "mode":{
       "system": "System",
@@ -30,8 +109,29 @@
     "language":"Sprache",
     "lang":{
       "en": "Englisch",
-      "de": "Deutsch"
+      "de": "Deutsch",
+      "ru": "Russisch",
+      "fr": "Französisch",
+      "tr": "Türkisch",
+      "uk": "Ukrainisch"
     }
+  },
+  "calendar": {
+    "day": "Tag",
+    "week": "Woche",
+    "month": "Monat",
+    "time": "Zeit",
+    "date": "Datum",
+    "coworkers": "Kollegen",
+    "comment": "Kommentar",
+    "noShifts": "Keine Schichten",
+    "monday": "Mo",
+    "tuesday": "Di",
+    "wednesday": "Mi",
+    "thursday": "Do",
+    "friday": "Fr",
+    "saturday": "Sa",
+    "sunday": "So"
   }
 }
 

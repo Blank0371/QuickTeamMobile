@@ -6,7 +6,7 @@ import { I18nProvider } from "../i18n/I18nProvider";
 import { ThemeProvider } from "../theme/ThemeProvider";
 
 function RootNav() {
-  const { user, loading } = useAuth();
+  const { user, loading, entered } = useAuth();
 
   if (loading) {
     return (
@@ -21,14 +21,15 @@ function RootNav() {
       <Stack.Protected guard={!user}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-    
-      <Stack.Protected guard={!!user}>
-        
+
+      <Stack.Protected guard={!!user && !entered}>
+        <Stack.Screen name="select" />
+      </Stack.Protected>
+
+      <Stack.Protected guard={!!user && entered}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="accounts"
-          options={{ presentation: "modal", headerShown: true, title: "Account" }}
-        />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="compose" options={{ presentation: "modal" }} />
         <Stack.Screen name="shift/[id]" options={{ presentation: "modal", headerShown: true, title: "Shift" }} />
       </Stack.Protected>
     </Stack>

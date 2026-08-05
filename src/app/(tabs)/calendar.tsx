@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   Pressable, ScrollView, StyleSheet,
@@ -8,10 +9,15 @@ import {
 import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/I18nProvider";
-import { businessSettings, mockShifts, Shift } from "../../mock/shifts";
+import { Shift, shifts, showCoworkers } from "../../lib/shifts";
 import { useTheme } from "../../theme/ThemeProvider";
 
 type ViewMode = "day" | "week" | "month";
+
+// Monday-first weekday i18n keys (matches startOfWeek below).
+const WEEKDAY_KEYS = [
+  "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+] as const;
 
 const toMinutes = (t: string) => {
   const [h, m] = t.split(":").map(Number);
@@ -28,7 +34,7 @@ const startOfWeek = (d: Date) => {
 
 export default function CalendarScreen() {
   const { theme } = useTheme();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [mode, setMode] = useState<ViewMode>("day");
   const [cursor, setCursor] = useState(new Date()); // the focused day
 
@@ -39,8 +45,44 @@ export default function CalendarScreen() {
     left: withTiming(`${idx * 33.33 + 1}%`, { duration: 200 }),
   }));
 
+  // Step by the active view's unit: ±1 day, ±1 week, ±1 month.
+  const move = (dir: 1 | -1) => setCursor((c) => {
+    const d = new Date(c);
+    if (mode === "day") d.setDate(d.getDate() + dir);
+    else if (mode === "week") d.setDate(d.getDate() + 7 * dir);
+    else d.setMonth(d.getMonth() + dir);
+    return d;
+  });
+
+  const title = useMemo(() => {
+    if (mode === "day") {
+      return cursor.toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" });
+    }
+    if (mode === "month") {
+      return cursor.toLocaleDateString(lang, { month: "long", year: "numeric" });
+    }
+    const s = startOfWeek(cursor);
+    const e = new Date(s);
+    e.setDate(s.getDate() + 6);
+    const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+    return `${s.toLocaleDateString(lang, opts)} – ${e.toLocaleDateString(lang, opts)}`;
+  }, [mode, cursor, lang]);
+
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
+      {/* top navigation bar */}
+      <View style={[styles.topbar, { borderBottomColor: theme.border }]}>
+        <Pressable onPress={() => move(-1)} hitSlop={10} style={styles.navBtn}>
+          <ChevronLeft color={theme.text} size={26} />
+        </Pressable>
+        <Pressable onPress={() => setCursor(new Date())} hitSlop={6} style={styles.titleWrap}>
+          <Text style={[styles.topTitle, { color: theme.text }]}>{title}</Text>
+        </Pressable>
+        <Pressable onPress={() => move(1)} hitSlop={10} style={styles.navBtn}>
+          <ChevronRight color={theme.text} size={26} />
+        </Pressable>
+      </View>
+
       {/* segmented control */}
       <View style = {styles.content}>
         {mode === "day" && <DayView date={cursor} />}
@@ -77,26 +119,25 @@ function packLanes(shifts: Shift[]) {
 function DayView({ date }: { date: Date }) {
   const { theme } = useTheme();
   const { t } = useI18n();
-  const shifts = mockShifts.filter((s) => s.date === iso(date));
+  const dayShifts = shifts.filter((s) => s.date === iso(date));
 
   const { from, to } = useMemo(() => {
-    if (!shifts.length) return { from: 8 * 60, to: 18 * 60 };
-    const starts = shifts.map((s) => toMinutes(s.start));
-    const ends = shifts.map((s) => toMinutes(s.end));
+    if (!dayShifts.length) return { from: 8 * 60, to: 18 * 60 };
+    const starts = dayShifts.map((s) => toMinutes(s.start));
+    const ends = dayShifts.map((s) => toMinutes(s.end));
     return {
       from: Math.max(0, Math.min(...starts) - 60),
       to: Math.min(24 * 60, Math.max(...ends) + 60),
     };
-  }, [shifts]);
+  }, [dayShifts]);
 
-  const { placed, laneCount } = useMemo(() => packLanes(shifts), [shifts]);
+  const { placed, laneCount } = useMemo(() => packLanes(dayShifts), [dayShifts]);
 
   const PX_PER_MIN = 1.1;
   const height = (to - from) * PX_PER_MIN;
   const GUTTER = 56;   // space for hour labels
-  const GAP = 4;       // gap between side-by-side blocks
 
-  if (!shifts.length) return <Empty text={t("calendar.noShifts")} />;
+  if (!dayShifts.length) return <Empty text={t("calendar.noShifts")} />;
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
@@ -113,33 +154,26 @@ function DayView({ date }: { date: Date }) {
         })}
 
         {/* shift blocks, packed into lanes */}
-        {placed.map(({ shift: s, lane }) => {
-          const top = (toMinutes(s.start) - from) * PX_PER_MIN;
-          const h = (toMinutes(s.end) - toMinutes(s.start)) * PX_PER_MIN;
-          const laneWidthPct = 100 / laneCount;
-          return (
-            <View style={{ position: "absolute", top: 0, bottom: 0, left: GUTTER, right: 8 }}>
-                {placed.map(({ shift: s, lane }) => {
-                  const top = (toMinutes(s.start) - from) * PX_PER_MIN;
-                  const h = (toMinutes(s.end) - toMinutes(s.start)) * PX_PER_MIN;
-                  const laneWidthPct = 100 / laneCount;
-                  return (
-                    <ShiftBlock
-                      key={s.id}
-                      shift={s}
-                      style={{
-                        position: "absolute",
-                        top,
-                        height: h,
-                        left: `${lane * laneWidthPct}%`,
-                        width: `${laneWidthPct}%`,
-                      }}
-                    />
-                  );
-  })}
-</View>
-          );
-        })}
+        <View style={{ position: "absolute", top: 0, bottom: 0, left: GUTTER, right: 8 }}>
+          {placed.map(({ shift: s, lane }) => {
+            const top = (toMinutes(s.start) - from) * PX_PER_MIN;
+            const h = (toMinutes(s.end) - toMinutes(s.start)) * PX_PER_MIN;
+            const laneWidthPct = 100 / laneCount;
+            return (
+              <ShiftBlock
+                key={s.id}
+                shift={s}
+                style={{
+                  position: "absolute",
+                  top,
+                  height: h,
+                  left: `${lane * laneWidthPct}%`,
+                  width: `${laneWidthPct}%`,
+                }}
+              />
+            );
+          })}
+        </View>
       </View>
     </ScrollView>
   );
@@ -148,21 +182,21 @@ function DayView({ date }: { date: Date }) {
 // ---------- WEEK ----------
 function WeekView({ date }: { date: Date }) {
   const { theme } = useTheme();
+  const { t } = useI18n();
   const start = startOfWeek(date);
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     return d;
   });
-  const labels = ["M", "T", "W", "T", "F", "S", "S"];
 
   return (
     <ScrollView contentContainerStyle={{ padding: 12, gap: 8 }}>
       {days.map((d, i) => {
-        const dayShifts = mockShifts.filter((s) => s.date === iso(d));
+        const dayShifts = shifts.filter((s) => s.date === iso(d));
         return (
           <View key={i} style={styles.weekRow}>
-            <Text style={[styles.weekDay, { color: theme.muted }]}>{labels[i]}</Text>
+            <Text style={[styles.weekDay, { color: theme.muted }]}>{t(`calendar.${WEEKDAY_KEYS[i]}`)}</Text>
             <View style={{ flex: 1, gap: 6 }}>
               {dayShifts.length === 0 ? (
                 <View style={[styles.weekEmpty, { borderColor: theme.border }]} />
@@ -180,10 +214,10 @@ function WeekView({ date }: { date: Date }) {
 // ---------- MONTH ----------
 function MonthView({ date, onPickDay }: { date: Date; onPickDay: (d: Date) => void }) {
   const { theme } = useTheme();
+  const { t } = useI18n();
   const first = new Date(date.getFullYear(), date.getMonth(), 1);
   const offset = (first.getDay() + 6) % 7; // lead blanks, Monday start
   const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const labels = ["M", "T", "W", "T", "F", "S", "S"];
 
   const cells: (Date | null)[] = [
     ...Array(offset).fill(null),
@@ -193,14 +227,14 @@ function MonthView({ date, onPickDay }: { date: Date; onPickDay: (d: Date) => vo
   return (
     <ScrollView contentContainerStyle={{ padding: 12 }}>
       <View style={styles.monthHeader}>
-        {labels.map((l, i) => (
-          <Text key={i} style={[styles.monthHeaderCell, { color: theme.muted }]}>{l}</Text>
+        {WEEKDAY_KEYS.map((k, i) => (
+          <Text key={i} style={[styles.monthHeaderCell, { color: theme.muted }]}>{t(`calendar.${k}`)}</Text>
         ))}
       </View>
       <View style={styles.monthGrid}>
         {cells.map((d, i) => {
           if (!d) return <View key={i} style={styles.monthCell} />;
-          const has = mockShifts.some((s) => s.date === iso(d));
+          const has = shifts.some((s) => s.date === iso(d));
           return (
             <Pressable key={i} style={styles.monthCell} onPress={() => onPickDay(d)}>
               <View style={[
@@ -230,7 +264,7 @@ function ShiftBlock({ shift, style, compact }: { shift: Shift; style?: any; comp
       ]}
     >
       <Text style={styles.blockTitle} numberOfLines={1}>{shift.title}</Text>
-      {businessSettings.showCoworkers && shift.coworkers.length > 0 && (
+      {showCoworkers && shift.coworkers.length > 0 && (
         <Text style={styles.blockSub} numberOfLines={1}>{shift.coworkers.join(", ")}</Text>
       )}
     </Pressable>
@@ -249,6 +283,13 @@ function Empty({ text }: { text: string }) {
 const styles = StyleSheet.create({
   content: { flex: 1, paddingTop: 20 },
   screen: { flex: 1 },
+  topbar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  navBtn: { padding: 4 },
+  titleWrap: { flex: 1, alignItems: "center" },
+  topTitle: { fontSize: 17, fontWeight: "700", textTransform: "capitalize" },
   toggle: { flexDirection: "row", borderRadius: 999, padding: 4, margin: 16, position: "relative" },
   highlight: { position: "absolute", top: 4, bottom: 4, width: "32.5%", borderRadius: 999 },
   third: { flex: 1, paddingVertical: 12, alignItems: "center" },
@@ -265,11 +306,10 @@ const styles = StyleSheet.create({
   borderWidth: 1.5,
   },
   blockTitle: { color: "#fff", fontWeight: "700", fontSize: 14 },
-  blockTime: { color: "#fff", fontSize: 12, opacity: 0.9 },
   blockSub: { color: "#fff", fontSize: 11, opacity: 0.8, marginTop: 2 },
 
   weekRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  weekDay: { width: 20, fontSize: 16, fontWeight: "700", paddingTop: 8 },
+  weekDay: { width: 36, fontSize: 15, fontWeight: "700", paddingTop: 8 },
   weekEmpty: { height: 20, borderRadius: 8, borderWidth: 1, borderStyle: "dashed" },
 
   monthHeader: { flexDirection: "row", marginBottom: 8 },

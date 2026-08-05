@@ -1,0 +1,136 @@
+{
+  "auth": {
+    "email": "Ел. пошта",
+    "password": "Пароль",
+    "confirmPassword": "Підтвердьте пароль",
+    "signIn": "Увійти",
+    "signUp": "Реєстрація",
+    "noAccount": "Немає облікового запису?",
+    "haveAccount": "Вже маєте обліковий запис?",
+    "alreadyRegistered": "Ця пошта вже зареєстрована — увійдіть замість цього.",
+    "pwRuleLength": "Щонайменше 8 символів",
+    "pwRuleUpper": "Одна велика літера",
+    "pwRuleLower": "Одна мала літера",
+    "pwRuleMatch": "Паролі збігаються",
+    "verifyTitle": "Перевірте пошту",
+    "verifySubtitle": "Введіть 6-значний код, надісланий на",
+    "code": "Код",
+    "verify": "Підтвердити",
+    "resend": "Надіслати код повторно",
+    "codeResent": "Новий код надіслано.",
+    "back": "Назад"
+  },
+  "select": {
+    "title": "Ваші компанії",
+    "joined": "Приєднано",
+    "invites": "Запрошення",
+    "accept": "Приєднатися",
+    "signOut": "Вийти",
+    "refresh": "Оновити",
+    "empty": "Поки що немає запрошень",
+    "emptyHint": "Попросіть керівника запросити цю адресу, потім потягніть вниз для оновлення.",
+    "loadError": "Не вдалося завантажити ваші компанії.",
+    "role": {
+      "chef": "Керівник",
+      "mitarbeiter": "Працівник"
+    }
+  },
+  "messages": {
+    "empty": "Поки немає повідомлень",
+    "done": "Виконано",
+    "votes": "голосів",
+    "anonymous": "Анонімно",
+    "mock": "Приклад (макет)",
+    "mockWants": "хоче обмінятися зміною",
+    "mockAvailable": "Доступний",
+    "mockCanTake": "Ви можете взяти це",
+    "new": "Нове повідомлення",
+    "titleField": "Заголовок",
+    "textField": "Повідомлення",
+    "addItem": "Додати пункт",
+    "addOption": "Додати варіант",
+    "multipleChoice": "Кілька варіантів",
+    "post": "Опублікувати",
+    "search": "Пошук",
+    "sortNewest": "Найновіші",
+    "sortRelevant": "Актуальні",
+    "priority": "Пріоритет",
+    "prioNormal": "Звичайний",
+    "prioWichtig": "Важливий",
+    "prioDringend": "Терміновий",
+    "swapGive": "Зміна для передачі",
+    "swapWant": "День, коли хочеш працювати",
+    "selectShift": "Виберіть зміну",
+    "selectDate": "Виберіть день",
+    "noUpcomingShifts": "Немає майбутніх змін",
+    "noFreeDates": "Немає вільних днів"
+  },
+  "manager": {
+    "title": "Менеджер",
+    "inDevelopment": "Ще в розробці"
+  },
+  "notifications": {
+    "title": "Сповіщення",
+    "cat": { "messages": "Повідомлення", "schedule": "Розклад" },
+    "item": {
+      "announcement": "Оголошення",
+      "tasks": "Списки завдань",
+      "shiftSwitch": "Обмін змінами",
+      "polls": "Опитування",
+      "documents": "Документи",
+      "planPublished": "План опубліковано",
+      "shiftChanged": "Зміну змінено",
+      "availabilityReminder": "Нагадування про доступність",
+      "understaffing": "Нестача персоналу"
+    }
+  },
+  "tabs": {
+    "messages": "Повідомлення",
+    "todos": "Завдання",
+    "manager": "Менеджер",
+    "main": "Головна",
+    "calendar": "Календар",
+    "settings": "Налаштування"
+  },
+  "settings": {
+    "title": "Налаштування",
+    "connections": "Підключення",
+    "manageConnections": "Керувати підключеннями",
+    "manageConnectionsSub": "Змінити компанію, прийняти запрошення або вийти",
+    "signOut": "Вийти",
+    "holdToConfirm": "Утримуйте 3 секунди",
+    "notifications": "Керувати сповіщеннями",
+    "appearance": "Оформлення",
+    "mode": {
+      "system": "Системна",
+      "light": "Світла",
+      "dark": "Темна"
+    },
+    "language": "Мова",
+    "lang": {
+      "en": "Англійська",
+      "de": "Німецька",
+      "ru": "Російська",
+      "fr": "Французька",
+      "tr": "Турецька",
+      "uk": "Українська"
+    }
+  },
+  "calendar": {
+    "day": "День",
+    "week": "Тиждень",
+    "month": "Місяць",
+    "time": "Час",
+    "date": "Дата",
+    "coworkers": "Колеги",
+    "comment": "Коментар",
+    "noShifts": "Немає змін",
+    "monday": "Пн",
+    "tuesday": "Вт",
+    "wednesday": "Ср",
+    "thursday": "Чт",
+    "friday": "Пт",
+    "saturday": "Сб",
+    "sunday": "Нд"
+  }
+}

@@ -1,28 +1,33 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createClient, Session } from "@supabase/supabase-js";
+import { Session } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useState } from "react";
-
-const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL!,
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      storage: AsyncStorage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false, // RN has no URL to detect from
-    },
-  }
-);
-
-const MOCK = true;
+import { supabase } from "../lib/supabase";
 
 type AuthContextType = {
   user: Session["user"] | null;
   loading: boolean;
-  hostSignUp: (email: string, password: string) => Promise<void>;
-  hostSignIn: (email: string, password: string) => Promise<void>;
-  signUpWithHash: (hash: string) => Promise<void>;
+  /** True once the user has picked which position to enter. */
+  entered: boolean;
+  /** The mitarbeiter position the user entered as (drives role-based UI). */
+  activeMitarbeiter: { id: string; betrieb_id: string; rolle_typ: string } | null;
+  /** Standard email/password sign-in. */
+  signIn: (email: string, password: string) => Promise<void>;
+  /**
+   * Standard email/password sign-up.
+   * - `needsVerification`: the project requires email confirmation (code emailed).
+   * - `alreadyRegistered`: the email already belongs to a confirmed account
+   *   (Supabase's enumeration protection returns a user with no identities and
+   *   no session), so the caller should steer the user to sign in instead.
+   */
+  signUp: (email: string, password: string) =>
+    Promise<{ needsVerification: boolean; alreadyRegistered: boolean }>;
+  /** Confirm a sign-up with the 6-digit code from the email. */
+  verifySignUp: (email: string, code: string) => Promise<void>;
+  /** Re-send the sign-up confirmation code. */
+  resendCode: (email: string) => Promise<void>;
+  /** Enter the app as a specific mitarbeiter position (from the select screen). */
+  enterApp: (m: { id: string; betrieb_id: string; rolle_typ: string }) => void;
+  /** Return to the business-selection screen (manage connections / switch). */
+  exitToSelection: () => void;
   signOut: () => Promise<void>;
 };
 
@@ -30,16 +35,13 @@ const Ctx = createContext<AuthContextType>({} as AuthContextType);
 export const useAuth = () => useContext(Ctx);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<Session["user"] | null>(
-  MOCK ? ({ id: "mock-id", email: "test@host.dev",role:"host" } as any) : null
-  );
-  const [loading, setLoading] = useState(!MOCK);
-  
-  //console.log("MOCK:", MOCK, "user:", user, "loading:", loading);
+  const [user, setUser] = useState<Session["user"] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [entered, setEntered] = useState(false);
+  const [activeMitarbeiter, setActiveMitarbeiter] =
+    useState<{ id: string; betrieb_id: string; rolle_typ: string } | null>(null);
 
   useEffect(() => {
-     if (MOCK) return;   // ← add this
-
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
       setLoading(false);
@@ -47,40 +49,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
+      if (!session?.user) { setEntered(false); setActiveMitarbeiter(null); } // reset on sign-out
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // --- Host: standard Supabase email/password ---
-  const hostSignUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-  };
-
-  const hostSignIn = async (email: string, password: string) => {
-    if (MOCK) { setUser({ id: "mock-id", email } as any); return; }
+  const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
   };
 
-  // --- Employee (Mitarbeiter): redeem hash via edge function ---
-  const signUpWithHash = async (hash: string) => {
-    const { data, error } = await supabase.functions.invoke("signUpWithHash", {
-      body: { hash },
-    });
+  const signUp = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
-
-    // edge function returns a permanent session for the auth_id
-    // tied to the mitarbeiter row
-    const { error: sessErr } = await supabase.auth.setSession({
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-    });
-    if (sessErr) throw sessErr;
+    // Enumeration protection: an already-confirmed email returns a user with an
+    // empty identities array and no session (no email is actually sent).
+    const alreadyRegistered = !data.session && data.user?.identities?.length === 0;
+    // When email confirmation is enabled, a genuine new sign-up has no session yet.
+    return { needsVerification: !data.session && !alreadyRegistered, alreadyRegistered };
   };
 
+  const verifySignUp = async (email: string, code: string) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: code,
+      type: "signup",
+    });
+    if (error) throw error;
+  };
+
+  const resendCode = async (email: string) => {
+    const { error } = await supabase.auth.resend({ type: "signup", email });
+    if (error) throw error;
+  };
+
+  const enterApp = (m: { id: string; betrieb_id: string; rolle_typ: string }) => {
+    setActiveMitarbeiter(m);
+    setEntered(true);
+  };
+  const exitToSelection = () => setEntered(false);
+
   const signOut = async () => {
-    if (MOCK) { setUser(null); return; }
     await supabase.auth.signOut();
   };
 
@@ -89,9 +98,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         loading,
-        hostSignUp,
-        hostSignIn,
-        signUpWithHash,
+        entered,
+        activeMitarbeiter,
+        signIn,
+        signUp,
+        verifySignUp,
+        resendCode,
+        enterApp,
+        exitToSelection,
         signOut,
       }}
     >

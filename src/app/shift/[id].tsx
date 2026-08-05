@@ -1,14 +1,14 @@
 import { useLocalSearchParams } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { useI18n } from "../../i18n/I18nProvider";
-import { businessSettings, mockShifts } from "../../mock/shifts";
+import { shifts, showCoworkers } from "../../lib/shifts";
 import { useTheme } from "../../theme/ThemeProvider";
 
 export default function ShiftDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme } = useTheme();
   const { t } = useI18n();
-  const shift = mockShifts.find((s) => s.id === id);
+  const shift = shifts.find((s) => s.id === id);
 
   if (!shift) {
     return <View style={[styles.screen, { backgroundColor: theme.bg }]}><Text style={{ color: theme.text }}>Not found</Text></View>;
@@ -19,7 +19,7 @@ export default function ShiftDetail() {
       <Text style={[styles.title, { color: theme.text }]}>{shift.title}</Text>
       <Row label={t("calendar.time")} value={`${shift.start} – ${shift.end}`} />
       <Row label={t("calendar.date")} value={shift.date} />
-      {businessSettings.showCoworkers && shift.coworkers.length > 0 && (
+      {showCoworkers && shift.coworkers.length > 0 && (
         <Row label={t("calendar.coworkers")} value={shift.coworkers.join(", ")} />
       )}
       {shift.comment ? <Row label={t("calendar.comment")} value={shift.comment} /> : null}

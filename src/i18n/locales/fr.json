@@ -1,0 +1,136 @@
+{
+  "auth": {
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "confirmPassword": "Confirmer le mot de passe",
+    "signIn": "Se connecter",
+    "signUp": "S'inscrire",
+    "noAccount": "Pas encore de compte ?",
+    "haveAccount": "Vous avez déjà un compte ?",
+    "alreadyRegistered": "Cet e-mail est déjà enregistré — connectez-vous plutôt.",
+    "pwRuleLength": "Au moins 8 caractères",
+    "pwRuleUpper": "Une lettre majuscule",
+    "pwRuleLower": "Une lettre minuscule",
+    "pwRuleMatch": "Les mots de passe correspondent",
+    "verifyTitle": "Vérifiez vos e-mails",
+    "verifySubtitle": "Saisissez le code à 6 chiffres envoyé à",
+    "code": "Code",
+    "verify": "Vérifier",
+    "resend": "Renvoyer le code",
+    "codeResent": "Un nouveau code a été envoyé.",
+    "back": "Retour"
+  },
+  "select": {
+    "title": "Vos entreprises",
+    "joined": "Rejointes",
+    "invites": "Invitations",
+    "accept": "Rejoindre",
+    "signOut": "Se déconnecter",
+    "refresh": "Actualiser",
+    "empty": "Pas encore d'invitations",
+    "emptyHint": "Demandez à votre responsable d'inviter cette adresse e-mail, puis tirez pour actualiser.",
+    "loadError": "Impossible de charger vos entreprises.",
+    "role": {
+      "chef": "Responsable",
+      "mitarbeiter": "Employé"
+    }
+  },
+  "messages": {
+    "empty": "Aucun message pour l'instant",
+    "done": "Fait",
+    "votes": "votes",
+    "anonymous": "Anonyme",
+    "mock": "Exemple (maquette)",
+    "mockWants": "souhaite échanger un créneau",
+    "mockAvailable": "Disponible",
+    "mockCanTake": "Vous pouvez le prendre",
+    "new": "Nouveau message",
+    "titleField": "Titre",
+    "textField": "Message",
+    "addItem": "Ajouter un élément",
+    "addOption": "Ajouter une option",
+    "multipleChoice": "Choix multiple",
+    "post": "Publier",
+    "search": "Rechercher",
+    "sortNewest": "Récents",
+    "sortRelevant": "Pertinents",
+    "priority": "Priorité",
+    "prioNormal": "Normal",
+    "prioWichtig": "Important",
+    "prioDringend": "Urgent",
+    "swapGive": "Poste à céder",
+    "swapWant": "Jour où tu veux travailler",
+    "selectShift": "Choisir un poste",
+    "selectDate": "Choisir un jour",
+    "noUpcomingShifts": "Aucun poste à venir",
+    "noFreeDates": "Aucun jour libre"
+  },
+  "manager": {
+    "title": "Gestion",
+    "inDevelopment": "En cours de développement"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "cat": { "messages": "Messages", "schedule": "Planning" },
+    "item": {
+      "announcement": "Annonces",
+      "tasks": "Listes de tâches",
+      "shiftSwitch": "Échange de créneaux",
+      "polls": "Sondages",
+      "documents": "Documents",
+      "planPublished": "Planning publié",
+      "shiftChanged": "Créneau modifié",
+      "availabilityReminder": "Rappel de disponibilité",
+      "understaffing": "Sous-effectif"
+    }
+  },
+  "tabs": {
+    "messages": "Messages",
+    "todos": "Tâches",
+    "manager": "Gestion",
+    "main": "Accueil",
+    "calendar": "Calendrier",
+    "settings": "Paramètres"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "connections": "Connexions",
+    "manageConnections": "Gérer les connexions",
+    "manageConnectionsSub": "Changer d'entreprise, accepter des invitations ou se déconnecter",
+    "signOut": "Se déconnecter",
+    "holdToConfirm": "Maintenez appuyé pendant 3 secondes",
+    "notifications": "Gérer les notifications",
+    "appearance": "Apparence",
+    "mode": {
+      "system": "Système",
+      "light": "Clair",
+      "dark": "Sombre"
+    },
+    "language": "Langue",
+    "lang": {
+      "en": "Anglais",
+      "de": "Allemand",
+      "ru": "Russe",
+      "fr": "Français",
+      "tr": "Turc",
+      "uk": "Ukrainien"
+    }
+  },
+  "calendar": {
+    "day": "Jour",
+    "week": "Semaine",
+    "month": "Mois",
+    "time": "Heure",
+    "date": "Date",
+    "coworkers": "Collègues",
+    "comment": "Commentaire",
+    "noShifts": "Aucun quart",
+    "monday": "Lun",
+    "tuesday": "Mar",
+    "wednesday": "Mer",
+    "thursday": "Jeu",
+    "friday": "Ven",
+    "saturday": "Sam",
+    "sunday": "Dim"
+  }
+}

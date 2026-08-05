@@ -1,0 +1,136 @@
+{
+  "auth": {
+    "email": "E-posta",
+    "password": "Parola",
+    "confirmPassword": "Parolayı onayla",
+    "signIn": "Giriş yap",
+    "signUp": "Kayıt ol",
+    "noAccount": "Hesabınız yok mu?",
+    "haveAccount": "Zaten hesabınız var mı?",
+    "alreadyRegistered": "Bu e-posta zaten kayıtlı — bunun yerine giriş yapın.",
+    "pwRuleLength": "En az 8 karakter",
+    "pwRuleUpper": "Bir büyük harf",
+    "pwRuleLower": "Bir küçük harf",
+    "pwRuleMatch": "Parolalar eşleşiyor",
+    "verifyTitle": "E-postanızı kontrol edin",
+    "verifySubtitle": "Şu adrese gönderilen 6 haneli kodu girin",
+    "code": "Kod",
+    "verify": "Doğrula",
+    "resend": "Kodu yeniden gönder",
+    "codeResent": "Yeni bir kod gönderildi.",
+    "back": "Geri"
+  },
+  "select": {
+    "title": "İşletmeleriniz",
+    "joined": "Katıldınız",
+    "invites": "Davetler",
+    "accept": "Katıl",
+    "signOut": "Çıkış yap",
+    "refresh": "Yenile",
+    "empty": "Henüz davet yok",
+    "emptyHint": "Yöneticinizden bu e-posta adresini davet etmesini isteyin, ardından yenilemek için aşağı çekin.",
+    "loadError": "İşletmeleriniz yüklenemedi.",
+    "role": {
+      "chef": "Yönetici",
+      "mitarbeiter": "Çalışan"
+    }
+  },
+  "messages": {
+    "empty": "Henüz mesaj yok",
+    "done": "Tamamlandı",
+    "votes": "oy",
+    "anonymous": "Anonim",
+    "mock": "Örnek (taslak)",
+    "mockWants": "vardiya değiştirmek istiyor",
+    "mockAvailable": "Uygun",
+    "mockCanTake": "Bunu alabilirsin",
+    "new": "Yeni mesaj",
+    "titleField": "Başlık",
+    "textField": "Mesaj",
+    "addItem": "Öğe ekle",
+    "addOption": "Seçenek ekle",
+    "multipleChoice": "Çoklu seçim",
+    "post": "Gönder",
+    "search": "Ara",
+    "sortNewest": "En yeni",
+    "sortRelevant": "İlgili",
+    "priority": "Öncelik",
+    "prioNormal": "Normal",
+    "prioWichtig": "Önemli",
+    "prioDringend": "Acil",
+    "swapGive": "Devredilecek vardiya",
+    "swapWant": "Çalışmak istediğin gün",
+    "selectShift": "Vardiya seç",
+    "selectDate": "Gün seç",
+    "noUpcomingShifts": "Yaklaşan vardiya yok",
+    "noFreeDates": "Boş gün yok"
+  },
+  "manager": {
+    "title": "Yönetici",
+    "inDevelopment": "Hâlâ geliştiriliyor"
+  },
+  "notifications": {
+    "title": "Bildirimler",
+    "cat": { "messages": "Mesajlar", "schedule": "Vardiya planı" },
+    "item": {
+      "announcement": "Duyurular",
+      "tasks": "Görev listeleri",
+      "shiftSwitch": "Vardiya değişimi",
+      "polls": "Anketler",
+      "documents": "Belgeler",
+      "planPublished": "Plan yayınlandı",
+      "shiftChanged": "Vardiya değişti",
+      "availabilityReminder": "Uygunluk hatırlatıcısı",
+      "understaffing": "Personel yetersizliği"
+    }
+  },
+  "tabs": {
+    "messages": "Mesajlar",
+    "todos": "Görevler",
+    "manager": "Yönetici",
+    "main": "Ana sayfa",
+    "calendar": "Takvim",
+    "settings": "Ayarlar"
+  },
+  "settings": {
+    "title": "Ayarlar",
+    "connections": "Bağlantılar",
+    "manageConnections": "Bağlantıları yönet",
+    "manageConnectionsSub": "İşletme değiştir, davetleri kabul et veya çıkış yap",
+    "signOut": "Çıkış yap",
+    "holdToConfirm": "3 saniye basılı tutun",
+    "notifications": "Bildirimleri yönet",
+    "appearance": "Görünüm",
+    "mode": {
+      "system": "Sistem",
+      "light": "Açık",
+      "dark": "Koyu"
+    },
+    "language": "Dil",
+    "lang": {
+      "en": "İngilizce",
+      "de": "Almanca",
+      "ru": "Rusça",
+      "fr": "Fransızca",
+      "tr": "Türkçe",
+      "uk": "Ukraynaca"
+    }
+  },
+  "calendar": {
+    "day": "Gün",
+    "week": "Hafta",
+    "month": "Ay",
+    "time": "Saat",
+    "date": "Tarih",
+    "coworkers": "İş arkadaşları",
+    "comment": "Yorum",
+    "noShifts": "Vardiya yok",
+    "monday": "Pzt",
+    "tuesday": "Sal",
+    "wednesday": "Çar",
+    "thursday": "Per",
+    "friday": "Cum",
+    "saturday": "Cmt",
+    "sunday": "Paz"
+  }
+}

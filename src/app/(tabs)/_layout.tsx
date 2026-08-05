@@ -12,10 +12,11 @@ export const unstable_settings = {
 export default function TabsLayout() {
   const { theme } = useTheme();
   const { t } = useI18n();
-  const {user} = useAuth();
+  const { activeMitarbeiter } = useAuth();
 
-  const isHost = (user as any)?.role === "host";
-  
+  // Role of the position the user entered as -> chef sees the Manager tab.
+  const isChef = activeMitarbeiter?.rolle_typ === "chef";
+
   return (
     <Tabs
       screenOptions={{
@@ -38,7 +39,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="todos"
         options={{
-          href: isHost ? null : "/todos",
+          href: null, // removed: employees no longer get a To-dos tab
           title: t("tabs.todos"),
           tabBarIcon: ({ color, size }) => <ListTodo color={color} size={size} />,
         }}
@@ -46,7 +47,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="manager"
         options={{
-          href: isHost ? "/manager" : null,
+          href: isChef ? "/manager" : null,
           title: t("tabs.manager"),
           tabBarIcon: ({ color, size }) => <Briefcase color={color} size={size} />,
         }}
