@@ -1,6 +1,6 @@
 // src/app/(tabs)/settings.tsx
 import { router } from "expo-router";
-import { AlertCircle, Mail } from "lucide-react-native";
+import { AlertCircle, Settings as Gear, Mail, Moon, Sun } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
@@ -65,9 +65,6 @@ export default function SettingsScreen() {
         <Text style={[styles.title, { color: theme.text }]}>{t("settings.title")}</Text>
 
         {/* ---- Connections ---- */}
-        <Text style={[styles.sectionLabel, { color: theme.muted }]}>
-          {t("settings.connections")}
-        </Text>
         <Pressable
           style={[styles.row, { backgroundColor: theme.surface }]}
           onPress={exitToSelection}
@@ -76,41 +73,40 @@ export default function SettingsScreen() {
             <Text style={[styles.rowText, { color: theme.text }]}>
               {t("settings.manageConnections")}
             </Text>
-            <Text style={[styles.rowSub, { color: theme.muted }]}>
-              {t("settings.manageConnectionsSub")}
-            </Text>
           </View>
           <Text style={[styles.chevron, { color: theme.muted }]}>›</Text>
         </Pressable>
 
         {/* ---- Appearance ---- */}
-        <Text style={[styles.sectionLabel, { color: theme.muted }]}>
-          {t("settings.appearance")}
-        </Text>
         <View style={[styles.segment, { backgroundColor: theme.surface }]}>
-          {(["system", "light", "dark"] as const).map((m) => (
-            <Pressable
-              key={m}
-              style={[styles.segmentItem, mode === m && { backgroundColor: theme.bg }]}
-              onPress={() => setMode(m)}
-            >
-              <Text style={{ color: mode === m ? theme.text : theme.muted, fontWeight: "600" }}>
-                {t(`settings.mode.${m}`)}
-              </Text>
-            </Pressable>
-          ))}
+          {([
+            { m: "light", Icon: Sun },
+            { m: "dark", Icon: Moon },
+            { m: "system", Icon: Gear },
+          ] as const).map(({ m, Icon }) => {
+            const active = mode === m;
+            return (
+              <Pressable
+                key={m}
+                style={[styles.segmentItem, active && { backgroundColor: theme.bg }]}
+                onPress={() => setMode(m)}
+              >
+                <Icon color={active ? theme.text : theme.muted} size={20} />
+                <Text style={{ color: active ? theme.text : theme.muted, fontWeight: "600", fontSize: 13 }}>
+                  {t(`settings.mode.${m}`)}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* ---- Language (dropdown) ---- */}
-        <Text style={[styles.sectionLabel, { color: theme.muted }]}>
-          {t("settings.language")}
-        </Text>
         <Pressable
           style={[styles.row, { backgroundColor: theme.surface }]}
           onPress={() => setLangOpen((o) => !o)}
         >
           <Text style={styles.langFlag}>{current.flag}</Text>
-          <Text style={[styles.langLabel, { color: theme.text }]}>{current.label}</Text>
+          <Text style={[styles.langLabel, { color: theme.text }]}>{t("settings.language")}</Text>
           <Text style={[styles.chevron, { color: theme.muted }]}>{langOpen ? "▴" : "▾"}</Text>
         </Pressable>
         {langOpen && (
@@ -133,9 +129,6 @@ export default function SettingsScreen() {
         )}
 
         {/* ---- Notifications ---- */}
-        <Text style={[styles.sectionLabel, { color: theme.muted }]}>
-          {t("notifications.title")}
-        </Text>
         <Pressable
           style={[styles.row, { backgroundColor: theme.surface }]}
           onPress={() => router.push("/notifications")}
@@ -148,9 +141,6 @@ export default function SettingsScreen() {
         </Pressable>
 
         {/* ---- Feedback ---- */}
-        <Text style={[styles.sectionLabel, { color: theme.muted }]}>
-          {t("settings.reportBug")}
-        </Text>
         <Pressable
           style={[styles.row, { backgroundColor: theme.surface }]}
           onPress={() => router.push("/bug-report")}
@@ -190,7 +180,7 @@ const styles = StyleSheet.create({
   rowSub: { fontSize: 13, marginTop: 2 },
   chevron: { fontSize: 24 },
   segment: { flexDirection: "row", borderRadius: 12, padding: 4, gap: 4 },
-  segmentItem: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: "center" },
+  segmentItem: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: "center", gap: 5 },
   card: { borderRadius: 12, overflow: "hidden", marginTop: 4 },
   langRow: {
     flexDirection: "row", alignItems: "center", gap: 12,
