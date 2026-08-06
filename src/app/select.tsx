@@ -2,8 +2,8 @@
 import { RefreshCw } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator, Pressable, RefreshControl,
-    ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Pressable, RefreshControl,
+  ScrollView, StyleSheet, Text, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../context/auth";
@@ -103,9 +103,6 @@ export default function SelectBusinessScreen() {
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.text }]}>{t("select.title")}</Text>
-        <Pressable onPress={signOut} hitSlop={8}>
-          <Text style={[styles.signOut, { color: theme.muted }]}>{t("select.signOut")}</Text>
-        </Pressable>
       </View>
       <Text style={[styles.email, { color: theme.muted }]}>{user?.email}</Text>
 
