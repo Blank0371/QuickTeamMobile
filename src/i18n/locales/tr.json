@@ -45,6 +45,25 @@
     "today": "Bugün",
     "tomorrow": "Yarın"
   },
+  "legal": {
+    "sectionTitle": "Yasal",
+    "consentTitle": "Gizlilik ve Koşullar",
+    "consentUpdated": "Gizlilik Politikamız ve Kullanım Koşullarımız değişti. Devam etmek için lütfen ikisini de okuyup kabul edin.",
+    "scrollHint": "Devam etmek için en alta kaydırın",
+    "agree": "Kabul ediyorum",
+    "privacy": {
+      "title": "Gizlilik Politikası"
+    },
+    "terms": {
+      "title": "Kullanım Koşulları"
+    },
+    "eula": {
+      "title": "Son Kullanıcı Lisans Sözleşmesi"
+    },
+    "dmca": {
+      "title": "DMCA Politikası"
+    }
+  },
   "messages": {
     "empty": "Henüz mesaj yok",
     "done": "Tamamlandı",
@@ -77,7 +96,8 @@
   },
   "manager": {
     "title": "Yönetici",
-    "inDevelopment": "Hâlâ geliştiriliyor"
+    "inDevelopment": "Hâlâ geliştiriliyor",
+    "useWebsite": "Lütfen işletmenizi web sitemizden yönetmeye devam edin"
   },
   "notifications": {
     "title": "Bildirimler",

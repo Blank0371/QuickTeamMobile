@@ -45,6 +45,25 @@
     "today": "Heute",
     "tomorrow": "Morgen"
   },
+  "legal": {
+    "sectionTitle": "Rechtliches",
+    "consentTitle": "Datenschutz & AGB",
+    "consentUpdated": "Unsere Datenschutzerklärung und AGB haben sich geändert. Bitte lies beide und stimme zu, um fortzufahren.",
+    "scrollHint": "Scrolle nach unten, um fortzufahren",
+    "agree": "Ich stimme zu",
+    "privacy": {
+      "title": "Datenschutzerklärung"
+    },
+    "terms": {
+      "title": "AGB"
+    },
+    "eula": {
+      "title": "Endbenutzer-Lizenzvertrag"
+    },
+    "dmca": {
+      "title": "DMCA-Richtlinie"
+    }
+  },
   "messages": {
     "empty": "Noch keine Nachrichten",
     "done": "Erledigt",
@@ -77,7 +96,8 @@
   },
   "manager": {
     "title": "Manager",
-    "inDevelopment": "Noch in Entwicklung"
+    "inDevelopment": "Noch in Entwicklung",
+    "useWebsite": "Bitte verwalte dein Unternehmen weiterhin auf unserer Website"
   },
   "notifications": {
     "title": "Benachrichtigungen",

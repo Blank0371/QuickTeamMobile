@@ -45,6 +45,25 @@
     "today": "Aujourd'hui",
     "tomorrow": "Demain"
   },
+  "legal": {
+    "sectionTitle": "Mentions légales",
+    "consentTitle": "Confidentialité et Conditions",
+    "consentUpdated": "Notre politique de confidentialité et nos conditions générales ont changé. Veuillez lire et accepter les deux pour continuer.",
+    "scrollHint": "Faites défiler jusqu'en bas pour continuer",
+    "agree": "J'accepte",
+    "privacy": {
+      "title": "Politique de confidentialité"
+    },
+    "terms": {
+      "title": "Conditions générales"
+    },
+    "eula": {
+      "title": "Contrat de licence utilisateur"
+    },
+    "dmca": {
+      "title": "Politique DMCA"
+    }
+  },
   "messages": {
     "empty": "Aucun message pour l'instant",
     "done": "Fait",
@@ -77,7 +96,8 @@
   },
   "manager": {
     "title": "Gestion",
-    "inDevelopment": "En cours de développement"
+    "inDevelopment": "En cours de développement",
+    "useWebsite": "Veuillez continuer à gérer votre entreprise sur notre site web"
   },
   "notifications": {
     "title": "Notifications",

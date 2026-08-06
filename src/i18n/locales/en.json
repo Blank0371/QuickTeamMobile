@@ -45,6 +45,25 @@
     "today": "Today",
     "tomorrow": "Tomorrow"
   },
+  "legal": {
+    "sectionTitle": "Legal",
+    "consentTitle": "Privacy Policy & Terms",
+    "consentUpdated": "Our Privacy Policy and Terms & Conditions have changed. Please review and agree to both to continue.",
+    "scrollHint": "Scroll to the bottom to continue",
+    "agree": "I agree",
+    "privacy": {
+      "title": "Privacy Policy"
+    },
+    "terms": {
+      "title": "Terms & Conditions"
+    },
+    "eula": {
+      "title": "End User License Agreement"
+    },
+    "dmca": {
+      "title": "DMCA Policy"
+    }
+  },
   "messages": {
     "empty": "No messages yet",
     "done": "Done",
@@ -77,7 +96,8 @@
   },
   "manager": {
     "title": "Manager",
-    "inDevelopment": "Still in development"
+    "inDevelopment": "Still in development",
+    "useWebsite": "Please continue to manage your business on our website"
   },
   "notifications": {
     "title": "Notifications",

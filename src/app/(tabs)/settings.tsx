@@ -1,14 +1,15 @@
 // src/app/(tabs)/settings.tsx
 import { router } from "expo-router";
-import { AlertCircle, Settings as Gear, Mail, Moon, Sun } from "lucide-react-native";
+import { AlertCircle, Copyright, FileText, Settings as Gear, Mail, Moon, ScrollText, Shield, Sun } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
   cancelAnimation, runOnJS, useAnimatedStyle, useSharedValue, withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
+import { APPLE_STANDARD_EULA_URL } from "../../lib/legal";
 import { useTheme } from "../../theme/ThemeProvider";
 
 const LANGS = [
@@ -19,6 +20,14 @@ const LANGS = [
   { code: "tr" as const, flag: "🇹🇷", label: "Türkçe" },
   { code: "uk" as const, flag: "🇺🇦", label: "Українська" },
 ];
+
+// Legal documents listed in the Settings > Legal section, in display order.
+const LEGAL_DOCS = [
+  { id: "privacy", Icon: Shield },
+  { id: "terms", Icon: FileText },
+  { id: "eula", Icon: ScrollText },
+  { id: "dmca", Icon: Copyright },
+] as const;
 
 const HOLD_MS = 3000;
 
@@ -166,6 +175,28 @@ export default function SettingsScreen() {
           </View>
           <Text style={[styles.chevron, { color: theme.muted }]}>›</Text>
         </Pressable>
+
+        {/* ---- Legal ---- */}
+        <Text style={[styles.sectionLabel, { color: theme.muted }]}>
+          {t("legal.sectionTitle")}
+        </Text>
+        {LEGAL_DOCS.map(({ id, Icon }) => (
+          <Pressable
+            key={id}
+            style={[styles.row, { backgroundColor: theme.surface }]}
+            onPress={() =>
+              id === "eula"
+                ? Linking.openURL(APPLE_STANDARD_EULA_URL)
+                : router.push({ pathname: "/legal/[doc]", params: { doc: id } })
+            }
+          >
+            <Icon color={theme.text} size={22} />
+            <Text style={[styles.rowText, { color: theme.text, flex: 1 }]}>
+              {t(`legal.${id}.title`)}
+            </Text>
+            <Text style={[styles.chevron, { color: theme.muted }]}>›</Text>
+          </Pressable>
+        ))}
 
         {/* ---- Danger zone ---- */}
         <View style={styles.danger}>

@@ -13,6 +13,7 @@ export default function Manager() {
       <Construction color={theme.accent} size={64} strokeWidth={1.5} />
       <Text style={[styles.title, { color: theme.text }]}>{t("manager.title")}</Text>
       <Text style={[styles.sub, { color: theme.muted }]}>{t("manager.inDevelopment")}</Text>
+      <Text style={[styles.sub, { color: theme.muted }]}>{t("manager.useWebsite")}</Text>
     </SafeAreaView>
   );
 }
