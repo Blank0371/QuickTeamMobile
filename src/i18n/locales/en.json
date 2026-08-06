@@ -35,6 +35,16 @@
       "mitarbeiter": "Employee"
     }
   },
+  "home": {
+    "greeting": "Hello",
+    "nextShift": "Your next shift",
+    "noShift": "No upcoming shifts",
+    "newMessages": "New messages",
+    "noNewMessages": "You're all caught up",
+    "viewAll": "View all",
+    "today": "Today",
+    "tomorrow": "Tomorrow"
+  },
   "messages": {
     "empty": "No messages yet",
     "done": "Done",
@@ -125,7 +135,9 @@
     "calendarHint": "Tap a day to set a preference. \nThe more you select, the less each choice counts.",
     "preferencesUpdated": "Preferences updated",
     "earlyShift": "Early shift",
-    "lateShift": "Late shift"
+    "lateShift": "Late shift",
+    "discardChanges": "Discard changes",
+    "done": "Done"
   },
   "settings": {
     "title": "Settings",
@@ -135,6 +147,8 @@
     "signOut": "Sign out",
     "holdToConfirm": "Press and hold for 3 seconds",
     "notifications": "Manage notifications",
+    "reportBug": "Report bugs and problems",
+    "reportBugSub": "Tell us what went wrong",
     "appearance": "Appearance",
     "mode": {
       "system": "System",
@@ -149,6 +163,14 @@
       "fr": "French",
       "tr": "Turkish",
       "uk": "Ukrainian"
+    },
+    "bugReport": {
+      "title": "Report a problem",
+      "description": "Describe the bug or problem you ran into. We'll take a look.",
+      "placeholder": "What went wrong?",
+      "submit": "Send report",
+      "success": "Thanks! Your report has been sent.",
+      "error": "Could not send your report. Please try again."
     }
   },
   "calendar": {

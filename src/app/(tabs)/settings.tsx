@@ -1,9 +1,10 @@
 // src/app/(tabs)/settings.tsx
 import { router } from "expo-router";
+import { AlertCircle, Mail } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
-    cancelAnimation, runOnJS, useAnimatedStyle, useSharedValue, withTiming,
+  cancelAnimation, runOnJS, useAnimatedStyle, useSharedValue, withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
@@ -139,9 +140,27 @@ export default function SettingsScreen() {
           style={[styles.row, { backgroundColor: theme.surface }]}
           onPress={() => router.push("/notifications")}
         >
+          <Mail color={theme.text} size={22} />
           <Text style={[styles.rowText, { color: theme.text, flex: 1 }]}>
             {t("settings.notifications")}
           </Text>
+          <Text style={[styles.chevron, { color: theme.muted }]}>›</Text>
+        </Pressable>
+
+        {/* ---- Feedback ---- */}
+        <Text style={[styles.sectionLabel, { color: theme.muted }]}>
+          {t("settings.reportBug")}
+        </Text>
+        <Pressable
+          style={[styles.row, { backgroundColor: theme.surface }]}
+          onPress={() => router.push("/bug-report")}
+        >
+          <AlertCircle color={theme.text} size={22} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.rowText, { color: theme.text }]}>
+              {t("settings.reportBug")}
+            </Text>
+          </View>
           <Text style={[styles.chevron, { color: theme.muted }]}>›</Text>
         </Pressable>
 

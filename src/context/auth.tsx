@@ -1,4 +1,5 @@
 import { Session } from "@supabase/supabase-js";
+import { router } from "expo-router";
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
@@ -86,6 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const enterApp = (m: { id: string; betrieb_id: string; rolle_typ: string }) => {
     setActiveMitarbeiter(m);
     setEntered(true);
+    // Land on Home. The (tabs) group anchors on "index", but flipping the
+    // `entered` guard doesn't always re-target the group's initial route, so
+    // redirect explicitly once the tabs mount on the next tick.
+    setTimeout(() => router.replace("/"), 0);
   };
   const exitToSelection = () => setEntered(false);
 

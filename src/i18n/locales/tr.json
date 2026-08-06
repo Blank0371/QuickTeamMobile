@@ -35,6 +35,16 @@
       "mitarbeiter": "Çalışan"
     }
   },
+  "home": {
+    "greeting": "Merhaba",
+    "nextShift": "Bir sonraki vardiyan",
+    "noShift": "Yaklaşan vardiya yok",
+    "newMessages": "Yeni mesajlar",
+    "noNewMessages": "Hepsi okundu",
+    "viewAll": "Tümünü gör",
+    "today": "Bugün",
+    "tomorrow": "Yarın"
+  },
   "messages": {
     "empty": "Henüz mesaj yok",
     "done": "Tamamlandı",
@@ -125,7 +135,9 @@
     "calendarHint": "Tercih ayarlamak için bir güne dokun. \nNe kadar çok seçersen, her seçim o kadar az dikkate alınır.",
     "preferencesUpdated": "Tercihler güncellendi",
     "earlyShift": "Erken vardiya",
-    "lateShift": "Geç vardiya"
+    "lateShift": "Geç vardiya",
+    "discardChanges": "Değişiklikleri iptal et",
+    "done": "Tamam"
   },
   "settings": {
     "title": "Ayarlar",
@@ -135,6 +147,8 @@
     "signOut": "Çıkış yap",
     "holdToConfirm": "3 saniye basılı tutun",
     "notifications": "Bildirimleri yönet",
+    "reportBug": "Hataları ve sorunları bildir",
+    "reportBugSub": "Neyin yanlış gittiğini bize bildirin",
     "appearance": "Görünüm",
     "mode": {
       "system": "Sistem",
@@ -149,6 +163,14 @@
       "fr": "Fransızca",
       "tr": "Türkçe",
       "uk": "Ukraynaca"
+    },
+    "bugReport": {
+      "title": "Bir sorun bildir",
+      "description": "Karşılaştığınız hatayı veya sorunu açıklayın. İnceleyeceğiz.",
+      "placeholder": "Ne yanlış gitti?",
+      "submit": "Bildirimi gönder",
+      "success": "Teşekkürler! Bildiriminiz gönderildi.",
+      "error": "Bildiriminiz gönderilemedi. Lütfen tekrar deneyin."
     }
   },
   "calendar": {

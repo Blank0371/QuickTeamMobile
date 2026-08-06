@@ -35,6 +35,16 @@
       "mitarbeiter": "Mitarbeiter"
     }
   },
+  "home": {
+    "greeting": "Hallo",
+    "nextShift": "Deine nächste Schicht",
+    "noShift": "Keine anstehenden Schichten",
+    "newMessages": "Neue Nachrichten",
+    "noNewMessages": "Alles gelesen",
+    "viewAll": "Alle anzeigen",
+    "today": "Heute",
+    "tomorrow": "Morgen"
+  },
   "messages": {
     "empty": "Noch keine Nachrichten",
     "done": "Erledigt",
@@ -125,7 +135,9 @@
     "calendarHint": "Tippe auf einen Tag, um eine Präferenz zu setzen. \nJe mehr du auswählst, desto weniger zählt jede einzelne.",
     "preferencesUpdated": "Präferenzen aktualisiert",
     "earlyShift": "Frühschicht",
-    "lateShift": "Spätschicht"
+    "lateShift": "Spätschicht",
+    "discardChanges": "Änderungen verwerfen",
+    "done": "Fertig"
   },
   "settings": {
     "title": "Einstellungen",
@@ -135,6 +147,8 @@
     "signOut": "Abmelden",
     "holdToConfirm": "3 Sekunden gedrückt halten",
     "notifications": "Benachrichtigungen verwalten",
+    "reportBug": "Fehler und Probleme melden",
+    "reportBugSub": "Sag uns, was schiefgelaufen ist",
     "appearance": "Erscheinung",
     "mode": {
       "system": "System",
@@ -149,6 +163,14 @@
       "fr": "Französisch",
       "tr": "Türkisch",
       "uk": "Ukrainisch"
+    },
+    "bugReport": {
+      "title": "Ein Problem melden",
+      "description": "Beschreibe den Fehler oder das Problem, das aufgetreten ist. Wir schauen es uns an.",
+      "placeholder": "Was ist schiefgelaufen?",
+      "submit": "Meldung senden",
+      "success": "Danke! Deine Meldung wurde gesendet.",
+      "error": "Meldung konnte nicht gesendet werden. Bitte versuche es erneut."
     }
   },
   "calendar": {

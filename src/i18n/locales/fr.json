@@ -35,6 +35,16 @@
       "mitarbeiter": "Employé"
     }
   },
+  "home": {
+    "greeting": "Bonjour",
+    "nextShift": "Votre prochain service",
+    "noShift": "Aucun service à venir",
+    "newMessages": "Nouveaux messages",
+    "noNewMessages": "Vous êtes à jour",
+    "viewAll": "Voir tout",
+    "today": "Aujourd'hui",
+    "tomorrow": "Demain"
+  },
   "messages": {
     "empty": "Aucun message pour l'instant",
     "done": "Fait",
@@ -125,7 +135,9 @@
     "calendarHint": "Touchez un jour pour définir une préférence. \nPlus vous en sélectionnez, moins chaque choix compte.",
     "preferencesUpdated": "Préférences mises à jour",
     "earlyShift": "Poste du matin",
-    "lateShift": "Poste du soir"
+    "lateShift": "Poste du soir",
+    "discardChanges": "Annuler les modifications",
+    "done": "Terminé"
   },
   "settings": {
     "title": "Paramètres",
@@ -135,6 +147,8 @@
     "signOut": "Se déconnecter",
     "holdToConfirm": "Maintenez appuyé pendant 3 secondes",
     "notifications": "Gérer les notifications",
+    "reportBug": "Signaler des bugs et problèmes",
+    "reportBugSub": "Dites-nous ce qui n'a pas fonctionné",
     "appearance": "Apparence",
     "mode": {
       "system": "Système",
@@ -149,6 +163,14 @@
       "fr": "Français",
       "tr": "Turc",
       "uk": "Ukrainien"
+    },
+    "bugReport": {
+      "title": "Signaler un problème",
+      "description": "Décrivez le bug ou le problème rencontré. Nous allons y jeter un œil.",
+      "placeholder": "Qu'est-ce qui n'a pas fonctionné ?",
+      "submit": "Envoyer le signalement",
+      "success": "Merci ! Votre signalement a été envoyé.",
+      "error": "Impossible d'envoyer votre signalement. Veuillez réessayer."
     }
   },
   "calendar": {

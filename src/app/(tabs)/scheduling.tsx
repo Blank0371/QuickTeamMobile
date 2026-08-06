@@ -15,14 +15,13 @@ const BLOCKED = "#dc2626"; // color for a disabled navigation direction
 
 const monthIndex = (d: Date) => d.getFullYear() * 12 + d.getMonth();
 
-type DayPref = "priority" | "preferred" | "vacation";
+type DayPref = "priority" | "preferred";
 type ShiftPref = "early" | "late";
 type DayEntry = { off?: DayPref; shift?: ShiftPref };
 
 const PREF_COLOR: Record<DayPref, string> = {
   priority: "#16a34a",  // green — preferred work
   preferred: "#dc2626", // red — preferred rest
-  vacation: "#2563eb",  // blue
 };
 const SHIFT_COLOR: Record<ShiftPref, string> = {
   early: "#0891b2", // cyan
@@ -109,6 +108,8 @@ export default function SchedulingScreen() {
     setTimeout(() => setPrefsSaved(false), 2500);
   };
 
+  const discardChanges = () => setDayPrefs({});
+
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -178,11 +179,11 @@ export default function SchedulingScreen() {
 
           {/* legend */}
           <View style={styles.legend}>
-            {(["priority", "preferred", "vacation"] as DayPref[]).map((p) => (
+            {(["priority", "preferred"] as DayPref[]).map((p) => (
               <View key={p} style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: PREF_COLOR[p] }]} />
                 <Text style={{ color: theme.muted, fontSize: 12 }}>
-                  {t(p === "priority" ? "scheduling.priorityOff" : p === "preferred" ? "scheduling.preferredOff" : "scheduling.vacation")}
+                  {t(p === "priority" ? "scheduling.priorityOff" : "scheduling.preferredOff")}
                 </Text>
               </View>
             ))}
@@ -216,6 +217,14 @@ export default function SchedulingScreen() {
               {prefsSaved ? `✓ ${t("scheduling.preferencesUpdated")}` : t("scheduling.updatePreferences")}
             </Text>
           </Pressable>
+
+          <Pressable
+            style={[styles.discard, { borderColor: BLOCKED }, Object.keys(dayPrefs).length === 0 && { opacity: 0.4 }]}
+            onPress={discardChanges}
+            disabled={Object.keys(dayPrefs).length === 0}
+          >
+            <Text style={[styles.submitText, { color: BLOCKED }]}>{t("scheduling.discardChanges")}</Text>
+          </Pressable>
         </View>
       </ScrollView>
 
@@ -227,13 +236,13 @@ export default function SchedulingScreen() {
               <Text style={[styles.sheetTitle, { color: theme.text }]}>{pickDay ? fmtDate(pickDay) : ""}</Text>
               <Pressable onPress={() => setPickDay(null)} hitSlop={10}><X color={theme.muted} size={22} /></Pressable>
             </View>
-            {(["priority", "preferred", "vacation"] as DayPref[]).map((p) => {
+            {(["priority", "preferred"] as DayPref[]).map((p) => {
               const active = pickDay ? dayPrefs[pickDay]?.off === p : false;
               return (
                 <Pressable key={p} style={[styles.sheetItem, { borderColor: PREF_COLOR[p] }, active && { backgroundColor: PREF_COLOR[p] }]} onPress={() => toggleOff(p)}>
                   <View style={[styles.legendDot, { backgroundColor: active ? "#fff" : PREF_COLOR[p] }]} />
                   <Text style={{ color: active ? "#fff" : theme.text, fontWeight: "700" }}>
-                    {t(p === "priority" ? "scheduling.priorityOff" : p === "preferred" ? "scheduling.preferredOff" : "scheduling.requestVacation")}
+                    {t(p === "priority" ? "scheduling.priorityOff" : "scheduling.preferredOff")}
                   </Text>
                 </Pressable>
               );
@@ -255,8 +264,11 @@ export default function SchedulingScreen() {
               })}
             </View>
 
-            <Pressable style={styles.sheetClear} onPress={clearDay}>
-              <Text style={{ color: theme.muted, fontWeight: "600" }}>{t("scheduling.clearDay")}</Text>
+            <Pressable style={[styles.submit, { backgroundColor: theme.accent }]} onPress={() => setPickDay(null)}>
+              <Text style={[styles.submitText, { color: "#fff" }]}>{t("scheduling.done")}</Text>
+            </Pressable>
+            <Pressable style={[styles.discard, { borderColor: BLOCKED }]} onPress={clearDay}>
+              <Text style={[styles.submitText, { color: BLOCKED }]}>{t("scheduling.clearDay")}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -365,6 +377,7 @@ const styles = StyleSheet.create({
   multiline: { minHeight: 70, textAlignVertical: "top" },
   dropTrigger: { flexDirection: "row", alignItems: "center", gap: 6 },
   submit: { borderRadius: 999, paddingVertical: 14, alignItems: "center" },
+  discard: { borderRadius: 999, paddingVertical: 14, alignItems: "center", borderWidth: 1.5 },
   submitText: { fontSize: 15, fontWeight: "700" },
 
   legend: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
