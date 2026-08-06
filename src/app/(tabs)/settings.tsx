@@ -51,6 +51,12 @@ function HoldButton({ label, onConfirm }: { label: string; onConfirm: () => void
   );
 }
 
+const MODES = [
+  { m: "light", Icon: Sun },
+  { m: "dark", Icon: Moon },
+  { m: "system", Icon: Gear },
+] as const;
+
 export default function SettingsScreen() {
   const { exitToSelection, signOut } = useAuth();
   const { theme, mode, setMode } = useTheme();
@@ -58,6 +64,13 @@ export default function SettingsScreen() {
 
   const [langOpen, setLangOpen] = useState(false);
   const current = LANGS.find((l) => l.code === lang) ?? LANGS[0];
+
+  // Sliding highlight: the box glides to the tapped mode (left animated),
+  // and the theme swap fades the surrounding screen along with it.
+  const modeIdx = Math.max(0, MODES.findIndex((x) => x.m === mode));
+  const slide = useAnimatedStyle(() => ({
+    left: withTiming(`${modeIdx * 33.33 + 1}%`, { duration: 220 }),
+  }));
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
@@ -79,16 +92,16 @@ export default function SettingsScreen() {
 
         {/* ---- Appearance ---- */}
         <View style={[styles.segment, { backgroundColor: theme.surface }]}>
-          {([
-            { m: "light", Icon: Sun },
-            { m: "dark", Icon: Moon },
-            { m: "system", Icon: Gear },
-          ] as const).map(({ m, Icon }) => {
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.segmentHighlight, { backgroundColor: theme.bg }, slide]}
+          />
+          {MODES.map(({ m, Icon }) => {
             const active = mode === m;
             return (
               <Pressable
                 key={m}
-                style={[styles.segmentItem, active && { backgroundColor: theme.bg }]}
+                style={styles.segmentItem}
                 onPress={() => setMode(m)}
               >
                 <Icon color={active ? theme.text : theme.muted} size={20} />
@@ -179,7 +192,8 @@ const styles = StyleSheet.create({
   rowText: { fontSize: 16, fontWeight: "600" },
   rowSub: { fontSize: 13, marginTop: 2 },
   chevron: { fontSize: 24 },
-  segment: { flexDirection: "row", borderRadius: 12, padding: 4, gap: 4 },
+  segment: { flexDirection: "row", borderRadius: 12, padding: 4, position: "relative" },
+  segmentHighlight: { position: "absolute", top: 4, bottom: 4, width: "32.5%", borderRadius: 8 },
   segmentItem: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: "center", gap: 5 },
   card: { borderRadius: 12, overflow: "hidden", marginTop: 4 },
   langRow: {

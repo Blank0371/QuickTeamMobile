@@ -1,10 +1,10 @@
 export const palette = {
     light:{
-        bg:      "#ffffff",
-        surface: "#f4f4f5",
+        bg:      "#f6f6f8",
+        surface: "#e8e8ec",
         text:    "#18181b",
-        muted:   "#71717a",
-        border:  "#e4e4e7",
+        muted:   "#6b6b74",
+        border:  "#d6d6dc",
         accent:  "#2563eb",
     },
     dark:{

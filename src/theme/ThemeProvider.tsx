@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 import { palette, ThemeColors } from "./palette";
 
@@ -25,16 +25,21 @@ export function ThemeProvider({ children }: {children: React.ReactNode}){
         });
     },[]);
 
-    const setMode = (m: Mode) => {
+    const setMode = useCallback((m: Mode) => {
         setModeState(m);
         AsyncStorage.setItem("themeMode", m);
-    }
+    }, []);
 
     const isDark = mode === "system" ? os === "dark" : mode === "dark";
     const theme = isDark? palette.dark : palette.light;
 
+    const value = useMemo(
+        () => ({ theme, mode, isDark, setMode }),
+        [theme, mode, isDark, setMode],
+    );
+
     return(
-        <Ctx.Provider value={{theme,mode,isDark,setMode}}>
+        <Ctx.Provider value={value}>
             {children}
         </Ctx.Provider>
     );
