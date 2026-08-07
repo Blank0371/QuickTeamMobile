@@ -1,19 +1,27 @@
+// Palette — "Werksdatenblatt" system: Deep Green brand, Gold Bronze accent,
+// Signal Red reserved strictly for destructive actions. See Farbpalette.html.
 export const palette = {
     light:{
-        bg:      "#f6f6f8",
-        surface: "#e8e8ec",
-        text:    "#18181b",
-        muted:   "#6b6b74",
-        border:  "#d6d6dc",
-        accent:  "#2563eb",
+        bg:         "#F3F0E8", // page background
+        surface:    "#E9E2D0", // cards, panels
+        text:       "#16241C", // green-deep — primary text
+        muted:      "#5B564A", // secondary text, placeholders
+        border:     "#D9CFB6", // dividers, hairlines
+        accent:     "#8A6B3C", // primary buttons, links (bronze)
+        accentText: "#FAF7F0", // text/icons on accent
+        danger:     "#A83824", // destructive actions only
+        gradient:   ["#E7EDE4", "#F3F0E8"] as [string, string], // soft green wash → bg (top→bottom)
     },
     dark:{
-        bg:      "#0b0b0c",
-        surface: "#1c1c1f",
-        text:    "#fafafa",
-        muted:   "#a1a1aa",
-        border:  "#27272a",
-        accent:  "#3b82f6",
+        bg:         "#0D100E", // carbon — page background
+        surface:    "#1A1F1C", // graphite — cards, panels
+        text:       "#EDE9E0", // bone — primary text
+        muted:      "#6E736C", // secondary text, placeholders
+        border:     "#352F1F", // bronze @26% over carbon — dividers
+        accent:     "#A8874F", // primary buttons, links (bronze)
+        accentText: "#0D100E", // dark text/icons on bronze
+        danger:     "#C1442D", // destructive actions only
+        gradient:   ["#16241C", "#0D100E"] as [string, string], // deep green → carbon (top→bottom)
     },
 };
 

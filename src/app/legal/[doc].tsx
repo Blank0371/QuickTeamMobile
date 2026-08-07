@@ -8,6 +8,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { LEGAL_DOC_IDS } from "../../lib/legal";
 import { legalBody, LegalDocId } from "../../lib/legalDocs";
 import { useTheme } from "../../theme/ThemeProvider";
+import { ScreenGradient } from "../../components/ScreenGradient";
 
 export default function LegalDocScreen() {
   const { theme } = useTheme();
@@ -20,6 +21,7 @@ export default function LegalDocScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
+      <ScreenGradient />
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
           <ChevronLeft color={theme.text} size={26} />

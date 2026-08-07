@@ -8,20 +8,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useTheme } from "../../theme/ThemeProvider";
+import { ScreenGradient } from "../../components/ScreenGradient";
+import { Flag } from "../../components/Flag";
 
-type Mode = "signIn" | "signUp" | "verify";
+type Mode = "signIn" | "signUp" | "verify" | "forgot" | "reset";
 
 const OK = "#16a34a";
-const BAD = "#dc2626";
+const BAD = "#C1442D";
+const CODE_LENGTH = 8; // must match Supabase Auth → Email OTP Length
 const emailValid = (e: string) => /\S+@\S+\.\S+/.test(e.trim());
 
 const LANGS = [
   { code: "en" as const, flag: "🇬🇧", label: "English" },
   { code: "de" as const, flag: "🇩🇪", label: "Deutsch" },
   { code: "ru" as const, flag: "🇷🇺", label: "Русский" },
-  { code: "fr" as const, flag: "🇫🇷", label: "Français" },
+  { code: "es" as const, flag: "🇪🇸", label: "Español" },
   { code: "tr" as const, flag: "🇹🇷", label: "Türkçe" },
   { code: "uk" as const, flag: "🇺🇦", label: "Українська" },
+  { code: "fr" as const, flag: "🇫🇷", label: "Français" },
 ];
 
 function LangSwitcher() {
@@ -37,7 +41,7 @@ function LangSwitcher() {
         onPress={() => setOpen((o) => !o)}
         hitSlop={8}
       >
-        <Text style={styles.langFlag}>{current.flag}</Text>
+        <Flag emoji={current.flag} size={22} style={styles.langFlag} />
         <Text style={[styles.langChevron, { color: theme.muted }]}>▾</Text>
       </Pressable>
 
@@ -49,7 +53,7 @@ function LangSwitcher() {
               style={styles.langItem}
               onPress={() => { setLang(l.code); setOpen(false); }}
             >
-              <Text style={styles.langFlag}>{l.flag}</Text>
+              <Flag emoji={l.flag} size={22} style={styles.langFlag} />
               <Text style={[styles.langLabel, { color: theme.text }]}>{l.label}</Text>
             </Pressable>
           ))}
@@ -71,7 +75,7 @@ function Rule({ ok, label, color }: { ok: boolean; label: string; color: string 
 }
 
 export default function AuthScreen() {
-  const { signIn, signUp, verifySignUp, resendCode } = useAuth();
+  const { signIn, signUp, verifySignUp, resendCode, sendPasswordReset, confirmPasswordReset } = useAuth();
   const { theme } = useTheme();
   const { t, lang } = useI18n();
 
@@ -101,15 +105,24 @@ export default function AuthScreen() {
     setView(next);
     setError(null);
     setNotice(null);
-    if (next !== "verify") { setPassword(""); setConfirm(""); }
+    if (next === "signIn" || next === "signUp" || next === "forgot") {
+      setPassword(""); setConfirm("");
+    }
+    if (next !== "verify" && next !== "reset") setCode("");
+  };
+
+  // Surface a friendly message to the user; log the real error for developers.
+  const fail = (context: string, e: unknown) => {
+    console.error(`[auth] ${context}`, e);
+    setError(t("auth.genericError"));
   };
 
   const doSignIn = async () => {
     setBusy(true); setError(null); setNotice(null);
     try {
       await signIn(email.trim(), password);
-    } catch (e: any) {
-      setError(e.message ?? "Something went wrong");
+    } catch (e) {
+      fail("signIn", e);
     } finally { setBusy(false); }
   };
 
@@ -124,8 +137,8 @@ export default function AuthScreen() {
       } else if (needsVerification) {
         go("verify");
       }
-    } catch (e: any) {
-      setError(e.message ?? "Something went wrong");
+    } catch (e) {
+      fail("signUp", e);
     } finally { setBusy(false); }
   };
 
@@ -133,8 +146,8 @@ export default function AuthScreen() {
     setBusy(true); setError(null); setNotice(null);
     try {
       await verifySignUp(email.trim(), code.trim());
-    } catch (e: any) {
-      setError(e.message ?? "Something went wrong");
+    } catch (e) {
+      fail("verifySignUp", e);
     } finally { setBusy(false); }
   };
 
@@ -143,9 +156,30 @@ export default function AuthScreen() {
     try {
       await resendCode(email.trim());
       setNotice(t("auth.codeResent"));
-    } catch (e: any) {
-      setError(e.message ?? "Something went wrong");
+    } catch (e) {
+      fail("resendCode", e);
     }
+  };
+
+  const doForgot = async () => {
+    setBusy(true); setError(null); setNotice(null);
+    try {
+      await sendPasswordReset(email.trim());
+      go("reset");
+      setNotice(t("auth.resetSent"));
+    } catch (e) {
+      fail("sendPasswordReset", e);
+    } finally { setBusy(false); }
+  };
+
+  const doReset = async () => {
+    setBusy(true); setError(null); setNotice(null);
+    try {
+      await confirmPasswordReset(email.trim(), code.trim(), password);
+      // Verifying the recovery code signs the user in; auth state change routes onward.
+    } catch (e) {
+      fail("confirmPasswordReset", e);
+    } finally { setBusy(false); }
   };
 
   const enterBtn = (label: string, onPress: () => void, enabled: boolean) => (
@@ -154,15 +188,107 @@ export default function AuthScreen() {
       onPress={onPress}
       disabled={!enabled || busy}
     >
-      {busy ? <ActivityIndicator color={enabled ? "#fff" : theme.muted} />
-            : <Text style={[styles.enterText, { color: enabled ? "#fff" : theme.muted }]}>{label}</Text>}
+      {busy ? <ActivityIndicator color={enabled ? theme.accentText : theme.muted} />
+            : <Text style={[styles.enterText, { color: enabled ? theme.accentText : theme.muted }]}>{label}</Text>}
     </Pressable>
   );
+
+  // ---------- forgot password (request code) ----------
+  if (view === "forgot") {
+    return (
+      <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+        <ScreenGradient />
+        <LangSwitcher />
+        <Animated.View style={styles.form} key={lang} entering={FadeIn.duration(T)}>
+          <Text style={[styles.title, { color: theme.text }]}>{t("auth.forgotTitle")}</Text>
+          <Text style={[styles.subtitle, { color: theme.muted }]}>{t("auth.forgotSubtitle")}</Text>
+
+          <TextInput
+            style={inputStyle}
+            placeholder={t("auth.email")}
+            placeholderTextColor={theme.muted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            autoFocus
+            value={email}
+            onChangeText={setEmail}
+          />
+
+          {error && <Text style={styles.error}>{error}</Text>}
+
+          {enterBtn(t("auth.sendCode"), doForgot, emailValid(email))}
+
+          <Pressable onPress={() => go("signIn")} hitSlop={8}>
+            <Text style={[styles.link, { color: theme.muted }]}>{t("auth.back")}</Text>
+          </Pressable>
+        </Animated.View>
+      </SafeAreaView>
+    );
+  }
+
+  // ---------- reset password (code + new password) ----------
+  if (view === "reset") {
+    return (
+      <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+        <ScreenGradient />
+        <LangSwitcher />
+        <Animated.View style={styles.form} key={lang} entering={FadeIn.duration(T)}>
+          <Text style={[styles.title, { color: theme.text }]}>{t("auth.resetTitle")}</Text>
+          <Text style={[styles.subtitle, { color: theme.muted }]}>
+            {t("auth.verifySubtitle")} {email}
+          </Text>
+
+          <TextInput
+            style={[...inputStyle, styles.codeInput]}
+            placeholder={t("auth.code")}
+            placeholderTextColor={theme.muted}
+            keyboardType="number-pad"
+            autoFocus
+            maxLength={CODE_LENGTH}
+            value={code}
+            onChangeText={setCode}
+          />
+          <TextInput
+            style={inputStyle}
+            placeholder={t("auth.password")}
+            placeholderTextColor={theme.muted}
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
+          <TextInput
+            style={inputStyle}
+            placeholder={t("auth.confirmPassword")}
+            placeholderTextColor={theme.muted}
+            secureTextEntry
+            value={confirm}
+            onChangeText={setConfirm}
+          />
+          <View style={styles.rules}>
+            {rules.map((r) => (
+              <Rule key={r.label} ok={r.ok} label={r.label} color={theme.muted} />
+            ))}
+          </View>
+
+          {error && <Text style={styles.error}>{error}</Text>}
+          {notice && <Text style={[styles.notice, { color: theme.muted }]}>{notice}</Text>}
+
+          {enterBtn(t("auth.resetPassword"), doReset, code.length === CODE_LENGTH && pwValid)}
+
+          <Pressable onPress={() => go("signIn")} hitSlop={8}>
+            <Text style={[styles.link, { color: theme.muted }]}>{t("auth.back")}</Text>
+          </Pressable>
+        </Animated.View>
+      </SafeAreaView>
+    );
+  }
 
   // ---------- verify (6-digit code) ----------
   if (view === "verify") {
     return (
       <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+        <ScreenGradient />
         <LangSwitcher />
         <Animated.View style={styles.form} key={lang} entering={FadeIn.duration(T)}>
           <Text style={[styles.title, { color: theme.text }]}>{t("auth.verifyTitle")}</Text>
@@ -176,7 +302,7 @@ export default function AuthScreen() {
             placeholderTextColor={theme.muted}
             keyboardType="number-pad"
             autoFocus
-            maxLength={6}
+            maxLength={CODE_LENGTH}
             value={code}
             onChangeText={setCode}
           />
@@ -184,7 +310,7 @@ export default function AuthScreen() {
           {error && <Text style={styles.error}>{error}</Text>}
           {notice && <Text style={[styles.notice, { color: theme.muted }]}>{notice}</Text>}
 
-          {enterBtn(t("auth.verify"), doVerify, code.length === 6)}
+          {enterBtn(t("auth.verify"), doVerify, code.length === CODE_LENGTH)}
 
           <Pressable onPress={resend} hitSlop={8}>
             <Text style={[styles.link, { color: theme.accent }]}>{t("auth.resend")}</Text>
@@ -202,6 +328,7 @@ export default function AuthScreen() {
   // ---------- sign in / sign up ----------
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+      <ScreenGradient />
       <LangSwitcher />
       <View style={styles.form} key={lang}>
         <Text style={[styles.title, { color: theme.text }]}>
@@ -250,6 +377,12 @@ export default function AuthScreen() {
         {isSignUp
           ? enterBtn(t("auth.signUp"), doSignUp, canSignUp)
           : enterBtn(t("auth.signIn"), doSignIn, canSignIn)}
+
+        {!isSignUp && (
+          <Pressable onPress={() => go("forgot")} hitSlop={8}>
+            <Text style={[styles.link, { color: theme.accent }]}>{t("auth.forgotLink")}</Text>
+          </Pressable>
+        )}
 
         <View style={styles.switchRow}>
           <Text style={[styles.switchText, { color: theme.muted }]}>
@@ -302,7 +435,7 @@ const styles = StyleSheet.create({
   enter: { borderRadius: 999, paddingVertical: 16, alignItems: "center", marginTop: 16 },
   enterText: { fontSize: 16, fontWeight: "600" },
   link: { textAlign: "center", marginTop: 16, fontSize: 15, fontWeight: "600" },
-  error: { color: "#dc2626", textAlign: "center" },
+  error: { color: "#C1442D", textAlign: "center" },
   notice: { textAlign: "center" },
 
   switchRow: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 8 },

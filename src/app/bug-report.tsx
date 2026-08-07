@@ -9,6 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n/I18nProvider";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../theme/ThemeProvider";
+import { ScreenGradient } from "../components/ScreenGradient";
 
 const TEXT_LIMIT = 1000;
 
@@ -35,6 +36,7 @@ export default function BugReportScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+      <ScreenGradient />
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
           <ChevronLeft color={theme.text} size={26} />
@@ -68,7 +70,7 @@ export default function BugReportScreen() {
               multiline
               autoFocus
             />
-            <Text style={[styles.counter, { color: text.length >= TEXT_LIMIT ? "#dc2626" : theme.muted }]}>
+            <Text style={[styles.counter, { color: text.length >= TEXT_LIMIT ? theme.danger : theme.muted }]}>
               {text.length}/{TEXT_LIMIT}
             </Text>
 
@@ -80,8 +82,8 @@ export default function BugReportScreen() {
               disabled={!canSend}
             >
               {busy
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={[styles.submitText, { color: canSend ? "#fff" : theme.muted }]}>
+                ? <ActivityIndicator color={theme.accentText} />
+                : <Text style={[styles.submitText, { color: canSend ? theme.accentText : theme.muted }]}>
                     {t("settings.bugReport.submit")}
                   </Text>}
             </Pressable>
@@ -107,5 +109,5 @@ const styles = StyleSheet.create({
   submit: { borderRadius: 999, paddingVertical: 16, alignItems: "center", marginTop: 8 },
   submitText: { fontSize: 16, fontWeight: "700" },
   success: { fontSize: 17, fontWeight: "600", textAlign: "center", marginTop: 24 },
-  error: { color: "#dc2626", textAlign: "center" },
+  error: { color: "#C1442D", textAlign: "center" },
 });

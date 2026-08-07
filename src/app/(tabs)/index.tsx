@@ -5,7 +5,7 @@ import { router, useFocusEffect } from "expo-router";
 import { CalendarClock, ChevronRight, Clock, MapPin, MessageCircle } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator, Pressable, RefreshControl, ScrollView,
+  ActivityIndicator, Pressable,
   StyleSheet, Text, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,6 +14,8 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { Shift, shifts } from "../../lib/shifts";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
+import { ScreenGradient } from "../../components/ScreenGradient";
+import { RefreshScrollView } from "../../components/RefreshScrollView";
 
 type UnreadMsg = {
   id: string;
@@ -54,7 +56,6 @@ export default function Home() {
   const [firstName, setFirstName] = useState<string>("");
   const [unread, setUnread] = useState<UnreadMsg[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!user || !activeMitarbeiter) return;
@@ -112,7 +113,6 @@ export default function Home() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const shift = nextShift();
 
@@ -137,9 +137,10 @@ export default function Home() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
-      <ScrollView
+      <ScreenGradient />
+      <RefreshScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.muted} />}
+        onRefresh={load}
       >
         <Text style={[styles.greeting, { color: theme.text }]}>
           {firstName ? `${t("home.greeting")}, ${firstName}` : t("home.greeting")}
@@ -154,7 +155,7 @@ export default function Home() {
           >
             <View style={styles.shiftHead}>
               <View style={[styles.iconBadge, { backgroundColor: theme.accent }]}>
-                <CalendarClock color="#fff" size={20} />
+                <CalendarClock color={theme.accentText} size={20} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.shiftDay, { color: theme.text }]}>{fmtShiftDay(shift.date)}</Text>
@@ -212,7 +213,7 @@ export default function Home() {
             </Pressable>
           ))
         )}
-      </ScrollView>
+      </RefreshScrollView>
     </SafeAreaView>
   );
 }

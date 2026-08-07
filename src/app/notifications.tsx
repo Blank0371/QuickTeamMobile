@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-nat
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n/I18nProvider";
 import { useTheme } from "../theme/ThemeProvider";
+import { ScreenGradient } from "../components/ScreenGradient";
 
 // Categories mirror the message/notification types. A category can be toggled
 // as a whole (master switch) or per item.
@@ -49,6 +50,7 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+      <ScreenGradient />
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
           <ChevronLeft color={theme.text} size={26} />

@@ -16,9 +16,29 @@ const storage =
     ? memoryStorage
     : AsyncStorage;
 
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  // These come from `.env` locally and from the `env` block of the active
+  // EAS build profile in production. If they're missing in a build, `.env`
+  // was almost certainly excluded (it's gitignored) — add the vars to the
+  // matching profile in eas.json or via `eas env:create`.
+  throw new Error(
+    "Supabase env vars missing: " +
+      [
+        !supabaseUrl && "EXPO_PUBLIC_SUPABASE_URL",
+        !supabaseAnonKey && "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+      ]
+        .filter(Boolean)
+        .join(", ") +
+      ". Check your .env (local) or the EAS build profile's env block."
+  );
+}
+
 export const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL!,
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       storage,

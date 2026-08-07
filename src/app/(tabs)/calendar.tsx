@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Shift, shifts, showCoworkers } from "../../lib/shifts";
 import { useTheme } from "../../theme/ThemeProvider";
+import { ScreenGradient } from "../../components/ScreenGradient";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -70,6 +71,7 @@ export default function CalendarScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
+      <ScreenGradient />
       {/* top navigation bar */}
       <View style={[styles.topbar, { borderBottomColor: theme.border }]}>
         <Pressable onPress={() => move(-1)} hitSlop={10} style={styles.navBtn}>
@@ -241,7 +243,7 @@ function MonthView({ date, onPickDay }: { date: Date; onPickDay: (d: Date) => vo
                 styles.monthDay,
                 has && { backgroundColor: theme.accent },
               ]}>
-                <Text style={{ color: has ? "#fff" : theme.text }}>{d.getDate()}</Text>
+                <Text style={{ color: has ? theme.accentText : theme.text }}>{d.getDate()}</Text>
               </View>
             </Pressable>
           );

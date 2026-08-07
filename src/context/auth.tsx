@@ -21,10 +21,18 @@ type AuthContextType = {
    */
   signUp: (email: string, password: string) =>
     Promise<{ needsVerification: boolean; alreadyRegistered: boolean }>;
-  /** Confirm a sign-up with the 6-digit code from the email. */
+  /** Confirm a sign-up with the 8-digit code from the email. */
   verifySignUp: (email: string, code: string) => Promise<void>;
   /** Re-send the sign-up confirmation code. */
   resendCode: (email: string) => Promise<void>;
+  /** Email an 8-digit password-recovery code. Always resolves (no account enumeration). */
+  sendPasswordReset: (email: string) => Promise<void>;
+  /**
+   * Confirm a recovery code and set a new password. Verifying the code opens a
+   * short-lived session; the password update runs inside it, after which the
+   * user is signed in with the new credentials.
+   */
+  confirmPasswordReset: (email: string, code: string, newPassword: string) => Promise<void>;
   /** Enter the app as a specific mitarbeiter position (from the select screen). */
   enterApp: (m: { id: string; betrieb_id: string; rolle_typ: string }) => void;
   /** Return to the business-selection screen (manage connections / switch). */
@@ -84,6 +92,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const sendPasswordReset = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw error;
+  };
+
+  const confirmPasswordReset = async (email: string, code: string, newPassword: string) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "recovery" });
+    if (error) throw error;
+    const { error: updErr } = await supabase.auth.updateUser({ password: newPassword });
+    if (updErr) throw updErr;
+  };
+
   const enterApp = (m: { id: string; betrieb_id: string; rolle_typ: string }) => {
     setActiveMitarbeiter(m);
     setEntered(true);
@@ -109,6 +129,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         verifySignUp,
         resendCode,
+        sendPasswordReset,
+        confirmPasswordReset,
         enterApp,
         exitToSelection,
         signOut,

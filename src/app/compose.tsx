@@ -11,6 +11,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import { shifts } from "../lib/shifts";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../theme/ThemeProvider";
+import { ScreenGradient } from "../components/ScreenGradient";
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -70,7 +71,7 @@ export default function ComposeScreen() {
   const PRIO_COLOR: Record<"normal" | "wichtig" | "dringend", string> = {
     normal: "#16a34a",   // green
     wichtig: "#d97706",  // yellow/amber
-    dringend: "#dc2626", // red
+    dringend: "#C1442D", // red
   };
 
   const canPost =
@@ -134,6 +135,7 @@ export default function ComposeScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+      <ScreenGradient />
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.text }]}>{t("messages.new")}</Text>
         <Pressable onPress={() => router.back()} hitSlop={10}>
@@ -150,7 +152,7 @@ export default function ComposeScreen() {
               onPress={() => setCat(c)}
               style={[styles.chip, { borderColor: theme.border }, cat === c && { backgroundColor: theme.accent, borderColor: theme.accent }]}
             >
-              <Text style={{ color: cat === c ? "#fff" : theme.text, fontWeight: "600" }}>
+              <Text style={{ color: cat === c ? theme.accentText : theme.text, fontWeight: "600" }}>
                 {t(`notifications.item.${catKey(c)}`)}
               </Text>
             </Pressable>
@@ -219,7 +221,7 @@ export default function ComposeScreen() {
               maxLength={TEXT_LIMIT}
               multiline
             />
-            <Text style={[styles.counter, { color: text.length >= TEXT_LIMIT ? "#dc2626" : theme.muted }]}>
+            <Text style={[styles.counter, { color: text.length >= TEXT_LIMIT ? theme.danger : theme.muted }]}>
               {text.length}/{TEXT_LIMIT}
             </Text>
           </View>
@@ -248,8 +250,8 @@ export default function ComposeScreen() {
           onPress={submit}
           disabled={!canPost || busy}
         >
-          {busy ? <ActivityIndicator color="#fff" />
-                : <Text style={[styles.postText, { color: canPost ? "#fff" : theme.muted }]}>{t("messages.post")}</Text>}
+          {busy ? <ActivityIndicator color={theme.accentText} />
+                : <Text style={[styles.postText, { color: canPost ? theme.accentText : theme.muted }]}>{t("messages.post")}</Text>}
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -328,5 +330,5 @@ const styles = StyleSheet.create({
   dropBackdrop: { flex: 1, backgroundColor: "#00000088", alignItems: "center", justifyContent: "center", padding: 24 },
   dropSheet: { width: "100%", maxHeight: "70%", borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 4 },
   dropItem: { paddingVertical: 14, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  error: { color: "#dc2626", textAlign: "center" },
+  error: { color: "#C1442D", textAlign: "center" },
 });

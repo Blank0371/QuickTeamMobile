@@ -89,7 +89,7 @@ export function LegalConsentGate() {
             onPress={accept}
             disabled={!atBottom}
           >
-            <Text style={[styles.agreeText, { color: atBottom ? "#fff" : theme.muted }]}>
+            <Text style={[styles.agreeText, { color: atBottom ? theme.accentText : theme.muted }]}>
               {t("legal.agree")}
             </Text>
           </Pressable>

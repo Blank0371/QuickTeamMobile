@@ -2,14 +2,17 @@
 import { RefreshCw } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator, Pressable, RefreshControl,
-  ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Pressable,
+  StyleSheet, Text, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { HoldButton } from "../components/HoldButton";
 import { useAuth } from "../context/auth";
 import { useI18n } from "../i18n/I18nProvider";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../theme/ThemeProvider";
+import { ScreenGradient } from "../components/ScreenGradient";
+import { RefreshScrollView } from "../components/RefreshScrollView";
 
 type Invite = {
   mitarbeiter_id: string;
@@ -101,6 +104,7 @@ export default function SelectBusinessScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+      <ScreenGradient />
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.text }]}>{t("select.title")}</Text>
       </View>
@@ -114,9 +118,9 @@ export default function SelectBusinessScreen() {
           <Text style={[styles.emptyHint, { color: theme.muted }]}>{t("select.emptyHint")}</Text>
         </View>
       ) : (
-        <ScrollView
+        <RefreshScrollView
           contentContainerStyle={{ paddingBottom: 24, gap: 10 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.muted} />}
+          onRefresh={load}
         >
           {joined.length > 0 && (
             <Text style={[styles.section, { color: theme.muted }]}>{t("select.joined")}</Text>
@@ -159,12 +163,12 @@ export default function SelectBusinessScreen() {
                 style={[styles.acceptBtn, { backgroundColor: theme.accent, opacity: accepting != null ? 0.6 : 1 }]}
               >
                 {accepting === inv.mitarbeiter_id
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={styles.acceptText}>{t("select.accept")}</Text>}
+                  ? <ActivityIndicator size="small" color={theme.accentText} />
+                  : <Text style={[styles.acceptText, { color: theme.accentText }]}>{t("select.accept")}</Text>}
               </Pressable>
             </View>
           ))}
-        </ScrollView>
+        </RefreshScrollView>
       )}
 
       <Pressable
@@ -173,14 +177,19 @@ export default function SelectBusinessScreen() {
         disabled={refreshing}
       >
         {refreshing ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={theme.accentText} />
         ) : (
           <View style={styles.refreshBarInner}>
-            <RefreshCw size={18} color="#fff" />
-            <Text style={styles.refreshBarText}>{t("select.refresh")}</Text>
+            <RefreshCw size={18} color={theme.accentText} />
+            <Text style={[styles.refreshBarText, { color: theme.accentText }]}>{t("select.refresh")}</Text>
           </View>
         )}
       </Pressable>
+
+      <View style={styles.danger}>
+        <HoldButton label={t("select.signOut")} onConfirm={() => { signOut(); }} />
+        <Text style={[styles.holdHint, { color: theme.muted }]}>{t("settings.holdToConfirm")}</Text>
+      </View>
     </SafeAreaView>
   );
 }
@@ -190,7 +199,8 @@ const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { fontSize: 24, fontWeight: "700" },
-  signOut: { fontSize: 15, fontWeight: "600" },
+  danger: { marginTop: 12, gap: 10 },
+  holdHint: { fontSize: 13, textAlign: "center" },
   email: { fontSize: 14, marginTop: 2, marginBottom: 16 },
   section: { fontSize: 13, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
   card: {
@@ -207,5 +217,5 @@ const styles = StyleSheet.create({
   refreshBar: { borderRadius: 999, paddingVertical: 16, alignItems: "center", marginTop: 8 },
   refreshBarInner: { flexDirection: "row", alignItems: "center", gap: 8 },
   refreshBarText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  error: { color: "#dc2626", textAlign: "center", marginBottom: 8 },
+  error: { color: "#C1442D", textAlign: "center", marginBottom: 8 },
 });

@@ -3,7 +3,7 @@ import { router, useFocusEffect } from "expo-router";
 import { Check, FileText, Plus, X } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
-    ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView,
+    ActivityIndicator, Modal, Pressable, ScrollView,
     StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,6 +11,8 @@ import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
+import { ScreenGradient } from "../../components/ScreenGradient";
+import { RefreshScrollView } from "../../components/RefreshScrollView";
 
 type Task = { id: string; text: string; erledigt_von: string | null; erledigt_am: string | null };
 type Opt = { id: string; text: string };
@@ -36,7 +38,6 @@ export default function MessagesScreen() {
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<"newest" | "relevant">("newest");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -116,8 +117,6 @@ export default function MessagesScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
-
   const toggleTask = async (taskId: string) => {
     await supabase.rpc("aufgabe_umschalten", { p_aufgabe_id: taskId });
     load();
@@ -173,10 +172,11 @@ export default function MessagesScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
-      <ScrollView
+      <ScreenGradient />
+      <RefreshScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.muted} />}
+        onRefresh={load}
       >
         <Text style={[styles.title, { color: theme.text }]}>{t("tabs.messages")}</Text>
 
@@ -195,7 +195,7 @@ export default function MessagesScreen() {
               onPress={() => setSortMode(s)}
               style={[styles.sortChip, { borderColor: theme.border }, sortMode === s && { backgroundColor: theme.accent, borderColor: theme.accent }]}
             >
-              <Text style={{ color: sortMode === s ? "#fff" : theme.text, fontWeight: "600", fontSize: 13 }}>
+              <Text style={{ color: sortMode === s ? theme.accentText : theme.text, fontWeight: "600", fontSize: 13 }}>
                 {t(s === "newest" ? "messages.sortNewest" : "messages.sortRelevant")}
               </Text>
             </Pressable>
@@ -209,14 +209,14 @@ export default function MessagesScreen() {
 
         {/* aenderungswunsch — mockup only */}
         <MockChangeRequest theme={theme} t={t} />
-      </ScrollView>
+      </RefreshScrollView>
 
       {activeMitarbeiter && (
         <Pressable
           style={[styles.fab, { backgroundColor: theme.accent }]}
           onPress={() => router.push({ pathname: "/compose", params: { betrieb: activeMitarbeiter.betrieb_id, role: activeMitarbeiter.rolle_typ } })}
         >
-          <Plus color="#fff" size={26} />
+          <Plus color={theme.accentText} size={26} />
         </Pressable>
       )}
 
@@ -245,7 +245,7 @@ function SummaryCard({ m, theme, t, fmt, onPress }: any) {
           {t(`notifications.item.${catKey(m.typ)}`)}
         </Text>
         {m.prioritaet !== "normal" && (
-          <Text style={[styles.prioBadge, { color: m.prioritaet === "dringend" ? "#dc2626" : "#d97706" }]}>
+          <Text style={[styles.prioBadge, { color: m.prioritaet === "dringend" ? "#C1442D" : "#d97706" }]}>
             {t(m.prioritaet === "dringend" ? "messages.prioDringend" : "messages.prioWichtig")}
           </Text>
         )}
@@ -295,7 +295,7 @@ function DetailBody({ m, theme, t, fmt, onToggleTask, onVote }: any) {
           {t(`notifications.item.${catKey(m.typ)}`)}
         </Text>
         {m.prioritaet !== "normal" && (
-          <Text style={[styles.prioBadge, { color: m.prioritaet === "dringend" ? "#dc2626" : "#d97706" }]}>
+          <Text style={[styles.prioBadge, { color: m.prioritaet === "dringend" ? "#C1442D" : "#d97706" }]}>
             {t(m.prioritaet === "dringend" ? "messages.prioDringend" : "messages.prioWichtig")}
           </Text>
         )}
@@ -311,7 +311,7 @@ function DetailBody({ m, theme, t, fmt, onToggleTask, onVote }: any) {
         return (
           <Pressable key={task.id} style={styles.taskRow} onPress={() => onToggleTask(task.id)}>
             <View style={[styles.checkbox, { borderColor: theme.border }, done && { backgroundColor: theme.accent, borderColor: theme.accent }]}>
-              {done && <Check color="#fff" size={14} />}
+              {done && <Check color={theme.accentText} size={14} />}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.taskText, { color: theme.text }, done && styles.strike]}>{task.text}</Text>
