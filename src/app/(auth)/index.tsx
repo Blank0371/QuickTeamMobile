@@ -11,12 +11,16 @@ import { useTheme } from "../../theme/ThemeProvider";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { Flag } from "../../components/Flag";
 
-type Mode = "signIn" | "signUp" | "verify" | "forgot" | "reset";
+type Mode = "signIn" | "signUp" | "verify" | "forgot" | "reset" | "phone" | "phoneVerify";
 
 const OK = "#16a34a";
 const BAD = "#C1442D";
 const CODE_LENGTH = 8; // must match Supabase Auth → Email OTP Length
+const SMS_CODE_LENGTH = 6; // must match Supabase Auth → SMS OTP Length
 const emailValid = (e: string) => /\S+@\S+\.\S+/.test(e.trim());
+// E.164-ish: leading "+", country code, then at least ~6 more digits.
+const phoneValid = (p: string) => /^\+[1-9]\d{6,14}$/.test(p.replace(/[\s()-]/g, ""));
+const normalizePhone = (p: string) => p.replace(/[\s()-]/g, "");
 
 const LANGS = [
   { code: "en" as const, flag: "🇬🇧", label: "English" },
@@ -75,12 +79,14 @@ function Rule({ ok, label, color }: { ok: boolean; label: string; color: string 
 }
 
 export default function AuthScreen() {
-  const { signIn, signUp, verifySignUp, resendCode, sendPasswordReset, confirmPasswordReset } = useAuth();
+  const { signIn, signUp, verifySignUp, resendCode, sendPasswordReset, confirmPasswordReset,
+          signInWithPhone, verifyPhone } = useAuth();
   const { theme } = useTheme();
   const { t, lang } = useI18n();
 
   const [view, setView] = useState<Mode>("signIn");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [code, setCode] = useState("");
@@ -182,6 +188,36 @@ export default function AuthScreen() {
     } finally { setBusy(false); }
   };
 
+  const doPhoneStart = async () => {
+    setBusy(true); setError(null); setNotice(null);
+    try {
+      await signInWithPhone(normalizePhone(phone));
+      go("phoneVerify");
+    } catch (e) {
+      fail("signInWithPhone", e);
+    } finally { setBusy(false); }
+  };
+
+  const doPhoneVerify = async () => {
+    setBusy(true); setError(null); setNotice(null);
+    try {
+      await verifyPhone(normalizePhone(phone), code.trim());
+      // A valid code opens a session; auth state change routes onward.
+    } catch (e) {
+      fail("verifyPhone", e);
+    } finally { setBusy(false); }
+  };
+
+  const resendPhone = async () => {
+    setError(null); setNotice(null);
+    try {
+      await signInWithPhone(normalizePhone(phone));
+      setNotice(t("auth.codeResent"));
+    } catch (e) {
+      fail("signInWithPhone", e);
+    }
+  };
+
   const enterBtn = (label: string, onPress: () => void, enabled: boolean) => (
     <Pressable
       style={[styles.enter, { backgroundColor: enabled ? theme.accent : theme.surface }]}
@@ -192,6 +228,79 @@ export default function AuthScreen() {
             : <Text style={[styles.enterText, { color: enabled ? theme.accentText : theme.muted }]}>{label}</Text>}
     </Pressable>
   );
+
+  // ---------- phone sign-in (enter number) ----------
+  if (view === "phone") {
+    return (
+      <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+        <ScreenGradient />
+        <LangSwitcher />
+        <Animated.View style={styles.form} key={lang} entering={FadeIn.duration(T)}>
+          <Text style={[styles.title, { color: theme.text }]}>{t("auth.phoneTitle")}</Text>
+          <Text style={[styles.subtitle, { color: theme.muted }]}>{t("auth.phoneSubtitle")}</Text>
+
+          <TextInput
+            style={inputStyle}
+            placeholder={t("auth.phonePlaceholder")}
+            placeholderTextColor={theme.muted}
+            keyboardType="phone-pad"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+            value={phone}
+            onChangeText={setPhone}
+          />
+
+          {error && <Text style={styles.error}>{error}</Text>}
+
+          {enterBtn(t("auth.sendCode"), doPhoneStart, phoneValid(phone))}
+
+          <Pressable onPress={() => go("signIn")} hitSlop={8}>
+            <Text style={[styles.link, { color: theme.muted }]}>{t("auth.useEmailInstead")}</Text>
+          </Pressable>
+        </Animated.View>
+      </SafeAreaView>
+    );
+  }
+
+  // ---------- phone verify (SMS code) ----------
+  if (view === "phoneVerify") {
+    return (
+      <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]}>
+        <ScreenGradient />
+        <LangSwitcher />
+        <Animated.View style={styles.form} key={lang} entering={FadeIn.duration(T)}>
+          <Text style={[styles.title, { color: theme.text }]}>{t("auth.verifyTitle")}</Text>
+          <Text style={[styles.subtitle, { color: theme.muted }]}>
+            {t("auth.verifySubtitle")} {phone}
+          </Text>
+
+          <TextInput
+            style={[...inputStyle, styles.codeInput]}
+            placeholder={t("auth.code")}
+            placeholderTextColor={theme.muted}
+            keyboardType="number-pad"
+            autoFocus
+            maxLength={SMS_CODE_LENGTH}
+            value={code}
+            onChangeText={setCode}
+          />
+
+          {error && <Text style={styles.error}>{error}</Text>}
+          {notice && <Text style={[styles.notice, { color: theme.muted }]}>{notice}</Text>}
+
+          {enterBtn(t("auth.verify"), doPhoneVerify, code.length === SMS_CODE_LENGTH)}
+
+          <Pressable onPress={resendPhone} hitSlop={8}>
+            <Text style={[styles.link, { color: theme.accent }]}>{t("auth.resend")}</Text>
+          </Pressable>
+          <Pressable onPress={() => go("phone")} hitSlop={8}>
+            <Text style={[styles.link, { color: theme.muted }]}>{t("auth.back")}</Text>
+          </Pressable>
+        </Animated.View>
+      </SafeAreaView>
+    );
+  }
 
   // ---------- forgot password (request code) ----------
   if (view === "forgot") {
@@ -379,9 +488,14 @@ export default function AuthScreen() {
           : enterBtn(t("auth.signIn"), doSignIn, canSignIn)}
 
         {!isSignUp && (
-          <Pressable onPress={() => go("forgot")} hitSlop={8}>
-            <Text style={[styles.link, { color: theme.accent }]}>{t("auth.forgotLink")}</Text>
-          </Pressable>
+          <>
+            <Pressable onPress={() => go("forgot")} hitSlop={8}>
+              <Text style={[styles.link, { color: theme.accent }]}>{t("auth.forgotLink")}</Text>
+            </Pressable>
+            <Pressable onPress={() => go("phone")} hitSlop={8}>
+              <Text style={[styles.link, { color: theme.accent, marginTop: 8 }]}>{t("auth.usePhoneInstead")}</Text>
+            </Pressable>
+          </>
         )}
 
         <View style={styles.switchRow}>

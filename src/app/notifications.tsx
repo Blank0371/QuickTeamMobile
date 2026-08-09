@@ -13,7 +13,7 @@ import { ScreenGradient } from "../components/ScreenGradient";
 // as a whole (master switch) or per item.
 const CATEGORIES = [
   { key: "messages", items: ["announcement", "tasks", "shiftSwitch", "polls", "documents"] },
-  { key: "schedule", items: ["planPublished", "shiftChanged", "availabilityReminder", "understaffing"] },
+  { key: "schedule", items: ["planPublished", "shiftChanged", "availabilityReminder", "understaffing", "emergency"] },
 ] as const;
 
 const STORAGE_KEY = "notifPrefs";

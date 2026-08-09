@@ -1,9 +1,9 @@
 // src/app/(tabs)/messages.tsx — broadcast feed (announcements, tasks, polls, docs)
 import { router, useFocusEffect } from "expo-router";
-import { Check, FileText, Plus, X } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { CalendarPlus, Check, ChevronDown, FileText, Plus, Repeat, TriangleAlert, X } from "lucide-react-native";
+import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator, Modal, Pressable, ScrollView,
+    ActivityIndicator, Alert, Modal, Pressable, ScrollView,
     StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,6 +13,7 @@ import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { RefreshScrollView } from "../../components/RefreshScrollView";
+import { HoldButton } from "../../components/HoldButton";
 
 type Task = { id: string; text: string; erledigt_von: string | null; erledigt_am: string | null };
 type Opt = { id: string; text: string };
@@ -31,29 +32,198 @@ type Msg = {
   gelesen: boolean;
 };
 
+type EmergencyMsg = {
+  id: string;
+  erstellt_am: string;
+  datum: string;
+  start_zeit: string;
+  end_zeit: string;
+  status: "gemeldet" | "vertretung_gesucht" | "besetzt" | "storniert";
+  eligible: boolean;
+  isMelder: boolean;
+  takenByMe: boolean;
+  takenByName: string;
+  melderName: string;
+};
+
+type SwapMsg = {
+  id: string;
+  erstellt_am: string;
+  datum: string;
+  start_zeit: string;
+  end_zeit: string;
+  status: "offen" | "vergeben";
+  eligible: boolean;
+  isAnbieter: boolean;
+  takenByMe: boolean;
+  anbieterName: string;
+};
+
+type OpenRole = { rolle_id: string; name: string; benoetigt: number; besetzt: number; eligible: boolean };
+type OpenShift = {
+  id: string;
+  erstellt_am: string;
+  datum: string;
+  start_zeit: string;
+  end_zeit: string;
+  kommentar: string;
+  roles: OpenRole[];
+  amAssigned: boolean;
+};
+
 export default function MessagesScreen() {
   const { user, activeMitarbeiter } = useAuth();
   const { theme } = useTheme();
   const { t, lang } = useI18n();
 
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [emergencies, setEmergencies] = useState<EmergencyMsg[]>([]);
+  const [openShifts, setOpenShifts] = useState<OpenShift[]>([]);
+  const [swaps, setSwaps] = useState<SwapMsg[]>([]);
+  const [openDetail, setOpenDetail] = useState<OpenShift | null>(null);
+  const [swapDetail, setSwapDetail] = useState<SwapMsg | null>(null);
+  const [emergencyDetail, setEmergencyDetail] = useState<EmergencyMsg | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<"newest" | "relevant">("newest");
+  const [category, setCategory] = useState<"all" | "shifts" | "messages">("all");
+  const [catOpen, setCatOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Turn notfall_vertretung broadcasts into interactive take-over cards.
+  const loadEmergencies = useCallback(async (emgRows: any[]) => {
+    if (!activeMitarbeiter || emgRows.length === 0) { setEmergencies([]); return; }
+    const notfallIds = emgRows.map((m: any) => m.inhalt?.notfall_id).filter(Boolean);
+
+    const [notf, myRoles, people] = await Promise.all([
+      supabase.from("notfaelle").select("id, status, melder_id, uebernehmer_id").in("id", notfallIds),
+      supabase.from("mitarbeiter_rollen").select("rolle_id").eq("mitarbeiter_id", activeMitarbeiter.id),
+      supabase.from("mitarbeiter").select("id, vorname, nachname").eq("betrieb_id", activeMitarbeiter.betrieb_id),
+    ]);
+    const nById = new Map((notf.data ?? []).map((n: any) => [n.id, n]));
+    const myRoleSet = new Set((myRoles.data ?? []).map((r: any) => r.rolle_id));
+    const nameOf = new Map((people.data ?? []).map((p: any) => [p.id, `${p.vorname} ${p.nachname}`.trim()]));
+
+    const built: EmergencyMsg[] = emgRows.map((m: any) => {
+      const inhalt = m.inhalt ?? {};
+      const n = nById.get(inhalt.notfall_id);
+      const status = n?.status ?? "besetzt";
+      const isMelder = n?.melder_id === activeMitarbeiter.id;
+      return {
+        id: m.id,
+        erstellt_am: m.erstellt_am,
+        datum: inhalt.datum ?? "",
+        start_zeit: inhalt.start_zeit ?? "",
+        end_zeit: inhalt.end_zeit ?? "",
+        status,
+        eligible: myRoleSet.has(inhalt.rolle_id) && !isMelder,
+        isMelder,
+        takenByMe: n?.uebernehmer_id === activeMitarbeiter.id,
+        takenByName: n?.uebernehmer_id ? (nameOf.get(n.uebernehmer_id) ?? "") : "",
+        melderName: n?.melder_id ? (nameOf.get(n.melder_id) ?? "") : "",
+      };
+    });
+    setEmergencies(built);
+  }, [activeMitarbeiter]);
+
+  // Turn schicht_ausschreibung broadcasts into interactive open-shift cards.
+  const loadOpenShifts = useCallback(async (rows: any[]) => {
+    if (!activeMitarbeiter || rows.length === 0) { setOpenShifts([]); return; }
+    const instIds = rows.map((m: any) => m.inhalt?.schicht_instanz_id).filter(Boolean);
+
+    const [zuweis, myRoles] = await Promise.all([
+      supabase.from("schicht_zuweisungen").select("mitarbeiter_id, rolle_id, schicht_instanz_id").in("schicht_instanz_id", instIds),
+      supabase.from("mitarbeiter_rollen").select("rolle_id").eq("mitarbeiter_id", activeMitarbeiter.id),
+    ]);
+    const myRoleSet = new Set((myRoles.data ?? []).map((r: any) => r.rolle_id));
+    const fillCount = new Map<string, number>(); // `${inst}|${rolle}` -> filled slots
+    const mineOnInst = new Set<string>();
+    (zuweis.data ?? []).forEach((z: any) => {
+      const k = `${z.schicht_instanz_id}|${z.rolle_id}`;
+      fillCount.set(k, (fillCount.get(k) ?? 0) + 1);
+      if (z.mitarbeiter_id === activeMitarbeiter.id) mineOnInst.add(z.schicht_instanz_id);
+    });
+
+    const built: OpenShift[] = rows.map((m: any) => {
+      const inhalt = m.inhalt ?? {};
+      const inst = inhalt.schicht_instanz_id;
+      const amAssigned = mineOnInst.has(inst);
+      const roles: OpenRole[] = (inhalt.rollen ?? []).map((r: any) => {
+        const besetzt = fillCount.get(`${inst}|${r.rolle_id}`) ?? 0;
+        const benoetigt = r.benoetigt ?? 1;
+        return {
+          rolle_id: r.rolle_id, name: r.name, benoetigt, besetzt,
+          eligible: myRoleSet.has(r.rolle_id) && besetzt < benoetigt && !amAssigned,
+        };
+      });
+      return {
+        id: m.id,
+        erstellt_am: m.erstellt_am,
+        datum: inhalt.datum ?? "",
+        start_zeit: inhalt.start_zeit ?? "",
+        end_zeit: inhalt.end_zeit ?? "",
+        kommentar: inhalt.kommentar ?? "",
+        roles,
+        amAssigned,
+      };
+    });
+    setOpenShifts(built);
+  }, [activeMitarbeiter]);
+
+  // Turn schicht_tausch broadcasts into interactive "take over this shift" cards.
+  const loadSwaps = useCallback(async (rows: any[]) => {
+    if (!activeMitarbeiter || rows.length === 0) { setSwaps([]); return; }
+    const anfrageIds = rows.map((m: any) => m.inhalt?.anfrage_id).filter(Boolean);
+
+    const [anfragen, myRoles, people] = await Promise.all([
+      supabase.from("schichttausch_anfragen").select("id, status, anbietender_mitarbeiter_id, uebernehmender_mitarbeiter_id").in("id", anfrageIds),
+      supabase.from("mitarbeiter_rollen").select("rolle_id").eq("mitarbeiter_id", activeMitarbeiter.id),
+      supabase.from("mitarbeiter").select("id, vorname, nachname").eq("betrieb_id", activeMitarbeiter.betrieb_id),
+    ]);
+    const aById = new Map((anfragen.data ?? []).map((a: any) => [a.id, a]));
+    const myRoleSet = new Set((myRoles.data ?? []).map((r: any) => r.rolle_id));
+    const nameOf = new Map((people.data ?? []).map((p: any) => [p.id, `${p.vorname} ${p.nachname}`.trim()]));
+
+    const built: SwapMsg[] = rows.map((m: any) => {
+      const inhalt = m.inhalt ?? {};
+      const a = aById.get(inhalt.anfrage_id);
+      const offen = (a?.status ?? "offen") === "offen";
+      const isAnbieter = inhalt.anbieter_id === activeMitarbeiter.id;
+      return {
+        id: m.id,
+        erstellt_am: m.erstellt_am,
+        datum: inhalt.datum ?? "",
+        start_zeit: inhalt.start_zeit ?? "",
+        end_zeit: inhalt.end_zeit ?? "",
+        status: offen ? "offen" : "vergeben",
+        eligible: offen && myRoleSet.has(inhalt.rolle_id) && !isAnbieter,
+        isAnbieter,
+        takenByMe: a?.uebernehmender_mitarbeiter_id === activeMitarbeiter.id,
+        anbieterName: inhalt.anbieter_id ? (nameOf.get(inhalt.anbieter_id) ?? "") : "",
+      };
+    });
+    setSwaps(built);
+  }, [activeMitarbeiter]);
 
   const load = useCallback(async () => {
     if (!user || !activeMitarbeiter) return;
     const { data: rows } = await supabase
       .from("benachrichtigungen")
-      .select("id, typ, titel, text, prioritaet, angeheftet, mehrfachauswahl, anonym, erstellt_am, autor_id")
+      .select("id, typ, titel, text, prioritaet, angeheftet, mehrfachauswahl, anonym, erstellt_am, autor_id, inhalt")
       .eq("betrieb_id", activeMitarbeiter.betrieb_id)
       .is("mitarbeiter_id", null)
       .is("geloescht_am", null)
       .order("angeheftet", { ascending: false })
       .order("erstellt_am", { ascending: false });
 
-    const list = rows ?? [];
+    const allRows = rows ?? [];
+    // Emergency-replacement and open-shift broadcasts get their own interactive cards.
+    const emgRows = allRows.filter((m: any) => m.typ === "notfall_vertretung");
+    const openRows = allRows.filter((m: any) => m.typ === "schicht_ausschreibung");
+    const swapRows = allRows.filter((m: any) => m.typ === "schicht_tausch");
+    const list = allRows.filter((m: any) => !["notfall_vertretung", "schicht_ausschreibung", "schicht_tausch"].includes(m.typ));
+    await Promise.all([loadEmergencies(emgRows), loadOpenShifts(openRows), loadSwaps(swapRows)]);
+
     const ids = list.map((m: any) => m.id);
     if (ids.length === 0) { setMessages([]); setLoading(false); return; }
 
@@ -113,9 +283,77 @@ export default function MessagesScreen() {
     built.filter((m) => !m.gelesen).forEach((m) => {
       supabase.rpc("als_gelesen_markieren", { p_benachrichtigung_id: m.id });
     });
-  }, [user, activeMitarbeiter]);
+  }, [user, activeMitarbeiter, loadEmergencies, loadOpenShifts, loadSwaps]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Live updates: when anyone in the business takes an open slot (new assignment)
+  // or a broadcast changes, every connected client re-loads so a taken spot is
+  // reflected for all — no manual refresh needed.
+  useEffect(() => {
+    if (!activeMitarbeiter) return;
+    const bid = activeMitarbeiter.betrieb_id;
+    const channel = supabase
+      .channel(`feed:${bid}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schicht_zuweisungen", filter: `betrieb_id=eq.${bid}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "benachrichtigungen", filter: `betrieb_id=eq.${bid}` }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [activeMitarbeiter, load]);
+
+  // Keep open accept-modals in sync with live reloads.
+  useEffect(() => {
+    setOpenDetail((cur) => (cur ? (openShifts.find((o) => o.id === cur.id) ?? null) : cur));
+  }, [openShifts]);
+  useEffect(() => {
+    setEmergencyDetail((cur) => (cur ? (emergencies.find((e) => e.id === cur.id) ?? null) : cur));
+  }, [emergencies]);
+  useEffect(() => {
+    setSwapDetail((cur) => (cur ? (swaps.find((s) => s.id === cur.id) ?? null) : cur));
+  }, [swaps]);
+
+  const takeOver = async (m: EmergencyMsg) => {
+    setEmergencyDetail(null);
+    const { data, error } = await supabase.rpc("notfall_vertretung_uebernehmen", { p_benachrichtigung_id: m.id });
+    if (error) { Alert.alert(t("messages.emTakeFailed")); load(); return; }
+    const code = data as string;
+    if (code === "besetzt") Alert.alert(t("messages.emTookTitle"), t("messages.emTookBody"));
+    else if (code === "bereits_besetzt") Alert.alert(t("messages.emAlreadyTaken"));
+    else if (code === "schon_zugewiesen") Alert.alert(t("messages.emAlreadyOnShift"));
+    else if (code === "nicht_qualifiziert") Alert.alert(t("messages.emNotQualified"));
+    else Alert.alert(t("messages.emTakeFailed"));
+    load();
+  };
+
+  const claimSlot = async (benId: string, rolleId: string) => {
+    setOpenDetail(null);
+    const { data, error } = await supabase.rpc("schicht_ausschreibung_annehmen", {
+      p_benachrichtigung_id: benId,
+      p_rolle_id: rolleId,
+      p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+    });
+    if (error) { Alert.alert(t("messages.osClaimFailed")); load(); return; }
+    const code = data as string;
+    if (code === "angenommen") Alert.alert(t("messages.osClaimedTitle"), t("messages.osClaimedBody"));
+    else if (code === "voll") Alert.alert(t("messages.osFull"));
+    else if (code === "schon_zugewiesen") Alert.alert(t("messages.osAlreadyOn"));
+    else if (code === "nicht_qualifiziert") Alert.alert(t("messages.osNotQualified"));
+    else Alert.alert(t("messages.osClaimFailed"));
+    load();
+  };
+
+  const takeSwap = async (m: SwapMsg) => {
+    setSwapDetail(null);
+    const { data, error } = await supabase.rpc("schicht_tausch_uebernehmen", { p_benachrichtigung_id: m.id });
+    if (error) { Alert.alert(t("shiftSwap.takeFailed")); load(); return; }
+    const code = data as string;
+    if (code === "besetzt") Alert.alert(t("shiftSwap.tookTitle"), t("shiftSwap.tookBody"));
+    else if (code === "bereits_besetzt") Alert.alert(t("shiftSwap.alreadyTaken"));
+    else if (code === "schon_zugewiesen") Alert.alert(t("shiftSwap.alreadyOn"));
+    else if (code === "nicht_qualifiziert") Alert.alert(t("shiftSwap.notQualified"));
+    else Alert.alert(t("shiftSwap.takeFailed"));
+    load();
+  };
 
   const toggleTask = async (taskId: string) => {
     await supabase.rpc("aufgabe_umschalten", { p_aufgabe_id: taskId });
@@ -170,6 +408,41 @@ export default function MessagesScreen() {
 
   const selected = messages.find((m) => m.id === selectedId) ?? null;
 
+  // Merge messages, emergency-cover and open-shift cards into a single feed so
+  // they interleave by recency: a newer post sits above an older emergency/open shift.
+  type FeedItem =
+    | { kind: "msg"; ts: number; pinned: boolean; prio: number; m: (typeof displayed)[number] }
+    | { kind: "emergency"; ts: number; pinned: false; prio: number; e: EmergencyMsg }
+    | { kind: "open"; ts: number; pinned: false; prio: number; o: OpenShift }
+    | { kind: "swap"; ts: number; pinned: false; prio: number; s: SwapMsg };
+  const feed: FeedItem[] = [
+    ...displayed.map((m) => ({
+      kind: "msg" as const,
+      ts: new Date(m.erstellt_am).getTime(),
+      pinned: m.angeheftet,
+      prio: sortMode === "relevant" && new Date(m.erstellt_am).getTime() >= weekAgo ? (PRIO[m.prioritaet] ?? 1) : 0,
+      m,
+    })),
+    ...emergencies.map((e) => ({ kind: "emergency" as const, ts: new Date(e.erstellt_am).getTime(), pinned: false as const, prio: 0, e })),
+    ...openShifts.map((o) => ({ kind: "open" as const, ts: new Date(o.erstellt_am).getTime(), pinned: false as const, prio: 0, o })),
+    ...swaps.map((s) => ({ kind: "swap" as const, ts: new Date(s.erstellt_am).getTime(), pinned: false as const, prio: 0, s })),
+  ]
+    .filter((item) => {
+      if (category === "all") return true;
+      const group =
+        item.kind === "emergency" || item.kind === "open" || item.kind === "swap"
+          ? "shifts"
+          : ["emergency", "openShift", "shiftSwitch"].includes(catKey(item.m.typ))
+            ? "shifts"
+            : "messages";
+      return group === category;
+    })
+    .sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1; // pinned messages first
+      if (a.prio !== b.prio) return b.prio - a.prio;
+      return b.ts - a.ts; // newest first
+    });
+
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
       <ScreenGradient />
@@ -200,15 +473,46 @@ export default function MessagesScreen() {
               </Text>
             </Pressable>
           ))}
+          <Pressable
+            onPress={() => setCatOpen((o) => !o)}
+            style={[styles.sortChip, styles.catChip, { borderColor: category === "all" ? theme.border : theme.accent }]}
+          >
+            <Text style={{ color: category === "all" ? theme.text : theme.accent, fontWeight: "600", fontSize: 13 }}>
+              {t(`messages.cat_${category}`)}
+            </Text>
+            <ChevronDown color={category === "all" ? theme.text : theme.accent} size={16} />
+          </Pressable>
         </View>
+        {catOpen && (
+          <View style={[styles.catMenu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {(["all", "shifts", "messages"] as const).map((c) => (
+              <Pressable
+                key={c}
+                onPress={() => { setCategory(c); setCatOpen(false); }}
+                style={styles.catItem}
+              >
+                <Text style={{ color: category === c ? theme.accent : theme.text, fontWeight: category === c ? "700" : "500", fontSize: 14 }}>
+                  {t(`messages.cat_${c}`)}
+                </Text>
+                {category === c && <Check color={theme.accent} size={16} />}
+              </Pressable>
+            ))}
+          </View>
+        )}
 
-        {displayed.map((m) => (
-          <SummaryCard key={m.id} m={m} theme={theme} t={t} fmt={fmt}
-            onPress={() => setSelectedId(m.id)} />
-        ))}
+        {feed.map((item) =>
+          item.kind === "emergency" ? (
+            <EmergencyCard key={item.e.id} e={item.e} theme={theme} t={t} lang={lang} onOpen={() => setEmergencyDetail(item.e)} />
+          ) : item.kind === "open" ? (
+            <OpenShiftCard key={item.o.id} o={item.o} theme={theme} t={t} lang={lang} onOpen={() => setOpenDetail(item.o)} />
+          ) : item.kind === "swap" ? (
+            <SwapCard key={item.s.id} s={item.s} theme={theme} t={t} lang={lang} onOpen={() => setSwapDetail(item.s)} />
+          ) : (
+            <SummaryCard key={item.m.id} m={item.m} theme={theme} t={t} fmt={fmt}
+              onPress={() => setSelectedId(item.m.id)} />
+          )
+        )}
 
-        {/* aenderungswunsch — mockup only */}
-        <MockChangeRequest theme={theme} t={t} />
       </RefreshScrollView>
 
       {activeMitarbeiter && (
@@ -228,6 +532,33 @@ export default function MessagesScreen() {
         onClose={() => setSelectedId(null)}
         onToggleTask={toggleTask}
         onVote={(o: string) => selected && vote(selected, o)}
+      />
+
+      <OpenShiftModal
+        o={openDetail}
+        theme={theme}
+        t={t}
+        lang={lang}
+        onClose={() => setOpenDetail(null)}
+        onClaim={(rolleId: string) => openDetail && claimSlot(openDetail.id, rolleId)}
+      />
+
+      <EmergencyModal
+        e={emergencyDetail}
+        theme={theme}
+        t={t}
+        lang={lang}
+        onClose={() => setEmergencyDetail(null)}
+        onTake={() => emergencyDetail && takeOver(emergencyDetail)}
+      />
+
+      <SwapModal
+        s={swapDetail}
+        theme={theme}
+        t={t}
+        lang={lang}
+        onClose={() => setSwapDetail(null)}
+        onTake={() => swapDetail && takeSwap(swapDetail)}
       />
     </SafeAreaView>
   );
@@ -360,20 +691,265 @@ function DetailBody({ m, theme, t, fmt, onToggleTask, onVote }: any) {
   );
 }
 
-function MockChangeRequest({ theme, t }: any) {
+const RED = "#C1442D";
+const GREEN = "#16a34a";
+const emWhen = (e: EmergencyMsg, lang: string) => {
+  const hhmm = (s: string) => (s ? s.slice(0, 5) : "");
+  return e.datum
+    ? `${new Date(e.datum + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" })} · ${hhmm(e.start_zeit)}–${hhmm(e.end_zeit)}`
+    : "";
+};
+
+// Tappable summary for an open emergency shift. Tapping opens the take-over modal.
+function EmergencyCard({ e, theme, t, lang, onOpen }: { e: EmergencyMsg; theme: any; t: any; lang: string; onOpen: () => void }) {
+  const taken = e.status === "besetzt";
   return (
-    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.accent, borderStyle: "dashed" }]}>
+    <Pressable style={[styles.card, { backgroundColor: theme.surface, borderColor: RED }]} onPress={onOpen}>
       <View style={styles.cardHead}>
+        <TriangleAlert color={RED} size={16} />
+        <Text style={[styles.badge, { color: RED }]}>{t("notifications.item.emergency")}</Text>
+      </View>
+      <Text style={[styles.cardTitle, { color: theme.text }]}>{t("messages.emTakeOverTitle")}</Text>
+      <Text style={[styles.cardText, { color: theme.text }]}>{emWhen(e, lang)}</Text>
+      {e.melderName ? <Text style={[styles.taskMeta, { color: theme.muted }]}>{e.melderName}</Text> : null}
+
+      {taken ? (
+        <View style={[styles.eligible, { backgroundColor: GREEN + "22" }]}>
+          <Text style={{ color: GREEN, fontWeight: "700" }}>
+            ✓ {e.takenByMe ? t("messages.emTakenByYou") : (e.takenByName ? `${t("messages.emTakenBy")} ${e.takenByName}` : t("messages.emTaken"))}
+          </Text>
+        </View>
+      ) : e.isMelder ? (
+        <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("messages.emYourEmergency")}</Text>
+      ) : e.eligible ? (
+        <View style={[styles.takeBtn, { backgroundColor: RED, alignSelf: "flex-start" }]}>
+          <Text style={{ color: "#fff", fontWeight: "700" }}>{t("messages.emTapToTake")}</Text>
+        </View>
+      ) : (
+        <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("messages.emNotEligible")}</Text>
+      )}
+    </Pressable>
+  );
+}
+
+// Take-over modal — hold to commit, first come first served.
+function EmergencyModal({ e, theme, t, lang, onClose, onTake }: { e: EmergencyMsg | null; theme: any; t: any; lang: string; onClose: () => void; onTake: () => void }) {
+  const taken = e?.status === "besetzt";
+  return (
+    <Modal visible={!!e} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={[styles.modalCard, { backgroundColor: theme.surface, borderColor: RED }]} onPress={(ev) => ev.stopPropagation()}>
+          <Pressable onPress={onClose} hitSlop={10} style={styles.modalClose}><X color={theme.muted} size={24} /></Pressable>
+          {e && (
+            <ScrollView contentContainerStyle={{ gap: 8 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.cardHead}>
+                <TriangleAlert color={RED} size={16} />
+                <Text style={[styles.badge, { color: RED }]}>{t("notifications.item.emergency")}</Text>
+              </View>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>{t("messages.emTakeOverTitle")}</Text>
+              <Text style={[styles.cardText, { color: theme.text }]}>{emWhen(e, lang)}</Text>
+              {e.melderName ? <Text style={[styles.taskMeta, { color: theme.muted }]}>{e.melderName}</Text> : null}
+
+              {taken ? (
+                <View style={[styles.eligible, { backgroundColor: GREEN + "22" }]}>
+                  <Text style={{ color: GREEN, fontWeight: "700" }}>
+                    ✓ {e.takenByMe ? t("messages.emTakenByYou") : (e.takenByName ? `${t("messages.emTakenBy")} ${e.takenByName}` : t("messages.emTaken"))}
+                  </Text>
+                </View>
+              ) : e.isMelder ? (
+                <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("messages.emYourEmergency")}</Text>
+              ) : e.eligible ? (
+                <View style={{ marginTop: 6 }}>
+                  <HoldButton label={t("messages.emHoldToTake")} onConfirm={onTake} color={RED} fillColor="rgba(0,0,0,0.28)" textColor="#fff" holdMs={2000} />
+                </View>
+              ) : (
+                <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("messages.emNotEligible")}</Text>
+              )}
+            </ScrollView>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const osWhen = (o: OpenShift, lang: string) => {
+  const hhmm = (s: string) => (s ? s.slice(0, 5) : "");
+  return o.datum
+    ? `${new Date(o.datum + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" })} · ${hhmm(o.start_zeit)}–${hhmm(o.end_zeit)}`
+    : "";
+};
+
+// Tappable summary for a posted open shift. Tapping opens the accept modal.
+function OpenShiftCard({ o, theme, t, lang, onOpen }: { o: OpenShift; theme: any; t: any; lang: string; onOpen: () => void }) {
+  const GREEN = "#16a34a";
+  const openCount = o.roles.reduce((n, r) => n + Math.max(0, r.benoetigt - r.besetzt), 0);
+  const canTake = o.roles.some((r) => r.eligible);
+
+  return (
+    <Pressable style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.accent }]} onPress={onOpen}>
+      <View style={styles.cardHead}>
+        <CalendarPlus color={theme.accent} size={16} />
+        <Text style={[styles.badge, { color: theme.accent }]}>{t("notifications.item.openShift")}</Text>
+      </View>
+      <Text style={[styles.cardTitle, { color: theme.text }]}>{t("messages.osTitle")}</Text>
+      <Text style={[styles.cardText, { color: theme.text }]}>{osWhen(o, lang)}</Text>
+      <Text style={[styles.taskMeta, { color: theme.muted }]}>
+        {o.roles.map((r) => `${r.name} ${r.besetzt}/${r.benoetigt}`).join("  ·  ")}
+      </Text>
+      {o.amAssigned ? (
+        <View style={[styles.eligible, { backgroundColor: GREEN + "22" }]}>
+          <Text style={{ color: GREEN, fontWeight: "700" }}>✓ {t("messages.osYoureOn")}</Text>
+        </View>
+      ) : canTake ? (
+        <View style={[styles.takeBtn, { backgroundColor: theme.accent, alignSelf: "flex-start" }]}>
+          <Text style={{ color: theme.accentText, fontWeight: "700" }}>{t("messages.osOpenToTake")}</Text>
+        </View>
+      ) : openCount === 0 ? (
+        <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("messages.osFullShort")}</Text>
+      ) : (
+        <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("messages.osNotEligible")}</Text>
+      )}
+    </Pressable>
+  );
+}
+
+// Accept modal — open a role slot and agree to it, first come first served.
+function OpenShiftModal({ o, theme, t, lang, onClose, onClaim }: { o: OpenShift | null; theme: any; t: any; lang: string; onClose: () => void; onClaim: (rolleId: string) => void }) {
+  const GREEN = "#16a34a";
+  return (
+    <Modal visible={!!o} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={[styles.modalCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable onPress={onClose} hitSlop={10} style={styles.modalClose}><X color={theme.muted} size={24} /></Pressable>
+          {o && (
+            <ScrollView contentContainerStyle={{ gap: 8 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.cardHead}>
+                <CalendarPlus color={theme.accent} size={16} />
+                <Text style={[styles.badge, { color: theme.accent }]}>{t("notifications.item.openShift")}</Text>
+              </View>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>{t("messages.osTitle")}</Text>
+              <Text style={[styles.cardText, { color: theme.text }]}>{osWhen(o, lang)}</Text>
+              {o.kommentar ? <Text style={[styles.cardText, { color: theme.text }]}>“{o.kommentar}”</Text> : null}
+
+              {o.amAssigned && (
+                <View style={[styles.eligible, { backgroundColor: GREEN + "22" }]}>
+                  <Text style={{ color: GREEN, fontWeight: "700" }}>✓ {t("messages.osYoureOn")}</Text>
+                </View>
+              )}
+
+              <Text style={[styles.taskMeta, { color: theme.muted, marginTop: 4 }]}>{t("messages.osPickRole")}</Text>
+              {o.roles.map((r) => {
+                const full = r.besetzt >= r.benoetigt;
+                return (
+                  <View key={r.rolle_id} style={styles.osRoleRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: theme.text, fontWeight: "700" }}>{r.name}</Text>
+                      <Text style={[styles.taskMeta, { color: theme.muted }]}>{r.besetzt}/{r.benoetigt} {t("messages.osFilled")}</Text>
+                    </View>
+                    {r.eligible ? (
+                      <HoldButton
+                        label={t("messages.osHoldToTake")}
+                        onConfirm={() => onClaim(r.rolle_id)}
+                        color={theme.accent}
+                        fillColor="rgba(0,0,0,0.28)"
+                        textColor={theme.accentText}
+                        holdMs={2000}
+                        compact
+                      />
+                    ) : full ? (
+                      <Text style={{ color: GREEN, fontWeight: "700" }}>✓ {t("messages.osFullShort")}</Text>
+                    ) : o.amAssigned ? null : (
+                      <Text style={[styles.taskMeta, { color: theme.muted, maxWidth: 130, textAlign: "right" }]}>{t("messages.osNotYourRole")}</Text>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const swWhen = (s: SwapMsg, lang: string) => {
+  const hhmm = (x: string) => (x ? x.slice(0, 5) : "");
+  return s.datum
+    ? `${new Date(s.datum + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" })} · ${hhmm(s.start_zeit)}–${hhmm(s.end_zeit)}`
+    : "";
+};
+
+// Tappable summary for a handed-over shift. Tapping opens the take-over modal.
+function SwapCard({ s, theme, t, lang, onOpen }: { s: SwapMsg; theme: any; t: any; lang: string; onOpen: () => void }) {
+  const taken = s.status === "vergeben";
+  return (
+    <Pressable style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.accent }]} onPress={onOpen}>
+      <View style={styles.cardHead}>
+        <Repeat color={theme.accent} size={16} />
         <Text style={[styles.badge, { color: theme.accent }]}>{t("notifications.item.shiftSwitch")}</Text>
-        <Text style={[styles.mockTag, { color: theme.muted }]}>{t("messages.mock")}</Text>
       </View>
-      <Text style={[styles.cardTitle, { color: theme.text }]}>Anna — {t("messages.mockWants")}</Text>
-      <Text style={[styles.cardText, { color: theme.text }]}>Evening shift · Fri 18:00–23:00</Text>
-      <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("messages.mockAvailable")}: Mon, Wed, Thu</Text>
-      <View style={[styles.eligible, { backgroundColor: "#16a34a22" }]}>
-        <Text style={{ color: "#16a34a", fontWeight: "700" }}>✓ {t("messages.mockCanTake")}</Text>
-      </View>
-    </View>
+      <Text style={[styles.cardTitle, { color: theme.text }]}>{t("shiftSwap.cardTitle")}</Text>
+      <Text style={[styles.cardText, { color: theme.text }]}>{swWhen(s, lang)}</Text>
+      {s.anbieterName ? <Text style={[styles.taskMeta, { color: theme.muted }]}>{s.anbieterName}</Text> : null}
+
+      {taken ? (
+        <View style={[styles.eligible, { backgroundColor: GREEN + "22" }]}>
+          <Text style={{ color: GREEN, fontWeight: "700" }}>
+            ✓ {s.takenByMe ? t("shiftSwap.takenByYou") : t("shiftSwap.taken")}
+          </Text>
+        </View>
+      ) : s.isAnbieter ? (
+        <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.yourShift")}</Text>
+      ) : s.eligible ? (
+        <View style={[styles.takeBtn, { backgroundColor: theme.accent, alignSelf: "flex-start" }]}>
+          <Text style={{ color: theme.accentText, fontWeight: "700" }}>{t("shiftSwap.tapToTake")}</Text>
+        </View>
+      ) : (
+        <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.notEligible")}</Text>
+      )}
+    </Pressable>
+  );
+}
+
+// Take-over modal — hold to commit, first come first served.
+function SwapModal({ s, theme, t, lang, onClose, onTake }: { s: SwapMsg | null; theme: any; t: any; lang: string; onClose: () => void; onTake: () => void }) {
+  const taken = s?.status === "vergeben";
+  return (
+    <Modal visible={!!s} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={[styles.modalCard, { backgroundColor: theme.surface, borderColor: theme.accent }]} onPress={(ev) => ev.stopPropagation()}>
+          <Pressable onPress={onClose} hitSlop={10} style={styles.modalClose}><X color={theme.muted} size={24} /></Pressable>
+          {s && (
+            <ScrollView contentContainerStyle={{ gap: 8 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.cardHead}>
+                <Repeat color={theme.accent} size={16} />
+                <Text style={[styles.badge, { color: theme.accent }]}>{t("notifications.item.shiftSwitch")}</Text>
+              </View>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>{t("shiftSwap.cardTitle")}</Text>
+              <Text style={[styles.cardText, { color: theme.text }]}>{swWhen(s, lang)}</Text>
+              {s.anbieterName ? <Text style={[styles.taskMeta, { color: theme.muted }]}>{s.anbieterName}</Text> : null}
+
+              {taken ? (
+                <View style={[styles.eligible, { backgroundColor: GREEN + "22" }]}>
+                  <Text style={{ color: GREEN, fontWeight: "700" }}>
+                    ✓ {s.takenByMe ? t("shiftSwap.takenByYou") : t("shiftSwap.taken")}
+                  </Text>
+                </View>
+              ) : s.isAnbieter ? (
+                <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.yourShift")}</Text>
+              ) : s.eligible ? (
+                <View style={{ marginTop: 6 }}>
+                  <HoldButton label={t("shiftSwap.holdToTake")} onConfirm={onTake} color={theme.accent} fillColor="rgba(0,0,0,0.28)" textColor={theme.accentText} holdMs={2000} />
+                </View>
+              ) : (
+                <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.notEligible")}</Text>
+              )}
+            </ScrollView>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -382,6 +958,8 @@ const catKey = (typ: string) =>
     : typ === "aufgabenliste" ? "tasks"
     : typ === "umfrage" ? "polls"
     : typ === "dokument" ? "documents"
+    : typ === "notfall_vertretung" ? "emergency"
+    : typ === "schicht_ausschreibung" ? "openShift"
     : "shiftSwitch";
 
 const styles = StyleSheet.create({
@@ -393,6 +971,9 @@ const styles = StyleSheet.create({
   search: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, fontSize: 15 },
   sortRow: { flexDirection: "row", gap: 8 },
   sortChip: { borderWidth: 1.5, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 },
+  catChip: { flexDirection: "row", alignItems: "center", gap: 4, marginLeft: "auto" },
+  catMenu: { borderWidth: 1.5, borderRadius: 12, overflow: "hidden" },
+  catItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, paddingHorizontal: 16 },
   prioBadge: { fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
 
   card: { borderWidth: 1.5, borderRadius: 14, padding: 16, gap: 6 },
@@ -425,6 +1006,8 @@ const styles = StyleSheet.create({
   docName: { fontSize: 15 },
 
   eligible: { alignSelf: "flex-start", borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12, marginTop: 6 },
+  takeBtn: { alignSelf: "flex-start", borderRadius: 999, paddingVertical: 10, paddingHorizontal: 20, marginTop: 6 },
+  osRoleRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, borderColor: "#8883" },
 
   fab: {
     position: "absolute", right: 20, bottom: 24, width: 56, height: 56, borderRadius: 28,

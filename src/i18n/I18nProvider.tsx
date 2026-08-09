@@ -16,7 +16,7 @@ const SUPPORTED: Lang[] = ["en", "de", "ru", "es", "fr", "tr", "uk"];
 type I18nContextType = {
   lang: Lang;
   setLang: (l: Lang) => void;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 };
 
 const Ctx = createContext<I18nContextType>({} as I18nContextType);
@@ -25,6 +25,12 @@ export const useI18n = () => useContext(Ctx);
 // "auth.signIn" -> walks the nested json
 function resolve(obj: any, key: string): string {
   return key.split(".").reduce((o, k) => o?.[k], obj) ?? key;
+}
+
+// Replaces {{name}} placeholders with values from params.
+function interpolate(str: string, params?: Record<string, string | number>): string {
+  if (!params) return str;
+  return str.replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => (params[k] != null ? String(params[k]) : m));
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
@@ -45,7 +51,10 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Stable per-language so memoized consumers don't re-render on unrelated renders.
-  const t = useCallback((key: string) => resolve(resources[lang], key), [lang]);
+  const t = useCallback(
+    (key: string, params?: Record<string, string | number>) => interpolate(resolve(resources[lang], key), params),
+    [lang]
+  );
 
   const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
 

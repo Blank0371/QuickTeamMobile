@@ -13,6 +13,43 @@ type AuthContextType = {
   /** Standard email/password sign-in. */
   signIn: (email: string, password: string) => Promise<void>;
   /**
+   * Start phone sign-in / sign-up: sends a 6-digit SMS OTP to `phone` (E.164,
+   * e.g. "+491701234567"). The same call creates the account on first use, so
+   * there is no separate phone sign-up path.
+   */
+  signInWithPhone: (phone: string) => Promise<void>;
+  /** Confirm a phone sign-in with the SMS code; opens a session on success. */
+  verifyPhone: (phone: string, code: string) => Promise<void>;
+  /**
+   * Add a phone number to the CURRENTLY signed-in account. Sends an SMS OTP to
+   * the new number; confirm it with `verifyChannelChange(phone, code, "phone")`.
+   */
+  addPhone: (phone: string) => Promise<void>;
+  /**
+   * Add an email address to the CURRENTLY signed-in account (typically a
+   * phone-first user). Sends a confirmation code to the new address; confirm it
+   * with `verifyChannelChange(email, code, "email")`.
+   */
+  addEmail: (email: string) => Promise<void>;
+  /** Confirm an add-phone / add-email change with the code sent to it. */
+  verifyChannelChange: (
+    contact: string,
+    code: string,
+    kind: "phone" | "email",
+  ) => Promise<void>;
+  /**
+   * Account-merge fallback (rare). Call while signed into the DUPLICATE account
+   * to mint a short-lived one-time merge token, then hand it to the keeper
+   * account's `confirmAccountMerge`. Returns the token string.
+   */
+  startAccountMerge: () => Promise<string>;
+  /**
+   * Call while signed into the KEEPER account with the token from
+   * `startAccountMerge`. Re-points every position from the duplicate onto this
+   * account and resolves with the number of positions moved.
+   */
+  confirmAccountMerge: (token: string) => Promise<number>;
+  /**
    * Standard email/password sign-up.
    * - `needsVerification`: the project requires email confirmation (code emailed).
    * - `alreadyRegistered`: the email already belongs to a confirmed account
@@ -66,6 +103,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+  };
+
+  const signInWithPhone = async (phone: string) => {
+    const { error } = await supabase.auth.signInWithOtp({ phone });
+    if (error) throw error;
+  };
+
+  const verifyPhone = async (phone: string, code: string) => {
+    const { error } = await supabase.auth.verifyOtp({
+      phone,
+      token: code,
+      type: "sms",
+    });
+    if (error) throw error;
+  };
+
+  const addPhone = async (phone: string) => {
+    const { error } = await supabase.auth.updateUser({ phone });
+    if (error) throw error;
+  };
+
+  const addEmail = async (email: string) => {
+    const { error } = await supabase.auth.updateUser({ email });
+    if (error) throw error;
+  };
+
+  const verifyChannelChange = async (
+    contact: string,
+    code: string,
+    kind: "phone" | "email",
+  ) => {
+    const { error } = await supabase.auth.verifyOtp(
+      kind === "phone"
+        ? { phone: contact, token: code, type: "phone_change" }
+        : { email: contact, token: code, type: "email_change" },
+    );
+    if (error) throw error;
+    // Pull the refreshed user so `user.phone` / `user.email` reflect the change
+    // immediately (updateUser's local user isn't updated until re-fetch).
+    const { data } = await supabase.auth.getUser();
+    if (data.user) setUser(data.user);
+  };
+
+  const startAccountMerge = async () => {
+    const { data, error } = await supabase.rpc("konto_merge_start");
+    if (error) throw error;
+    return data as string;
+  };
+
+  const confirmAccountMerge = async (token: string) => {
+    const { data, error } = await supabase.rpc("konto_merge_confirm", { p_token: token });
+    if (error) throw error;
+    return (data ?? 0) as number;
   };
 
   const signUp = async (email: string, password: string) => {
@@ -126,6 +216,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         entered,
         activeMitarbeiter,
         signIn,
+        signInWithPhone,
+        verifyPhone,
+        addPhone,
+        addEmail,
+        verifyChannelChange,
+        startAccountMerge,
+        confirmAccountMerge,
         signUp,
         verifySignUp,
         resendCode,

@@ -33,7 +33,7 @@ function RootNav() {
           <Stack.Screen name="notifications" />
           <Stack.Screen name="bug-report" />
           <Stack.Screen name="compose" options={{ presentation: "modal" }} />
-          <Stack.Screen name="shift/[id]" options={{ presentation: "modal", headerShown: true, title: "Shift" }} />
+          <Stack.Screen name="shift/[id]" options={{ presentation: "modal" }} />
           <Stack.Screen name="legal/[doc]" />
         </Stack.Protected>
       </Stack>

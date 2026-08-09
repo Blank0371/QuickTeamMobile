@@ -1,8 +1,8 @@
 // src/app/(tabs)/settings.tsx
 import { router } from "expo-router";
-import { AlertCircle, Copyright, FileText, Settings as Gear, Mail, Moon, ScrollText, Shield, Sun } from "lucide-react-native";
+import { AlertCircle, Copyright, FileText, Settings as Gear, Mail, Moon, Phone, ScrollText, Shield, Sun, X } from "lucide-react-native";
 import { useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { HoldButton } from "../../components/HoldButton";
@@ -37,6 +37,166 @@ const MODES = [
   { m: "system", Icon: Gear },
 ] as const;
 
+const SMS_CODE_LENGTH = 6;       // must match Supabase Auth → SMS OTP Length
+const EMAIL_CODE_LENGTH = 8;     // must match Supabase Auth → Email OTP Length
+const emailValid = (e: string) => /\S+@\S+\.\S+/.test(e.trim());
+const phoneValid = (p: string) => /^\+[1-9]\d{6,14}$/.test(p.replace(/[\s()-]/g, ""));
+const normalizePhone = (p: string) => p.replace(/[\s()-]/g, "");
+
+/**
+ * Prompts a single-channel account (email-only or phone-only) to add the other
+ * channel to the same auth.users row, so one person = one account. Renders
+ * nothing once both channels exist. Flow: banner → enter contact → send OTP →
+ * enter code → verified and merged into the current auth user.
+ */
+function LinkChannelBanner() {
+  const { user, addPhone, addEmail, verifyChannelChange } = useAuth();
+  const { theme } = useTheme();
+  const { t } = useI18n();
+
+  // Missing channel to offer. Bail if we can't tell, or both already present.
+  const missing: "phone" | "email" | null = !user
+    ? null
+    : !user.phone
+      ? "phone"
+      : !user.email
+        ? "email"
+        : null;
+
+  const [step, setStep] = useState<"banner" | "input" | "verify">("banner");
+  const [contact, setContact] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (!missing || dismissed) return null;
+
+  const isPhone = missing === "phone";
+  const codeLen = isPhone ? SMS_CODE_LENGTH : EMAIL_CODE_LENGTH;
+  const contactValid = isPhone ? phoneValid(contact) : emailValid(contact);
+  const sendValue = isPhone ? normalizePhone(contact) : contact.trim();
+
+  const reset = () => {
+    setStep("banner"); setContact(""); setCode(""); setError(null);
+  };
+
+  const send = async () => {
+    setBusy(true); setError(null);
+    try {
+      if (isPhone) await addPhone(sendValue);
+      else await addEmail(sendValue);
+      setStep("verify");
+    } catch (e) {
+      console.error("[link] send", e);
+      setError(t("settings.link.error"));
+    } finally { setBusy(false); }
+  };
+
+  const confirm = async () => {
+    setBusy(true); setError(null);
+    try {
+      await verifyChannelChange(sendValue, code.trim(), missing);
+      // user.phone / user.email now populated → this component unmounts itself.
+    } catch (e) {
+      console.error("[link] confirm", e);
+      setError(t("settings.link.error"));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <View style={[styles.banner, { backgroundColor: theme.surface, borderColor: theme.accent }]}>
+      <View style={styles.bannerHead}>
+        {isPhone ? <Phone color={theme.accent} size={20} /> : <Mail color={theme.accent} size={20} />}
+        <Text style={[styles.bannerTitle, { color: theme.text }]}>
+          {isPhone ? t("settings.link.addPhoneTitle") : t("settings.link.addEmailTitle")}
+        </Text>
+        {step === "banner" && (
+          <Pressable onPress={() => setDismissed(true)} hitSlop={8}>
+            <X color={theme.muted} size={18} />
+          </Pressable>
+        )}
+      </View>
+
+      {step === "banner" && (
+        <>
+          <Text style={[styles.bannerBody, { color: theme.muted }]}>
+            {isPhone ? t("settings.link.addPhoneBody") : t("settings.link.addEmailBody")}
+          </Text>
+          <Pressable
+            style={[styles.bannerBtn, { backgroundColor: theme.accent }]}
+            onPress={() => setStep("input")}
+          >
+            <Text style={[styles.bannerBtnText, { color: theme.accentText }]}>{t("settings.link.add")}</Text>
+          </Pressable>
+        </>
+      )}
+
+      {step === "input" && (
+        <>
+          <TextInput
+            style={[styles.bannerInput, { color: theme.text, borderColor: theme.border }]}
+            placeholder={isPhone ? t("settings.link.phonePlaceholder") : t("settings.link.emailPlaceholder")}
+            placeholderTextColor={theme.muted}
+            keyboardType={isPhone ? "phone-pad" : "email-address"}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+            value={contact}
+            onChangeText={setContact}
+          />
+          {error && <Text style={styles.bannerError}>{error}</Text>}
+          <View style={styles.bannerRow}>
+            <Pressable style={styles.bannerLink} onPress={reset} disabled={busy}>
+              <Text style={[styles.bannerLinkText, { color: theme.muted }]}>{t("settings.link.cancel")}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.bannerBtn, { backgroundColor: theme.accent, opacity: contactValid && !busy ? 1 : 0.5, flex: 1 }]}
+              onPress={send}
+              disabled={!contactValid || busy}
+            >
+              {busy ? <ActivityIndicator color={theme.accentText} />
+                    : <Text style={[styles.bannerBtnText, { color: theme.accentText }]}>{t("settings.link.sendCode")}</Text>}
+            </Pressable>
+          </View>
+        </>
+      )}
+
+      {step === "verify" && (
+        <>
+          <Text style={[styles.bannerBody, { color: theme.muted }]}>
+            {t("settings.link.codeSent")} {sendValue}
+          </Text>
+          <TextInput
+            style={[styles.bannerInput, styles.bannerCode, { color: theme.text, borderColor: theme.border }]}
+            placeholder={t("settings.link.code")}
+            placeholderTextColor={theme.muted}
+            keyboardType="number-pad"
+            autoFocus
+            maxLength={codeLen}
+            value={code}
+            onChangeText={setCode}
+          />
+          {error && <Text style={styles.bannerError}>{error}</Text>}
+          <View style={styles.bannerRow}>
+            <Pressable style={styles.bannerLink} onPress={reset} disabled={busy}>
+              <Text style={[styles.bannerLinkText, { color: theme.muted }]}>{t("settings.link.cancel")}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.bannerBtn, { backgroundColor: theme.accent, opacity: code.length === codeLen && !busy ? 1 : 0.5, flex: 1 }]}
+              onPress={confirm}
+              disabled={code.length !== codeLen || busy}
+            >
+              {busy ? <ActivityIndicator color={theme.accentText} />
+                    : <Text style={[styles.bannerBtnText, { color: theme.accentText }]}>{t("settings.link.confirm")}</Text>}
+            </Pressable>
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const { exitToSelection, signOut } = useAuth();
   const { theme, mode, setMode } = useTheme();
@@ -57,6 +217,9 @@ export default function SettingsScreen() {
       <ScreenGradient />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={[styles.title, { color: theme.text }]}>{t("settings.title")}</Text>
+
+        {/* ---- Link the other login channel (phone/email) ---- */}
+        <LinkChannelBanner />
 
         {/* ---- Connections ---- */}
         <Pressable
@@ -209,4 +372,20 @@ const styles = StyleSheet.create({
 
   danger: { marginTop: 32, gap: 12 },
   holdHint: { fontSize: 13, textAlign: "center" },
+
+  banner: { borderWidth: 1.5, borderRadius: 12, padding: 16, gap: 12 },
+  bannerHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  bannerTitle: { fontSize: 16, fontWeight: "700", flex: 1 },
+  bannerBody: { fontSize: 14, lineHeight: 20 },
+  bannerBtn: { borderRadius: 999, paddingVertical: 12, alignItems: "center", justifyContent: "center" },
+  bannerBtnText: { fontSize: 15, fontWeight: "700" },
+  bannerInput: {
+    borderWidth: 1.5, borderRadius: 8, paddingVertical: 12,
+    paddingHorizontal: 12, fontSize: 16,
+  },
+  bannerCode: { fontSize: 22, letterSpacing: 6, fontWeight: "700", textAlign: "center" },
+  bannerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  bannerLink: { paddingVertical: 12, paddingHorizontal: 8 },
+  bannerLinkText: { fontSize: 15, fontWeight: "600" },
+  bannerError: { color: "#C1442D", fontSize: 14 },
 });

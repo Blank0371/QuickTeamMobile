@@ -114,7 +114,7 @@ export default function SchedulingScreen() {
         {loading ? (
           <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />
         ) : tab === "emergency" ? (
-          <EmergencySection theme={theme} t={t} me={me} betrieb={betrieb} />
+          <EmergencySection theme={theme} t={t} lang={lang} me={me} betrieb={betrieb} />
         ) : tab === "planning" ? (
           <PlanningSection
             theme={theme} t={t} lang={lang} me={me!} betrieb={betrieb!}
@@ -135,20 +135,103 @@ export default function SchedulingScreen() {
 // =====================================================================
 // Emergency
 // =====================================================================
-function EmergencySection({ theme, t, me, betrieb }: any) {
+type EmShift = {
+  zuweisungId: string;
+  instanzId: string;
+  datum: string;
+  start_zeit: string;
+  end_zeit: string;
+  label: string;
+};
+type Reported = {
+  id: string;
+  status: "gemeldet" | "vertretung_gesucht" | "besetzt" | "storniert";
+  datum: string;
+  start_zeit: string;
+  end_zeit: string;
+  label: string;
+};
+
+function EmergencySection({ theme, t, lang, me, betrieb }: any) {
+  const [loading, setLoading] = useState(true);
+  const [shifts, setShifts] = useState<EmShift[]>([]);
+  const [reported, setReported] = useState<Reported[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const canSend = reason.trim().length > 0;
+
+  const load = useCallback(async () => {
+    if (!me || !betrieb) return;
+    setLoading(true);
+    const today = isoDay(new Date());
+
+    const [zuw, inst, vorl, notf] = await Promise.all([
+      supabase.from("schicht_zuweisungen").select("id, schicht_instanz_id, attendet").eq("mitarbeiter_id", me),
+      supabase.from("schicht_instanzen").select("id, datum, start_zeit, end_zeit, schicht_vorlage_id").eq("betrieb_id", betrieb).gte("datum", today),
+      supabase.from("schicht_vorlagen").select("id, bezeichnung").eq("betrieb_id", betrieb),
+      supabase.from("notfaelle").select("id, status, schicht_instanz_id").eq("melder_id", me).neq("status", "storniert"),
+    ]);
+
+    const instById = new Map((inst.data ?? []).map((i: any) => [i.id, i]));
+    const vorlById = new Map((vorl.data ?? []).map((v: any) => [v.id, v.bezeichnung]));
+    const labelOf = (i: any) => (i.schicht_vorlage_id && vorlById.get(i.schicht_vorlage_id)) || t("scheduling.shift");
+
+    const upcoming: EmShift[] = (zuw.data ?? [])
+      .filter((z: any) => z.attendet)
+      .map((z: any) => ({ z, i: instById.get(z.schicht_instanz_id) }))
+      .filter((x: any) => x.i)
+      .map((x: any) => ({
+        zuweisungId: x.z.id,
+        instanzId: x.i.id,
+        datum: x.i.datum,
+        start_zeit: x.i.start_zeit,
+        end_zeit: x.i.end_zeit,
+        label: labelOf(x.i),
+      }))
+      .sort((a: EmShift, b: EmShift) => (a.datum + a.start_zeit).localeCompare(b.datum + b.start_zeit));
+
+    const rep: Reported[] = (notf.data ?? [])
+      .map((n: any) => ({ n, i: instById.get(n.schicht_instanz_id) }))
+      .filter((x: any) => x.i)
+      .map((x: any) => ({
+        id: x.n.id,
+        status: x.n.status,
+        datum: x.i.datum,
+        start_zeit: x.i.start_zeit,
+        end_zeit: x.i.end_zeit,
+        label: labelOf(x.i),
+      }))
+      .sort((a: Reported, b: Reported) => (a.datum + a.start_zeit).localeCompare(b.datum + b.start_zeit));
+
+    setShifts(upcoming);
+    setReported(rep);
+    setSelected((cur) => (cur && upcoming.some((s) => s.zuweisungId === cur) ? cur : null));
+    setLoading(false);
+  }, [me, betrieb, t]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const fmtShift = (s: { datum: string; start_zeit: string; end_zeit: string; label: string }) =>
+    `${s.label} · ${new Date(s.datum + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" })} · ${hhmm(s.start_zeit)}–${hhmm(s.end_zeit)}`;
+
+  const statusLabel = (s: Reported["status"]) =>
+    s === "besetzt" ? t("scheduling.emReplaced")
+      : s === "vertretung_gesucht" ? t("scheduling.emSearching")
+        : t("scheduling.emReported");
+  const statusColor = (s: Reported["status"]) => (s === "besetzt" ? GREEN : AMBER);
 
   const send = async () => {
-    if (!canSend || !me || !betrieb) return;
-    const { error } = await supabase.from("abwesenheit").insert({
-      mitarbeiter_id: me, betrieb_id: betrieb, grund: reason.trim(),
-    });
+    if (!selected || sending) return;
+    setSending(true);
+    const { error } = await supabase.rpc("notfall_melden", { p_zuweisung_id: selected, p_grund: reason.trim() || null });
+    setSending(false);
     if (error) return;
     setReason("");
+    setSelected(null);
     setSent(true);
     setTimeout(() => setSent(false), 2500);
+    load();
   };
 
   return (
@@ -158,24 +241,68 @@ function EmergencySection({ theme, t, me, betrieb }: any) {
           <TriangleAlert color={RED} size={20} />
           <Text style={[styles.hint, { color: theme.muted, flex: 1 }]}>{t("scheduling.emergencyHint")}</Text>
         </View>
-        <TextInput
-          style={[styles.input, styles.multiline, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
-          placeholder={t("scheduling.reasonPlaceholder")}
-          placeholderTextColor={theme.muted}
-          value={reason}
-          onChangeText={setReason}
-          multiline
-        />
-        <Pressable
-          style={[styles.submit, { backgroundColor: canSend ? theme.accent : theme.border }]}
-          onPress={send}
-          disabled={!canSend}
-        >
-          <Text style={[styles.submitText, { color: canSend ? theme.accentText : theme.muted }]}>
-            {sent ? `✓ ${t("scheduling.leaveSent")}` : t("scheduling.sendLeave")}
-          </Text>
-        </Pressable>
+
+        {loading ? (
+          <ActivityIndicator color={theme.accent} style={{ marginVertical: 20 }} />
+        ) : shifts.length === 0 ? (
+          <Text style={[styles.hint, { color: theme.muted }]}>{t("scheduling.emNoShifts")}</Text>
+        ) : (
+          <>
+            <Text style={[styles.sectionLabel, { color: theme.muted, marginTop: 0 }]}>{t("scheduling.emPickShift")}</Text>
+            {shifts.map((s) => {
+              const active = selected === s.zuweisungId;
+              return (
+                <Pressable
+                  key={s.zuweisungId}
+                  onPress={() => setSelected(active ? null : s.zuweisungId)}
+                  style={[styles.shiftRow, { borderColor: active ? RED : theme.border }, active && { backgroundColor: RED + "18" }]}
+                >
+                  <View style={[styles.radio, { borderColor: active ? RED : theme.border }]}>
+                    {active && <View style={[styles.radioDot, { backgroundColor: RED }]} />}
+                  </View>
+                  <Text style={{ color: theme.text, fontWeight: "600", flex: 1 }}>{fmtShift(s)}</Text>
+                </Pressable>
+              );
+            })}
+
+            <TextInput
+              style={[styles.input, styles.multiline, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
+              placeholder={t("scheduling.reasonPlaceholder")}
+              placeholderTextColor={theme.muted}
+              value={reason}
+              onChangeText={setReason}
+              multiline
+            />
+            <Pressable
+              style={[styles.submit, { backgroundColor: selected ? RED : theme.border }]}
+              onPress={send}
+              disabled={!selected || sending}
+            >
+              <Text style={[styles.submitText, { color: selected ? "#fff" : theme.muted }]}>
+                {sent ? `✓ ${t("scheduling.leaveSent")}` : t("scheduling.sendLeave")}
+              </Text>
+            </Pressable>
+          </>
+        )}
       </View>
+
+      {reported.length > 0 && (
+        <>
+          <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("scheduling.emYourEmergencies")}</Text>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {reported.map((r) => (
+              <View key={r.id} style={[styles.listRow, { borderColor: theme.border }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontWeight: "600" }}>{fmtShift(r)}</Text>
+                </View>
+                <View style={[styles.statusPill, { backgroundColor: statusColor(r.status) }]}>
+                  <Text style={styles.statusText}>{statusLabel(r.status)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
     </>
   );
 }
@@ -479,7 +606,10 @@ function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, rel
   const rangeDays = von && bis
     ? Math.floor((new Date(bis).getTime() - new Date(von).getTime()) / 86400000) + 1
     : von ? 1 : 0;
-  const canRequest = !!von && rangeDays > 0;
+  // The picked range must fit within the days the employee still has left,
+  // so a request can never push the balance below zero.
+  const exceedsBalance = rangeDays > daysLeft;
+  const canRequest = !!von && rangeDays > 0 && !exceedsBalance;
 
   const request = async () => {
     if (!canRequest) return;
@@ -541,6 +671,11 @@ function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, rel
         <Text style={{ color: theme.muted, fontSize: 13, textAlign: "center" }}>
           {von ? `${fmtDate(von)}${bis ? "  –  " + fmtDate(bis) : ""}   ·   ${rangeDays} ${t("scheduling.days")}` : ""}
         </Text>
+        {exceedsBalance ? (
+          <Text style={{ color: RED, fontSize: 13, textAlign: "center", fontWeight: "600" }}>
+            {t("scheduling.notEnoughDays")}
+          </Text>
+        ) : null}
         <View>
           <TextInput
             style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
@@ -694,6 +829,9 @@ const styles = StyleSheet.create({
   weekCell: { flex: 1, alignItems: "center", gap: 6 },
   weekCellLabel: { fontSize: 11, fontWeight: "600", textTransform: "capitalize" },
   weekDayBox: { width: 40, height: 44, borderWidth: 1.5, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  radioDot: { width: 10, height: 10, borderRadius: 5 },
 
   prefToggle: { flexDirection: "row", gap: 8 },
   prefBtn: { borderWidth: 1.5, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12, alignItems: "center" },

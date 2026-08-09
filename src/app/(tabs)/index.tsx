@@ -2,10 +2,10 @@
 // new messages. Opening a profile lands here (index is the initial tab route).
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
-import { CalendarClock, ChevronRight, Clock, MapPin, MessageCircle } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { CalendarClock, CheckCheck, ChevronRight, Clock, MapPin, MessageCircle, Repeat, TreePalm, TriangleAlert } from "lucide-react-native";
+import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator, Pressable,
+  ActivityIndicator, Modal, Pressable,
   StyleSheet, Text, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,7 +25,23 @@ type UnreadMsg = {
   autorName: string;
 };
 
+const RED = "#C1442D";
+
+// A thing the manager still has to approve or act on.
+type PendingApproval = {
+  id: string;
+  kind: "vacation" | "swap" | "emergency";
+  who: string;
+  detail: string;
+};
+
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+const fmtRange = (von: string, bis: string, lang: string) => {
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  const f = (d: string) => new Date(d + "T00:00:00").toLocaleDateString(lang, opts);
+  return von === bis ? f(von) : `${f(von)} – ${f(bis)}`;
+};
 
 // Home only surfaces messages that arrived since the last time this device
 // looked at Home. We remember the newest message timestamp per position.
@@ -46,6 +62,7 @@ const catKey = (typ: string) =>
     : typ === "aufgabenliste" ? "tasks"
     : typ === "umfrage" ? "polls"
     : typ === "dokument" ? "documents"
+    : typ === "notfall_vertretung" ? "emergency"
     : "shiftSwitch";
 
 export default function Home() {
@@ -53,8 +70,11 @@ export default function Home() {
   const { theme } = useTheme();
   const { t, lang } = useI18n();
 
+  const isChef = activeMitarbeiter?.rolle_typ === "chef";
+
   const [firstName, setFirstName] = useState<string>("");
   const [unread, setUnread] = useState<UnreadMsg[]>([]);
+  const [approvals, setApprovals] = useState<PendingApproval[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -67,6 +87,67 @@ export default function Home() {
       .eq("id", activeMitarbeiter.id)
       .maybeSingle();
     setFirstName((me?.vorname ?? "").trim());
+
+    // Managers see what they still have to decide on: vacation requests always,
+    // shift swaps only when the business requires manager approval for them.
+    if (isChef) {
+      const { data: settings } = await supabase
+        .from("betriebs_einstellungen")
+        .select("tausch_freigabe_erforderlich")
+        .eq("betrieb_id", activeMitarbeiter.betrieb_id)
+        .maybeSingle();
+      const swapApprovalOn = !!settings?.tausch_freigabe_erforderlich;
+
+      const [vac, swaps, team, emg] = await Promise.all([
+        supabase.from("urlaub")
+          .select("id, mitarbeiter_id, von, bis")
+          .eq("betrieb_id", activeMitarbeiter.betrieb_id)
+          .eq("status", "requested")
+          .order("von", { ascending: true }),
+        swapApprovalOn
+          ? supabase.from("benachrichtigungen")
+              .select("id, titel, autor_id, erstellt_am")
+              .eq("betrieb_id", activeMitarbeiter.betrieb_id)
+              .eq("typ", "aenderungswunsch")
+              .is("geloescht_am", null)
+              .order("erstellt_am", { ascending: false })
+          : Promise.resolve({ data: [] as any[] }),
+        supabase.from("mitarbeiter").select("id, vorname, nachname")
+          .eq("betrieb_id", activeMitarbeiter.betrieb_id),
+        // Reported emergencies the manager still has to act on (call out a replacement).
+        supabase.from("notfaelle")
+          .select("id, melder_id, status, erstellt_am")
+          .eq("betrieb_id", activeMitarbeiter.betrieb_id)
+          .eq("status", "gemeldet")
+          .order("erstellt_am", { ascending: true }),
+      ]);
+
+      const nameById = new Map<string, string>();
+      (team.data ?? []).forEach((p: any) => nameById.set(p.id, `${p.vorname} ${p.nachname}`.trim()));
+
+      const emgItems: PendingApproval[] = (emg.data ?? []).map((n: any) => ({
+        id: `emg:${n.id}`,
+        kind: "emergency",
+        who: nameById.get(n.melder_id) ?? "—",
+        detail: "",
+      }));
+
+      const vacItems: PendingApproval[] = (vac.data ?? []).map((v: any) => ({
+        id: `vac:${v.id}`,
+        kind: "vacation",
+        who: nameById.get(v.mitarbeiter_id) ?? "—",
+        detail: fmtRange(v.von, v.bis, lang),
+      }));
+      const swapItems: PendingApproval[] = (swaps.data ?? []).map((s: any) => ({
+        id: `swap:${s.id}`,
+        kind: "swap",
+        who: s.autor_id ? (nameById.get(s.autor_id) ?? "") : "",
+        detail: s.titel ?? "",
+      }));
+      setApprovals([...emgItems, ...vacItems, ...swapItems]);
+    } else {
+      setApprovals([]);
+    }
 
     // broadcast messages for this business, newest first
     const { data: rows } = await supabase
@@ -109,7 +190,7 @@ export default function Home() {
     // Remember the newest message so it won't be flagged "new" next time Home
     // is viewed. `list` is ordered newest-first, so [0] is the latest.
     await AsyncStorage.setItem(seenKey(activeMitarbeiter.id), list[0].erstellt_am);
-  }, [user, activeMitarbeiter]);
+  }, [user, activeMitarbeiter, isChef, lang]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -126,6 +207,16 @@ export default function Home() {
   };
   const fmtMsg = (isoStr: string) =>
     new Date(isoStr).toLocaleDateString(lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+  const emergencyCount = approvals.filter((a) => a.kind === "emergency").length;
+  const emergencyNames = approvals.filter((a) => a.kind === "emergency").map((a) => a.who);
+  const vacationCount = approvals.filter((a) => a.kind === "vacation").length;
+  const swapCount = approvals.filter((a) => a.kind === "swap").length;
+
+  // Interrupting popup: opens once when emergencies appear, re-arms after they clear.
+  const [emgDismissed, setEmgDismissed] = useState(false);
+  useEffect(() => { if (emergencyCount === 0) setEmgDismissed(false); }, [emergencyCount]);
+  const showEmgModal = isChef && emergencyCount > 0 && !emgDismissed;
 
   if (loading) {
     return (
@@ -146,6 +237,78 @@ export default function Home() {
           {firstName ? `${t("home.greeting")}, ${firstName}` : t("home.greeting")}
         </Text>
 
+        {/* ---- Manager: pending approvals ---- */}
+        {isChef ? (
+          <>
+            <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("home.pendingApprovals")}</Text>
+            {emergencyCount === 0 && vacationCount === 0 && swapCount === 0 ? (
+              <View style={[styles.card, styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <CheckCheck color={theme.muted} size={22} />
+                <Text style={[styles.emptyText, { color: theme.muted }]}>{t("home.noApprovals")}</Text>
+              </View>
+            ) : (
+              <>
+                {emergencyCount > 0 ? (
+                  <Pressable
+                    style={[styles.card, { backgroundColor: theme.surface, borderColor: RED }]}
+                    onPress={() => router.push("/manager")}
+                  >
+                    <View style={styles.shiftHead}>
+                      <View style={[styles.iconBadge, { backgroundColor: RED }]}>
+                        <TriangleAlert color="#fff" size={20} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.shiftDay, { color: theme.text }]}>{t("home.emergencyWaiting")}</Text>
+                        <Text style={[styles.shiftTitle, { color: theme.muted }]}>
+                          {emergencyCount} {t(emergencyCount === 1 ? "home.requestOne" : "home.requestMany")}
+                        </Text>
+                      </View>
+                      <ChevronRight color={theme.muted} size={22} />
+                    </View>
+                  </Pressable>
+                ) : null}
+                {vacationCount > 0 ? (
+                  <Pressable
+                    style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                    onPress={() => router.push("/manager")}
+                  >
+                    <View style={styles.shiftHead}>
+                      <View style={[styles.iconBadge, { backgroundColor: theme.accent }]}>
+                        <TreePalm color={theme.accentText} size={20} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.shiftDay, { color: theme.text }]}>{t("home.vacationWaiting")}</Text>
+                        <Text style={[styles.shiftTitle, { color: theme.muted }]}>
+                          {vacationCount} {t(vacationCount === 1 ? "home.requestOne" : "home.requestMany")}
+                        </Text>
+                      </View>
+                      <ChevronRight color={theme.muted} size={22} />
+                    </View>
+                  </Pressable>
+                ) : null}
+                {swapCount > 0 ? (
+                  <Pressable
+                    style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                    onPress={() => router.push("/messages")}
+                  >
+                    <View style={styles.shiftHead}>
+                      <View style={[styles.iconBadge, { backgroundColor: theme.accent }]}>
+                        <Repeat color={theme.accentText} size={20} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.shiftDay, { color: theme.text }]}>{t("home.swapWaiting")}</Text>
+                        <Text style={[styles.shiftTitle, { color: theme.muted }]}>
+                          {swapCount} {t(swapCount === 1 ? "home.requestOne" : "home.requestMany")}
+                        </Text>
+                      </View>
+                      <ChevronRight color={theme.muted} size={22} />
+                    </View>
+                  </Pressable>
+                ) : null}
+              </>
+            )}
+          </>
+        ) : (<>
         {/* ---- Next shift ---- */}
         <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("home.nextShift")}</Text>
         {shift ? (
@@ -182,6 +345,7 @@ export default function Home() {
             <Text style={[styles.emptyText, { color: theme.muted }]}>{t("home.noShift")}</Text>
           </View>
         )}
+        </>)}
 
         {/* ---- New messages ---- */}
         <View style={styles.sectionHead}>
@@ -214,6 +378,33 @@ export default function Home() {
           ))
         )}
       </RefreshScrollView>
+
+      {/* Interrupting emergency popup for the manager */}
+      <Modal visible={showEmgModal} transparent animationType="fade" onRequestClose={() => setEmgDismissed(true)}>
+        <Pressable style={styles.backdrop} onPress={() => setEmgDismissed(true)}>
+          <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: RED }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHead}>
+              <View style={[styles.iconBadge, { backgroundColor: RED }]}>
+                <TriangleAlert color="#fff" size={22} />
+              </View>
+              <Text style={[styles.sheetTitle, { color: theme.text }]}>{t("home.emergencyModalTitle")}</Text>
+            </View>
+            <Text style={{ color: theme.text, fontSize: 15, lineHeight: 21, marginBottom: 4 }}>
+              {emergencyCount} {t(emergencyCount === 1 ? "home.requestOne" : "home.requestMany")}
+              {emergencyNames.length ? ` — ${emergencyNames.join(", ")}` : ""}
+            </Text>
+            <Text style={{ color: theme.muted, fontSize: 13, marginBottom: 14 }}>{t("home.emergencyModalBody")}</Text>
+            <View style={styles.modalBtnRow}>
+              <Pressable style={[styles.modalBtn, { borderColor: theme.border }]} onPress={() => setEmgDismissed(true)}>
+                <Text style={{ color: theme.text, fontWeight: "700" }}>{t("home.later")}</Text>
+              </Pressable>
+              <Pressable style={[styles.modalBtn, { backgroundColor: RED, borderColor: RED }]} onPress={() => { setEmgDismissed(true); router.push("/manager"); }}>
+                <Text style={{ color: "#fff", fontWeight: "700" }}>{t("home.viewNow")}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -225,6 +416,13 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 28, fontWeight: "700", marginBottom: 4 },
 
   sectionLabel: { fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 10 },
+
+  backdrop: { flex: 1, backgroundColor: "#00000088", alignItems: "center", justifyContent: "center", padding: 24 },
+  sheet: { width: "100%", borderWidth: 1.5, borderRadius: 16, padding: 18, gap: 6 },
+  sheetHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 6 },
+  sheetTitle: { fontSize: 18, fontWeight: "800", flex: 1 },
+  modalBtnRow: { flexDirection: "row", gap: 10 },
+  modalBtn: { flex: 1, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderRadius: 999, paddingVertical: 12 },
   sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
   viewAll: { fontSize: 13, fontWeight: "700", marginTop: 10 },
 
