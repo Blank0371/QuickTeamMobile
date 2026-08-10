@@ -89,6 +89,9 @@ export default function MessagesScreen() {
   const [category, setCategory] = useState<"all" | "shifts" | "messages">("all");
   const [catOpen, setCatOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const PAGE = 10;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  const [totalMsgCount, setTotalMsgCount] = useState(0);
 
   // Turn notfall_vertretung broadcasts into interactive take-over cards.
   const loadEmergencies = useCallback(async (emgRows: any[]) => {
@@ -221,8 +224,12 @@ export default function MessagesScreen() {
     const emgRows = allRows.filter((m: any) => m.typ === "notfall_vertretung");
     const openRows = allRows.filter((m: any) => m.typ === "schicht_ausschreibung");
     const swapRows = allRows.filter((m: any) => m.typ === "schicht_tausch");
-    const list = allRows.filter((m: any) => !["notfall_vertretung", "schicht_ausschreibung", "schicht_tausch"].includes(m.typ));
+    const fullList = allRows.filter((m: any) => !["notfall_vertretung", "schicht_ausschreibung", "schicht_tausch"].includes(m.typ));
     await Promise.all([loadEmergencies(emgRows), loadOpenShifts(openRows), loadSwaps(swapRows)]);
+
+    // Only build the most recent `visibleCount` messages; "Load more" reveals older ones.
+    setTotalMsgCount(fullList.length);
+    const list = fullList.slice(0, visibleCount);
 
     const ids = list.map((m: any) => m.id);
     if (ids.length === 0) { setMessages([]); setLoading(false); return; }
@@ -283,7 +290,7 @@ export default function MessagesScreen() {
     built.filter((m) => !m.gelesen).forEach((m) => {
       supabase.rpc("als_gelesen_markieren", { p_benachrichtigung_id: m.id });
     });
-  }, [user, activeMitarbeiter, loadEmergencies, loadOpenShifts, loadSwaps]);
+  }, [user, activeMitarbeiter, loadEmergencies, loadOpenShifts, loadSwaps, visibleCount]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -511,6 +518,15 @@ export default function MessagesScreen() {
             <SummaryCard key={item.m.id} m={item.m} theme={theme} t={t} fmt={fmt}
               onPress={() => setSelectedId(item.m.id)} />
           )
+        )}
+
+        {totalMsgCount > visibleCount && (
+          <Pressable
+            style={[styles.loadMore, { borderColor: theme.border, backgroundColor: theme.surface }]}
+            onPress={() => setVisibleCount((c) => c + PAGE)}
+          >
+            <Text style={{ color: theme.accent, fontWeight: "700", fontSize: 14 }}>{t("messages.loadMore")}</Text>
+          </Pressable>
         )}
 
       </RefreshScrollView>
@@ -1014,6 +1030,7 @@ const styles = StyleSheet.create({
 
   eligible: { alignSelf: "flex-start", borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12, marginTop: 6 },
   takeBtn: { alignSelf: "flex-start", borderRadius: 999, paddingVertical: 10, paddingHorizontal: 20, marginTop: 6 },
+  loadMore: { borderWidth: 1.5, borderRadius: 999, paddingVertical: 12, alignItems: "center", marginTop: 4 },
   osRoleRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, borderColor: "#8883" },
 
   fab: {

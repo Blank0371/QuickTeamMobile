@@ -8,11 +8,12 @@
 // Reads/writes Supabase under chef RLS: urlaub (update status/begruendung),
 // betriebe (update), betriebs_einstellungen (update).
 import {
-  Briefcase, Check, ChevronDown, ChevronRight, Megaphone, RefreshCw, TriangleAlert, Users, X,
+  Briefcase, CalendarClock, CalendarPlus, Check, ChevronDown, ChevronRight, Clock,
+  Megaphone, Minus, Pencil, Plus, RefreshCw, Trash2, TriangleAlert, Users, X,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
@@ -24,8 +25,14 @@ const GREEN = "#16a34a";
 const RED = "#C1442D";
 const AMBER = "#d97706";
 
-type Section = "employees" | "business";
+const WEEKDAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+
+type Section = "employees" | "business" | "shifts";
 type Status = "requested" | "approved" | "denied";
+
+type Vorlage = { id: string; bezeichnung: string; wochentag: number; start_zeit: string; end_zeit: string; aktiv: boolean };
+type Rolle = { id: string; name: string; aktiv: boolean };
+type RoleReq = { rolle_id: string; mindestanzahl: number };
 
 type Mitarbeiter = {
   id: string; vorname: string; nachname: string; email: string | null; telefon: string | null;
@@ -70,10 +77,12 @@ export default function ManagerScreen() {
   const { theme } = useTheme();
   const { t, lang } = useI18n();
   const { activeMitarbeiter } = useAuth();
+  const insets = useSafeAreaInsets();
   const betrieb = activeMitarbeiter?.betrieb_id ?? null;
 
   const [section, setSection] = useState<Section>("employees");
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const [team, setTeam] = useState<Mitarbeiter[]>([]);
   const [vacations, setVacations] = useState<Urlaub[]>([]);
@@ -82,6 +91,9 @@ export default function ManagerScreen() {
   const [shiftsWorked, setShiftsWorked] = useState<Record<string, number>>({});
   const [einstellungen, setEinstellungen] = useState<Einstellungen | null>(null);
   const [emergencies, setEmergencies] = useState<Emergency[]>([]);
+  const [templates, setTemplates] = useState<Vorlage[]>([]);
+  const [templateReqs, setTemplateReqs] = useState<Record<string, RoleReq[]>>({}); // vorlage_id -> role reqs
+  const [roles, setRoles] = useState<Rolle[]>([]);
 
   const fmtDate = (d: string) =>
     new Date(d + "T00:00:00").toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" });
@@ -91,11 +103,11 @@ export default function ManagerScreen() {
     setLoading(true);
     const yearStart = `${new Date().getFullYear()}-01-01`;
 
-    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, vorlagen] = await Promise.all([
+    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, vorlagen, mindest] = await Promise.all([
       supabase.from("mitarbeiter")
         .select("id, vorname, nachname, email, telefon, rolle_typ, vertrag_typ, soll_stunden, ueberstunden_saldo, status, urlaubsanspruch_tage")
         .eq("betrieb_id", betrieb).order("nachname"),
-      supabase.from("rollen").select("id, name").eq("betrieb_id", betrieb),
+      supabase.from("rollen").select("id, name, aktiv").eq("betrieb_id", betrieb),
       supabase.from("mitarbeiter_rollen").select("mitarbeiter_id, rolle_id").eq("betrieb_id", betrieb),
       supabase.from("urlaub").select("id, mitarbeiter_id, von, bis, status, kommentar, begruendung")
         .eq("betrieb_id", betrieb).order("von", { ascending: false }),
@@ -106,7 +118,8 @@ export default function ManagerScreen() {
       supabase.from("schicht_instanzen").select("id, start_zeit, end_zeit, datum, schicht_vorlage_id").eq("betrieb_id", betrieb).gte("datum", yearStart),
       supabase.from("notfaelle").select("id, status, melder_id, schicht_instanz_id, rolle_id, grund, erstellt_am")
         .eq("betrieb_id", betrieb).in("status", ["gemeldet", "vertretung_gesucht"]).order("erstellt_am", { ascending: true }),
-      supabase.from("schicht_vorlagen").select("id, bezeichnung").eq("betrieb_id", betrieb),
+      supabase.from("schicht_vorlagen").select("id, bezeichnung, wochentag, start_zeit, end_zeit, aktiv").eq("betrieb_id", betrieb),
+      supabase.from("schicht_vorlage_mindestbesetzung").select("schicht_vorlage_id, rolle_id, mindestanzahl").eq("betrieb_id", betrieb),
     ]);
 
     setTeam((mitarb.data ?? []) as Mitarbeiter[]);
@@ -159,6 +172,16 @@ export default function ManagerScreen() {
     setEmergencies(emg);
 
     setEinstellungen((settingsRow.data ?? null) as Einstellungen | null);
+
+    // Shift templates + their per-role minimum staffing (for the Shifts section).
+    setRoles((roles.data ?? []).map((r: any) => ({ id: r.id, name: r.name, aktiv: r.aktiv })) as Rolle[]);
+    setTemplates((vorlagen.data ?? []) as Vorlage[]);
+    const reqs: Record<string, RoleReq[]> = {};
+    (mindest.data ?? []).forEach((m: any) => {
+      (reqs[m.schicht_vorlage_id] ??= []).push({ rolle_id: m.rolle_id, mindestanzahl: m.mindestanzahl });
+    });
+    setTemplateReqs(reqs);
+
     setLoading(false);
   }, [betrieb, t]);
 
@@ -178,12 +201,12 @@ export default function ManagerScreen() {
 
         {/* section switcher */}
         <View style={[styles.tabs, { borderColor: theme.border }]}>
-          {(["employees", "business"] as Section[]).map((s) => {
+          {(["employees", "shifts", "business"] as Section[]).map((s) => {
             const active = section === s;
             return (
               <Pressable key={s} onPress={() => setSection(s)} style={[styles.tabBtn, active && { backgroundColor: theme.accent }]}>
                 <Text style={{ color: active ? theme.accentText : theme.text, fontWeight: "700", fontSize: 13 }}>
-                  {t(s === "employees" ? "manager.tabEmployees" : "manager.tabBusiness")}
+                  {t(s === "employees" ? "manager.tabEmployees" : s === "business" ? "manager.tabBusiness" : "manager.tabShifts")}
                 </Text>
               </Pressable>
             );
@@ -195,17 +218,35 @@ export default function ManagerScreen() {
         ) : section === "employees" ? (
           <EmployeesSection
             theme={theme} t={t} lang={lang} team={team} vacations={vacations} roleNames={roleNames}
-            betrieb={betrieb!}
+            betrieb={betrieb!} roles={roles}
             hoursWorked={hoursWorked} shiftsWorked={shiftsWorked} emergencies={emergencies}
             reload={load} fmtDate={fmtDate}
           />
-        ) : (
+        ) : section === "business" ? (
           <BusinessSection
             theme={theme} t={t} betrieb={betrieb!}
             einstellungen={einstellungen} setEinstellungen={setEinstellungen}
           />
+        ) : (
+          <ShiftsSection
+            theme={theme} t={t} lang={lang} betrieb={betrieb!}
+            templates={templates} templateReqs={templateReqs} roles={roles} reload={load}
+          />
         )}
       </RefreshScrollView>
+
+      {/* Floating "generate shifts" button — hovers at the bottom of the Shifts section */}
+      {!loading && section === "shifts" && (
+        <Pressable
+          style={[styles.bigCreate, { backgroundColor: theme.accent, left: 16 + insets.left, right: 16 + insets.right, bottom: 16 + insets.bottom }]}
+          onPress={() => setCreateOpen(true)}
+        >
+          <CalendarPlus color={theme.accentText} size={24} />
+          <Text style={[styles.bigCreateText, { color: theme.accentText }]}>{t("manager.createShifts")}</Text>
+        </Pressable>
+      )}
+
+      <CreateShiftsModal visible={createOpen} theme={theme} t={t} lang={lang} betrieb={betrieb} onClose={() => setCreateOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -213,7 +254,7 @@ export default function ManagerScreen() {
 // =====================================================================
 // Employees
 // =====================================================================
-function EmployeesSection({ theme, t, lang, team, vacations, roleNames, betrieb, hoursWorked, shiftsWorked, emergencies, reload, fmtDate }: any) {
+function EmployeesSection({ theme, t, lang, team, vacations, roleNames, betrieb, roles, hoursWorked, shiftsWorked, emergencies, reload, fmtDate }: any) {
   const [showDecided, setShowDecided] = useState(false);
   const [denyFor, setDenyFor] = useState<string | null>(null); // urlaub id in deny mode
   const [denyReason, setDenyReason] = useState("");
@@ -406,6 +447,9 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, betrieb,
         </Pressable>
       </Modal>
 
+      {/* ---- Roles ---- */}
+      <RolesManager theme={theme} t={t} betrieb={betrieb} roles={roles} reload={reload} />
+
       {/* ---- Team ---- */}
       <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("manager.employees")}</Text>
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -450,6 +494,93 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, betrieb,
                 <DetailRow theme={theme} label={t("manager.status")} value={detail.status} last />
               </>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
+// Compact roles manager: list active roles, add a new one, soft-remove (aktiv=false).
+function RolesManager({ theme, t, betrieb, roles, reload }: any) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [confirmRole, setConfirmRole] = useState<Rolle | null>(null); // role pending deletion
+  const active = (roles as Rolle[]).filter((r) => r.aktiv);
+
+  const add = async () => {
+    const n = name.trim();
+    if (!n || busy) return;
+    setBusy(true);
+    const { error } = await supabase.from("rollen").insert({ betrieb_id: betrieb, name: n, aktiv: true });
+    setBusy(false);
+    if (error) { Alert.alert(t("manager.roleSaveFailed")); return; }
+    setName("");
+    reload();
+  };
+
+  const confirmRemoveDone = async () => {
+    if (!confirmRole) return;
+    setBusy(true);
+    const { error } = await supabase.from("rollen").update({ aktiv: false }).eq("id", confirmRole.id);
+    setBusy(false);
+    setConfirmRole(null);
+    if (error) { Alert.alert(t("manager.roleSaveFailed")); return; }
+    reload();
+  };
+
+  return (
+    <>
+      <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("manager.roles")}</Text>
+      <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        {active.length === 0 ? (
+          <Text style={[styles.hint, { color: theme.muted }]}>{t("manager.rolesEmpty")}</Text>
+        ) : (
+          <View style={styles.roleChips}>
+            {active.map((r) => (
+              <View key={r.id} style={[styles.roleChip, { borderColor: theme.border, backgroundColor: theme.bg }]}>
+                <Text style={{ color: theme.text, fontWeight: "600", fontSize: 14 }}>{r.name}</Text>
+                <Pressable onPress={() => setConfirmRole(r)} hitSlop={8}>
+                  <X color={theme.muted} size={16} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.roleAddRow}>
+          <TextInput
+            style={[styles.input, { flex: 1, color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
+            value={name} onChangeText={setName} placeholder={t("manager.roleNamePlaceholder")} placeholderTextColor={theme.muted}
+            maxLength={30} onSubmitEditing={add} returnKeyType="done"
+          />
+          <Pressable style={[styles.roleAddBtn, { backgroundColor: theme.accent, opacity: name.trim() ? 1 : 0.5 }]} onPress={add} disabled={!name.trim() || busy}>
+            <Plus color={theme.accentText} size={18} />
+            <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 14 }}>{t("manager.roleAdd")}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* delete confirmation popup */}
+      <Modal visible={!!confirmRole} transparent animationType="fade" onRequestClose={() => setConfirmRole(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setConfirmRole(null)}>
+          <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHead}>
+              <Text style={[styles.sheetTitle, { color: theme.text }]}>{t("manager.roleRemove")}</Text>
+              <Pressable onPress={() => setConfirmRole(null)} hitSlop={10}><X color={theme.muted} size={22} /></Pressable>
+            </View>
+            <Text style={{ color: theme.text, fontSize: 15, lineHeight: 21, marginBottom: 16 }}>
+              {confirmRole ? (t("manager.roleRemoveConfirm", { name: confirmRole.name }) as string) : ""}
+            </Text>
+            <View style={styles.btnRow}>
+              <Pressable style={[styles.smallBtn, { borderColor: theme.border }]} onPress={() => setConfirmRole(null)} disabled={busy}>
+                <Text style={{ color: theme.text, fontWeight: "700", fontSize: 14 }}>{t("manager.cancel")}</Text>
+              </Pressable>
+              <Pressable style={[styles.smallBtn, { backgroundColor: RED, borderColor: RED }]} onPress={confirmRemoveDone} disabled={busy}>
+                <Trash2 color="#fff" size={16} />
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{t("manager.roleRemove")}</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -636,6 +767,409 @@ function BusinessSection({ theme, t, betrieb, einstellungen, setEinstellungen }:
   );
 }
 
+// =====================================================================
+// Shifts
+// =====================================================================
+const hhmm = (s: string) => (s ? s.slice(0, 5) : "");
+// Full localized weekday name (Monday-first index 0..6), same approach as scheduling.tsx.
+const weekdayName = (wd: number, lang: string) => {
+  const monday = new Date(2024, 0, 1); // 2024-01-01 is a Monday
+  const d = new Date(monday);
+  d.setDate(monday.getDate() + wd);
+  return d.toLocaleDateString(lang, { weekday: "long" });
+};
+
+function ShiftsSection({ theme, t, lang, betrieb, templates, templateReqs, roles, reload }: any) {
+  const [editor, setEditor] = useState<Vorlage | "new" | null>(null);
+
+  const roleName = (id: string) => roles.find((r: Rolle) => r.id === id)?.name ?? "";
+
+  const byDay = useMemo(() => {
+    const m = new Map<number, Vorlage[]>();
+    (templates as Vorlage[]).forEach((v) => {
+      if (!m.has(v.wochentag)) m.set(v.wochentag, []);
+      m.get(v.wochentag)!.push(v);
+    });
+    for (const arr of m.values()) arr.sort((a, b) => a.start_zeit.localeCompare(b.start_zeit));
+    return m;
+  }, [templates]);
+
+  return (
+    <>
+      <View style={styles.tplHeadRow}>
+        <Text style={[styles.sectionLabel, { color: theme.muted, marginTop: 6 }]}>{t("manager.shiftTemplates")}</Text>
+        <Pressable style={[styles.addTplBtn, { borderColor: theme.accent }]} onPress={() => setEditor("new")}>
+          <Plus color={theme.accent} size={16} />
+          <Text style={{ color: theme.accent, fontWeight: "700", fontSize: 13 }}>{t("manager.addTemplate")}</Text>
+        </Pressable>
+      </View>
+
+      {templates.length === 0 ? (
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[styles.hint, { color: theme.muted }]}>{t("manager.noTemplates")}</Text>
+        </View>
+      ) : (
+        WEEKDAY_KEYS.map((key, day) => {
+          const arr = byDay.get(day) ?? [];
+          if (arr.length === 0) return null;
+          return (
+            <View key={key} style={{ gap: 6 }}>
+              <Text style={[styles.dayLabel, { color: theme.text }]}>{weekdayName(day, lang)}</Text>
+              <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, gap: 0 }]}>
+                {arr.map((v, i) => {
+                  const reqs: RoleReq[] = templateReqs[v.id] ?? [];
+                  return (
+                    <Pressable
+                      key={v.id}
+                      style={[styles.tplRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.border }]}
+                      onPress={() => setEditor(v)}
+                    >
+                      <Clock color={theme.muted} size={18} />
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.tplTitleRow}>
+                          <Text style={{ color: theme.text, fontWeight: "700" }}>{v.bezeichnung}</Text>
+                          {!v.aktiv && (
+                            <Text style={[styles.inactivePill, { color: theme.muted, borderColor: theme.border }]}>
+                              {t("manager.tplInactive")}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={{ color: theme.muted, fontSize: 13 }}>{hhmm(v.start_zeit)}–{hhmm(v.end_zeit)}</Text>
+                        {reqs.length > 0 && (
+                          <Text style={{ color: theme.muted, fontSize: 12, marginTop: 2 }}>
+                            {reqs.map((r) => `${roleName(r.rolle_id)} ×${r.mindestanzahl}`).join("  ·  ")}
+                          </Text>
+                        )}
+                      </View>
+                      <Pencil color={theme.muted} size={16} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })
+      )}
+
+      {/* spacer so the last row clears the floating generate button */}
+      <View style={{ height: 76 }} />
+
+      <TemplateEditor
+        target={editor} theme={theme} t={t} lang={lang} betrieb={betrieb} roles={roles}
+        initialReqs={editor && editor !== "new" ? (templateReqs[editor.id] ?? []) : []}
+        onClose={() => setEditor(null)} reload={reload}
+      />
+    </>
+  );
+}
+
+// Create / edit a shift template incl. per-role minimum staffing.
+function TemplateEditor({ target, theme, t, lang, betrieb, roles, initialReqs, onClose, reload }: any) {
+  const isNew = target === "new";
+  const tpl: Vorlage | null = target && target !== "new" ? target : null;
+  const activeRoles: Rolle[] = (roles as Rolle[]).filter((r) => r.aktiv);
+
+  const [bezeichnung, setBezeichnung] = useState("");
+  const [wochentag, setWochentag] = useState(0);
+  const [start, setStart] = useState("06:00");
+  const [end, setEnd] = useState("14:00");
+  const [aktiv, setAktiv] = useState(true);
+  const [counts, setCounts] = useState<Record<string, number>>({}); // rolle_id -> mindestanzahl
+  const [rolesOpen, setRolesOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Reset the form whenever a different template (or "new") is opened.
+  useEffect(() => {
+    if (!target) return;
+    setBezeichnung(tpl?.bezeichnung ?? "");
+    setWochentag(tpl?.wochentag ?? 0);
+    setStart(tpl ? hhmm(tpl.start_zeit) : "06:00");
+    setEnd(tpl ? hhmm(tpl.end_zeit) : "14:00");
+    setAktiv(tpl?.aktiv ?? true);
+    const c: Record<string, number> = {};
+    (initialReqs as RoleReq[]).forEach((r) => { c[r.rolle_id] = r.mindestanzahl; });
+    setCounts(c);
+  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const validTime = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+
+  const save = async () => {
+    if (!bezeichnung.trim()) { Alert.alert(t("manager.tplNameRequired")); return; }
+    if (!validTime(start) || !validTime(end)) { Alert.alert(t("manager.tplTimeInvalid")); return; }
+    setSaving(true);
+
+    let vorlageId = tpl?.id ?? null;
+    const base = {
+      betrieb_id: betrieb,
+      bezeichnung: bezeichnung.trim(),
+      wochentag,
+      start_zeit: start + ":00",
+      end_zeit: end + ":00",
+      aktiv,
+    };
+
+    if (isNew) {
+      const { data, error } = await supabase.from("schicht_vorlagen").insert(base).select("id").single();
+      if (error || !data) { setSaving(false); Alert.alert(t("manager.tplSaveFailed")); return; }
+      vorlageId = data.id;
+    } else {
+      const { error } = await supabase.from("schicht_vorlagen").update(base).eq("id", vorlageId);
+      if (error) { setSaving(false); Alert.alert(t("manager.tplSaveFailed")); return; }
+    }
+
+    // Sync role requirements: wipe existing, insert the nonzero counts.
+    if (!isNew) {
+      await supabase.from("schicht_vorlage_mindestbesetzung").delete().eq("schicht_vorlage_id", vorlageId);
+    }
+    const rows = Object.entries(counts)
+      .filter(([, n]) => n > 0)
+      .map(([rolle_id, n]) => ({ betrieb_id: betrieb, schicht_vorlage_id: vorlageId, rolle_id, mindestanzahl: n }));
+    if (rows.length > 0) {
+      await supabase.from("schicht_vorlage_mindestbesetzung").insert(rows);
+    }
+
+    setSaving(false);
+    onClose();
+    reload();
+  };
+
+  const remove = async () => {
+    if (!tpl) return;
+    Alert.alert(t("manager.deleteTemplate"), t("manager.deleteTemplateConfirm"), [
+      { text: t("manager.cancel"), style: "cancel" },
+      {
+        text: t("manager.deleteTemplate"), style: "destructive", onPress: async () => {
+          setSaving(true);
+          await supabase.from("schicht_vorlage_mindestbesetzung").delete().eq("schicht_vorlage_id", tpl.id);
+          await supabase.from("schicht_vorlagen").delete().eq("id", tpl.id);
+          setSaving(false);
+          onClose();
+          reload();
+        },
+      },
+    ]);
+  };
+
+  const bump = (rolleId: string, delta: number) =>
+    setCounts((c) => ({ ...c, [rolleId]: Math.max(0, Math.min(99, (c[rolleId] ?? 0) + delta)) }));
+
+  return (
+    <Modal visible={!!target} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border, maxHeight: "88%" }]} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetHead}>
+            <Text style={[styles.sheetTitle, { color: theme.text }]}>
+              {isNew ? t("manager.newTemplate") : t("manager.editTemplate")}
+            </Text>
+            <Pressable onPress={onClose} hitSlop={10}><X color={theme.muted} size={22} /></Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={{ gap: 12 }} showsVerticalScrollIndicator={false}>
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.tplName")}</Text>
+              <TextInput
+                style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
+                value={bezeichnung} onChangeText={setBezeichnung} placeholder={t("manager.tplName")} placeholderTextColor={theme.muted} maxLength={40}
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.tplWeekday")}</Text>
+              <View style={styles.wdRow}>
+                {WEEKDAY_KEYS.map((key, day) => {
+                  const on = wochentag === day;
+                  return (
+                    <Pressable key={key} onPress={() => setWochentag(day)}
+                      style={[styles.wdChip, { borderColor: on ? theme.accent : theme.border, backgroundColor: on ? theme.accent : "transparent" }]}>
+                      <Text style={{ color: on ? theme.accentText : theme.text, fontWeight: "700", fontSize: 12 }}>
+                        {weekdayName(day, lang).slice(0, 2)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.timeRow}>
+              <View style={[styles.field, { flex: 1 }]}>
+                <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.tplStart")}</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
+                  value={start} onChangeText={setStart} placeholder="06:00" placeholderTextColor={theme.muted} maxLength={5} keyboardType="numbers-and-punctuation"
+                />
+              </View>
+              <View style={[styles.field, { flex: 1 }]}>
+                <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.tplEnd")}</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
+                  value={end} onChangeText={setEnd} placeholder="14:00" placeholderTextColor={theme.muted} maxLength={5} keyboardType="numbers-and-punctuation"
+                />
+              </View>
+            </View>
+
+            <View style={[styles.switchRow, { borderColor: theme.border }]}>
+              <Text style={{ color: theme.text, fontWeight: "600", flex: 1 }}>{t("manager.tplActive")}</Text>
+              <Switch value={aktiv} onValueChange={setAktiv} trackColor={{ true: theme.accent, false: theme.border }} />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.tplRoles")}</Text>
+              {activeRoles.length === 0 ? (
+                <Text style={[styles.hint, { color: theme.muted }]}>{t("manager.tplNoRoles")}</Text>
+              ) : (
+                <>
+                  {/* dropdown header — shows a summary of the chosen roles */}
+                  <Pressable
+                    style={[styles.roleDropdownHead, { borderColor: theme.border, backgroundColor: theme.bg }]}
+                    onPress={() => setRolesOpen((o) => !o)}
+                  >
+                    <Text style={{ color: theme.text, flex: 1, fontSize: 14 }} numberOfLines={1}>
+                      {(() => {
+                        const chosen = activeRoles.filter((r: Rolle) => (counts[r.id] ?? 0) > 0);
+                        return chosen.length === 0
+                          ? t("manager.tplRolesNone")
+                          : chosen.map((r: Rolle) => `${r.name} ×${counts[r.id]}`).join(", ");
+                      })()}
+                    </Text>
+                    {rolesOpen ? <ChevronDown color={theme.muted} size={20} /> : <ChevronRight color={theme.muted} size={20} />}
+                  </Pressable>
+
+                  {rolesOpen && (
+                    <View style={[styles.roleDropdownBody, { borderColor: theme.border, backgroundColor: theme.bg }]}>
+                      {activeRoles.map((r: Rolle) => {
+                        const n = counts[r.id] ?? 0;
+                        return (
+                          <View key={r.id} style={[styles.roleReqRow, { borderColor: theme.border }]}>
+                            <Text style={{ color: theme.text, flex: 1, fontWeight: n > 0 ? "700" : "500" }}>{r.name}</Text>
+                            <Pressable style={[styles.stepBtn, { borderColor: theme.border }]} onPress={() => bump(r.id, -1)} hitSlop={6}>
+                              <Minus color={theme.text} size={16} />
+                            </Pressable>
+                            <Text style={{ color: theme.text, fontWeight: "700", width: 24, textAlign: "center" }}>{n}</Text>
+                            <Pressable style={[styles.stepBtn, { borderColor: theme.border }]} onPress={() => bump(r.id, 1)} hitSlop={6}>
+                              <Plus color={theme.text} size={16} />
+                            </Pressable>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+
+            <Pressable style={[styles.submit, { backgroundColor: theme.accent }]} onPress={save} disabled={saving}>
+              <Text style={[styles.submitText, { color: theme.accentText }]}>{saving ? "…" : t("manager.save")}</Text>
+            </Pressable>
+
+            {!isNew && (
+              <Pressable style={styles.deleteBtn} onPress={remove} disabled={saving}>
+                <Trash2 color={RED} size={16} />
+                <Text style={{ color: RED, fontWeight: "700", fontSize: 14 }}>{t("manager.deleteTemplate")}</Text>
+              </Pressable>
+            )}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// "Generate shifts" — generation is a plug for now; the preferences reminder is real.
+function CreateShiftsModal({ visible, theme, t, lang, betrieb, onClose }: any) {
+  // default range = next calendar month
+  const now = new Date();
+  const firstNext = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const lastNext = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // deadline = 7 days before the period starts (fixed here — not editable in this menu)
+  const deadlineDate = new Date(firstNext); deadlineDate.setDate(firstNext.getDate() - 7);
+
+  const [von, setVon] = useState(isoDay(firstNext));
+  const [bis, setBis] = useState(isoDay(lastNext));
+  const [sending, setSending] = useState(false);
+
+  // Has the preferences deadline passed? Compare end-of-deadline-day to now.
+  const deadlinePassed = now.getTime() > new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate(), 23, 59, 59).getTime();
+  const fmtDeadline = deadlineDate.toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
+  const sendReminder = async () => {
+    setSending(true);
+    const { error } = await supabase.rpc("ankuendigung_erstellen", {
+      p_betrieb_id: betrieb,
+      p_typ: "allgemein",
+      p_titel: t("manager.prefReminderTitle"),
+      p_text: t("manager.prefReminderBody"),
+      p_prioritaet: "dringend",
+    });
+    setSending(false);
+    Alert.alert(error ? t("manager.prefReminderFailed") : t("manager.prefReminderSent"));
+  };
+
+  // Always confirm before generating — even while generation is a plug.
+  const generate = () => {
+    Alert.alert(t("manager.csConfirmTitle"), t("manager.csConfirmBody"), [
+      { text: t("manager.cancel"), style: "cancel" },
+      { text: t("manager.csConfirmGenerate"), onPress: () => { Alert.alert(t("manager.createShifts"), t("manager.csComingSoon")); onClose(); } },
+    ]);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetHead}>
+            <Text style={[styles.sheetTitle, { color: theme.text }]}>{t("manager.createShifts")}</Text>
+            <Pressable onPress={onClose} hitSlop={10}><X color={theme.muted} size={22} /></Pressable>
+          </View>
+
+          <View style={styles.timeRow}>
+            <View style={[styles.field, { flex: 1 }]}>
+              <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.csRangeStart")}</Text>
+              <TextInput style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
+                value={von} onChangeText={setVon} placeholder="YYYY-MM-DD" placeholderTextColor={theme.muted} maxLength={10} keyboardType="numbers-and-punctuation" />
+            </View>
+            <View style={[styles.field, { flex: 1 }]}>
+              <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.csRangeEnd")}</Text>
+              <TextInput style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
+                value={bis} onChangeText={setBis} placeholder="YYYY-MM-DD" placeholderTextColor={theme.muted} maxLength={10} keyboardType="numbers-and-punctuation" />
+            </View>
+          </View>
+
+          {/* Read-only preferences deadline */}
+          <View style={styles.field}>
+            <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.csDeadline")}</Text>
+            <View style={styles.deadlineRow}>
+              <CalendarClock color={theme.muted} size={18} />
+              <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15 }}>{fmtDeadline}</Text>
+            </View>
+            <Text style={[styles.hint, { color: theme.muted }]}>{t("manager.csDeadlineHint")}</Text>
+          </View>
+
+          {/* Warning / all-clear banner above the generate button */}
+          <View style={[styles.deadlineBanner, { backgroundColor: (deadlinePassed ? GREEN : AMBER) + "1F", borderColor: deadlinePassed ? GREEN : AMBER }]}>
+            <TriangleAlert color={deadlinePassed ? GREEN : AMBER} size={18} />
+            <Text style={{ color: deadlinePassed ? GREEN : AMBER, fontWeight: "700", fontSize: 13, flex: 1 }}>
+              {t(deadlinePassed ? "manager.csDeadlineOk" : "manager.csDeadlineWarn")}
+            </Text>
+          </View>
+
+          {/* Reminder button sits ABOVE the generate button */}
+          <Pressable style={[styles.reminderBtn, { borderColor: AMBER }]} onPress={sendReminder} disabled={sending}>
+            <Megaphone color={AMBER} size={18} />
+            <Text style={{ color: AMBER, fontWeight: "700", fontSize: 14, flex: 1, textAlign: "center" }}>
+              {sending ? "…" : t("manager.prefReminder")}
+            </Text>
+          </Pressable>
+
+          <Pressable style={[styles.submit, { backgroundColor: theme.accent }]} onPress={generate}>
+            <Text style={[styles.submitText, { color: theme.accentText }]}>{t("manager.csGenerate")}</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 16, gap: 10, paddingBottom: 40 },
@@ -681,4 +1215,29 @@ const styles = StyleSheet.create({
   sheet: { width: "100%", borderWidth: 1.5, borderRadius: 16, padding: 16, gap: 4 },
   sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
   sheetTitle: { fontSize: 18, fontWeight: "700" },
+
+  // Shifts section
+  bigCreate: { position: "absolute", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, borderRadius: 16, paddingVertical: 18, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  bigCreateText: { fontSize: 19, fontWeight: "800" },
+  tplHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
+  addTplBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1.5, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
+  dayLabel: { fontSize: 14, fontWeight: "800", marginTop: 6 },
+  tplRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
+  tplTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  inactivePill: { fontSize: 10, fontWeight: "800", textTransform: "uppercase", borderWidth: 1, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
+  wdRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  wdChip: { width: 40, height: 36, borderWidth: 1.5, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  timeRow: { flexDirection: "row", gap: 12 },
+  roleDropdownHead: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1.5, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14 },
+  roleDropdownBody: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, marginTop: 6 },
+  roleReqRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
+  stepBtn: { width: 34, height: 34, borderWidth: 1.5, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  deleteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, marginTop: 2 },
+  roleChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  roleChip: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1.5, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12 },
+  roleAddRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  roleAddBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14 },
+  deadlineRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  deadlineBanner: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1.5, borderRadius: 12, padding: 12, marginTop: 8 },
+  reminderBtn: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1.5, borderRadius: 999, paddingVertical: 12, paddingHorizontal: 16, marginTop: 8 },
 });
