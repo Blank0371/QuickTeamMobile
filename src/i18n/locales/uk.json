@@ -50,7 +50,6 @@
   },
   "home": {
     "greeting": "Вітаємо",
-    "nextShift": "Ваша наступна зміна",
     "noShift": "Немає майбутніх змін",
     "pendingApprovals": "Очікують вашого рішення",
     "noApprovals": "Зараз немає що затверджувати",
@@ -67,7 +66,8 @@
     "noNewMessages": "Усе прочитано",
     "viewAll": "Показати всі",
     "today": "Сьогодні",
-    "tomorrow": "Завтра"
+    "tomorrow": "Завтра",
+    "nextShifts": "Ваші найближчі зміни"
   },
   "legal": {
     "sectionTitle": "Правова інформація",
@@ -345,7 +345,13 @@
     "emReported": "Повідомлено",
     "emSearching": "Пошук заміни",
     "emReplaced": "Закрито",
-    "emYourEmergencies": "Ваші термінові випадки"
+    "emYourEmergencies": "Ваші термінові випадки",
+    "cannotAttend": "Не зможу прийти",
+    "emConfirmBody": "Ваш керівник отримає сповіщення та шукатиме заміну.",
+    "emHoldToReport": "Утримуйте, щоб повідомити",
+    "emReportedTitle": "Надіслано",
+    "emReportedBody": "Вашого керівника сповіщено.",
+    "emReportFailed": "Не вдалося надіслати. Спробуйте ще раз."
   },
   "settings": {
     "title": "Налаштування",
@@ -419,6 +425,9 @@
     "details": "Деталі",
     "roster": "Команда",
     "addPerson": "Додати людину",
-    "pickRole": "Роль"
+    "pickRole": "Роль",
+    "openToTake": "Можна взяти",
+    "canceled": "Скасовано",
+    "takeShiftBlurb": "Ця зміна вільна — ви можете її взяти."
   }
 }

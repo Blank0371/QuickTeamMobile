@@ -50,7 +50,6 @@
   },
   "home": {
     "greeting": "Hello",
-    "nextShift": "Your next shift",
     "noShift": "No upcoming shifts",
     "pendingApprovals": "Waiting for your approval",
     "noApprovals": "Nothing to approve right now",
@@ -67,7 +66,8 @@
     "noNewMessages": "You're all caught up",
     "viewAll": "View all",
     "today": "Today",
-    "tomorrow": "Tomorrow"
+    "tomorrow": "Tomorrow",
+    "nextShifts": "Your upcoming shifts"
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -345,7 +345,13 @@
     "emReported": "Reported",
     "emSearching": "Finding cover",
     "emReplaced": "Covered",
-    "emYourEmergencies": "Your emergencies"
+    "emYourEmergencies": "Your emergencies",
+    "cannotAttend": "Can't attend",
+    "emConfirmBody": "Your manager will be notified and will look for a replacement.",
+    "emHoldToReport": "Hold to report",
+    "emReportedTitle": "Reported",
+    "emReportedBody": "Your manager has been notified.",
+    "emReportFailed": "Couldn't report. Please try again."
   },
   "settings": {
     "title": "Settings",
@@ -419,6 +425,9 @@
     "details": "Details",
     "roster": "Team",
     "addPerson": "Add person",
-    "pickRole": "Role"
+    "pickRole": "Role",
+    "openToTake": "Open to take",
+    "canceled": "Canceled",
+    "takeShiftBlurb": "This shift is open — you can take it."
   }
 }

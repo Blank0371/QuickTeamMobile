@@ -10,7 +10,7 @@ import {
   ChevronRight, Trash2, TreePalm, TriangleAlert, X,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -18,6 +18,7 @@ import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { RefreshScrollView } from "../../components/RefreshScrollView";
+import { HoldButton } from "../../components/HoldButton";
 
 const WEEKDAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 const MONTHS_AHEAD = 12; // how far ahead planning/vacation may reach (from this month)
@@ -159,7 +160,6 @@ function EmergencySection({ theme, t, lang, me, betrieb }: any) {
   const [selected, setSelected] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
 
   const load = useCallback(async () => {
     if (!me || !betrieb) return;
@@ -224,13 +224,12 @@ function EmergencySection({ theme, t, lang, me, betrieb }: any) {
   const send = async () => {
     if (!selected || sending) return;
     setSending(true);
-    const { error } = await supabase.rpc("notfall_melden", { p_zuweisung_id: selected, p_grund: reason.trim() || null });
+    const { error } = await supabase.rpc("notfall_melden", { p_zuweisung_id: selected, p_grund: reason.trim() || null, p_mitarbeiter_id: me });
     setSending(false);
-    if (error) return;
+    if (error) { Alert.alert(t("scheduling.emReportFailed")); return; }
     setReason("");
     setSelected(null);
-    setSent(true);
-    setTimeout(() => setSent(false), 2500);
+    Alert.alert(t("scheduling.emReportedTitle"), t("scheduling.emReportedBody"));
     load();
   };
 
@@ -273,15 +272,20 @@ function EmergencySection({ theme, t, lang, me, betrieb }: any) {
               onChangeText={setReason}
               multiline
             />
-            <Pressable
-              style={[styles.submit, { backgroundColor: selected ? RED : theme.border }]}
-              onPress={send}
-              disabled={!selected || sending}
-            >
-              <Text style={[styles.submitText, { color: selected ? "#fff" : theme.muted }]}>
-                {sent ? `✓ ${t("scheduling.leaveSent")}` : t("scheduling.sendLeave")}
-              </Text>
-            </Pressable>
+            {selected ? (
+              <HoldButton
+                label={t("scheduling.emHoldToReport")}
+                onConfirm={send}
+                color={RED}
+                fillColor="rgba(0,0,0,0.28)"
+                textColor="#fff"
+                holdMs={1500}
+              />
+            ) : (
+              <View style={[styles.submit, { backgroundColor: theme.border }]}>
+                <Text style={[styles.submitText, { color: theme.muted }]}>{t("scheduling.sendLeave")}</Text>
+              </View>
+            )}
           </>
         )}
       </View>

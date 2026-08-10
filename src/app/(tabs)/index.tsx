@@ -11,8 +11,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
-import { Shift, shifts } from "../../lib/shifts";
 import { supabase } from "../../lib/supabase";
+import type { CalShift } from "./calendar";
 import { useTheme } from "../../theme/ThemeProvider";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { RefreshScrollView } from "../../components/RefreshScrollView";
@@ -47,15 +47,8 @@ const fmtRange = (von: string, bis: string, lang: string) => {
 // looked at Home. We remember the newest message timestamp per position.
 const seenKey = (mitarbeiterId: string) => `home:lastMsgSeen:${mitarbeiterId}`;
 
-// The soonest shift from today onward (shifts is mock/empty until the schedule
-// feature lands — this degrades to an empty state).
-const nextShift = (): Shift | null => {
-  const today = iso(new Date());
-  const upcoming = shifts
-    .filter((s) => s.date >= today)
-    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
-  return upcoming[0] ?? null;
-};
+const hhmm = (s: string) => (s ? s.slice(0, 5) : "");
+const myRole = (s: CalShift) => s.participants.find((p) => p.is_me)?.role_name ?? null;
 
 const catKey = (typ: string) =>
   typ === "allgemein" ? "announcement"
@@ -75,6 +68,7 @@ export default function Home() {
   const [firstName, setFirstName] = useState<string>("");
   const [unread, setUnread] = useState<UnreadMsg[]>([]);
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
+  const [upcoming, setUpcoming] = useState<CalShift[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -145,8 +139,24 @@ export default function Home() {
         detail: s.titel ?? "",
       }));
       setApprovals([...emgItems, ...vacItems, ...swapItems]);
+      setUpcoming([]);
     } else {
       setApprovals([]);
+      // Employees see their next few upcoming shifts, drawn from the same
+      // roster RPC the calendar uses (respects the business visibility settings).
+      const today = iso(new Date());
+      const to = iso(new Date(Date.now() + 60 * 86400000));
+      const { data: sh } = await supabase.rpc("kalender_schichten", {
+        p_betrieb_id: activeMitarbeiter.betrieb_id,
+        p_von: today,
+        p_bis: to,
+        p_mitarbeiter_id: activeMitarbeiter.id,
+      });
+      const mine = ((sh as CalShift[]) ?? [])
+        .filter((s) => s.mine && s.datum >= today)
+        .sort((a, b) => (a.datum + a.start_zeit).localeCompare(b.datum + b.start_zeit))
+        .slice(0, 3);
+      setUpcoming(mine);
     }
 
     // broadcast messages for this business, newest first
@@ -193,9 +203,6 @@ export default function Home() {
   }, [user, activeMitarbeiter, isChef, lang]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
-
-
-  const shift = nextShift();
 
   const fmtShiftDay = (date: string) => {
     const d = new Date(date + "T00:00:00");
@@ -309,41 +316,47 @@ export default function Home() {
             )}
           </>
         ) : (<>
-        {/* ---- Next shift ---- */}
-        <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("home.nextShift")}</Text>
-        {shift ? (
-          <Pressable
-            style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
-            onPress={() => router.push({ pathname: "/shift/[id]", params: { id: shift.id } })}
-          >
-            <View style={styles.shiftHead}>
-              <View style={[styles.iconBadge, { backgroundColor: theme.accent }]}>
-                <CalendarClock color={theme.accentText} size={20} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.shiftDay, { color: theme.text }]}>{fmtShiftDay(shift.date)}</Text>
-                <Text style={[styles.shiftTitle, { color: theme.muted }]}>{shift.title}</Text>
-              </View>
-              <ChevronRight color={theme.muted} size={22} />
-            </View>
-            <View style={[styles.shiftMetaRow, { borderTopColor: theme.border }]}>
-              <View style={styles.metaItem}>
-                <Clock color={theme.muted} size={16} />
-                <Text style={[styles.metaText, { color: theme.text }]}>{shift.start}–{shift.end}</Text>
-              </View>
-              {shift.role ? (
-                <View style={styles.metaItem}>
-                  <MapPin color={theme.muted} size={16} />
-                  <Text style={[styles.metaText, { color: theme.text }]}>{shift.role}</Text>
-                </View>
-              ) : null}
-            </View>
-          </Pressable>
-        ) : (
+        {/* ---- Upcoming shifts ---- */}
+        <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("home.nextShifts")}</Text>
+        {upcoming.length === 0 ? (
           <View style={[styles.card, styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <CalendarClock color={theme.muted} size={22} />
             <Text style={[styles.emptyText, { color: theme.muted }]}>{t("home.noShift")}</Text>
           </View>
+        ) : (
+          upcoming.map((s) => {
+            const role = myRole(s);
+            return (
+              <Pressable
+                key={s.id}
+                style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={() => router.push({ pathname: "/shift/[id]", params: { id: s.id } })}
+              >
+                <View style={styles.shiftHead}>
+                  <View style={[styles.iconBadge, { backgroundColor: theme.accent }]}>
+                    <CalendarClock color={theme.accentText} size={20} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.shiftDay, { color: theme.text }]}>{fmtShiftDay(s.datum)}</Text>
+                    <Text style={[styles.shiftTitle, { color: theme.muted }]}>{s.label || t("calendar.shift")}</Text>
+                  </View>
+                  <ChevronRight color={theme.muted} size={22} />
+                </View>
+                <View style={[styles.shiftMetaRow, { borderTopColor: theme.border }]}>
+                  <View style={styles.metaItem}>
+                    <Clock color={theme.muted} size={16} />
+                    <Text style={[styles.metaText, { color: theme.text }]}>{hhmm(s.start_zeit)}–{hhmm(s.end_zeit)}</Text>
+                  </View>
+                  {role ? (
+                    <View style={styles.metaItem}>
+                      <MapPin color={theme.muted} size={16} />
+                      <Text style={[styles.metaText, { color: theme.text }]}>{role}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })
         )}
         </>)}
 

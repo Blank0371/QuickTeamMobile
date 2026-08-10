@@ -50,7 +50,6 @@
   },
   "home": {
     "greeting": "Здравствуйте",
-    "nextShift": "Ваша следующая смена",
     "noShift": "Нет предстоящих смен",
     "pendingApprovals": "Ждут вашего решения",
     "noApprovals": "Сейчас нечего утверждать",
@@ -67,7 +66,8 @@
     "noNewMessages": "Всё прочитано",
     "viewAll": "Показать все",
     "today": "Сегодня",
-    "tomorrow": "Завтра"
+    "tomorrow": "Завтра",
+    "nextShifts": "Ваши ближайшие смены"
   },
   "legal": {
     "sectionTitle": "Правовая информация",
@@ -345,7 +345,13 @@
     "emReported": "Сообщено",
     "emSearching": "Поиск замены",
     "emReplaced": "Закрыта",
-    "emYourEmergencies": "Ваши экстренные случаи"
+    "emYourEmergencies": "Ваши экстренные случаи",
+    "cannotAttend": "Не смогу прийти",
+    "emConfirmBody": "Ваш руководитель получит уведомление и найдёт замену.",
+    "emHoldToReport": "Удерживайте, чтобы сообщить",
+    "emReportedTitle": "Отправлено",
+    "emReportedBody": "Ваш руководитель уведомлён.",
+    "emReportFailed": "Не удалось отправить. Попробуйте снова."
   },
   "settings": {
     "title": "Настройки",
@@ -419,6 +425,9 @@
     "details": "Детали",
     "roster": "Команда",
     "addPerson": "Добавить человека",
-    "pickRole": "Роль"
+    "pickRole": "Роль",
+    "openToTake": "Можно взять",
+    "canceled": "Отменено",
+    "takeShiftBlurb": "Эта смена свободна — вы можете её взять."
   }
 }

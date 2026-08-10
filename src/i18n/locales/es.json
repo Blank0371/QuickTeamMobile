@@ -50,7 +50,6 @@
   },
   "home": {
     "greeting": "Hola",
-    "nextShift": "Tu próximo turno",
     "noShift": "No hay próximos turnos",
     "pendingApprovals": "Esperando tu aprobación",
     "noApprovals": "Nada que aprobar por ahora",
@@ -67,7 +66,8 @@
     "noNewMessages": "Estás al día",
     "viewAll": "Ver todo",
     "today": "Hoy",
-    "tomorrow": "Mañana"
+    "tomorrow": "Mañana",
+    "nextShifts": "Tus próximos turnos"
   },
   "legal": {
     "sectionTitle": "Legal",
@@ -345,7 +345,13 @@
     "emReported": "Notificado",
     "emSearching": "Buscando reemplazo",
     "emReplaced": "Cubierto",
-    "emYourEmergencies": "Tus emergencias"
+    "emYourEmergencies": "Tus emergencias",
+    "cannotAttend": "No puedo asistir",
+    "emConfirmBody": "Se notificará a tu responsable, que buscará un reemplazo.",
+    "emHoldToReport": "Mantén para reportar",
+    "emReportedTitle": "Reportado",
+    "emReportedBody": "Tu responsable ha sido notificado.",
+    "emReportFailed": "No se pudo reportar. Inténtalo de nuevo."
   },
   "settings": {
     "title": "Ajustes",
@@ -419,6 +425,9 @@
     "details": "Detalles",
     "roster": "Equipo",
     "addPerson": "Añadir persona",
-    "pickRole": "Rol"
+    "pickRole": "Rol",
+    "openToTake": "Libre para tomar",
+    "canceled": "Cancelado",
+    "takeShiftBlurb": "Este turno está libre: puedes tomarlo."
   }
 }

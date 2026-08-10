@@ -50,7 +50,6 @@
   },
   "home": {
     "greeting": "Merhaba",
-    "nextShift": "Bir sonraki vardiyan",
     "noShift": "Yaklaşan vardiya yok",
     "pendingApprovals": "Onayını bekliyor",
     "noApprovals": "Şu an onaylanacak bir şey yok",
@@ -67,7 +66,8 @@
     "noNewMessages": "Hepsi okundu",
     "viewAll": "Tümünü gör",
     "today": "Bugün",
-    "tomorrow": "Yarın"
+    "tomorrow": "Yarın",
+    "nextShifts": "Yaklaşan vardiyaların"
   },
   "legal": {
     "sectionTitle": "Yasal",
@@ -345,7 +345,13 @@
     "emReported": "Bildirildi",
     "emSearching": "Yerine biri aranıyor",
     "emReplaced": "Dolduruldu",
-    "emYourEmergencies": "Acil durumların"
+    "emYourEmergencies": "Acil durumların",
+    "cannotAttend": "Gelemiyorum",
+    "emConfirmBody": "Yöneticin bilgilendirilecek ve yerine birini arayacak.",
+    "emHoldToReport": "Bildirmek için basılı tut",
+    "emReportedTitle": "Bildirildi",
+    "emReportedBody": "Yöneticin bilgilendirildi.",
+    "emReportFailed": "Bildirilemedi. Lütfen tekrar deneyin."
   },
   "settings": {
     "title": "Ayarlar",
@@ -419,6 +425,9 @@
     "details": "Ayrıntılar",
     "roster": "Ekip",
     "addPerson": "Kişi ekle",
-    "pickRole": "Rol"
+    "pickRole": "Rol",
+    "openToTake": "Alınabilir",
+    "canceled": "İptal edildi",
+    "takeShiftBlurb": "Bu vardiya boş — alabilirsin."
   }
 }

@@ -314,7 +314,7 @@ export default function MessagesScreen() {
 
   const takeOver = async (m: EmergencyMsg) => {
     setEmergencyDetail(null);
-    const { data, error } = await supabase.rpc("notfall_vertretung_uebernehmen", { p_benachrichtigung_id: m.id });
+    const { data, error } = await supabase.rpc("notfall_vertretung_uebernehmen", { p_benachrichtigung_id: m.id, p_mitarbeiter_id: activeMitarbeiter?.id ?? null });
     if (error) { Alert.alert(t("messages.emTakeFailed")); load(); return; }
     const code = data as string;
     if (code === "besetzt") Alert.alert(t("messages.emTookTitle"), t("messages.emTookBody"));
@@ -344,7 +344,7 @@ export default function MessagesScreen() {
 
   const takeSwap = async (m: SwapMsg) => {
     setSwapDetail(null);
-    const { data, error } = await supabase.rpc("schicht_tausch_uebernehmen", { p_benachrichtigung_id: m.id });
+    const { data, error } = await supabase.rpc("schicht_tausch_uebernehmen", { p_benachrichtigung_id: m.id, p_mitarbeiter_id: activeMitarbeiter?.id ?? null });
     if (error) { Alert.alert(t("shiftSwap.takeFailed")); load(); return; }
     const code = data as string;
     if (code === "besetzt") Alert.alert(t("shiftSwap.tookTitle"), t("shiftSwap.tookBody"));
@@ -700,6 +700,10 @@ const emWhen = (e: EmergencyMsg, lang: string) => {
     : "";
 };
 
+// When the broadcast was posted (date + time) — shown as a card footer.
+const postedAt = (iso: string, lang: string) =>
+  new Date(iso).toLocaleDateString(lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
 // Tappable summary for an open emergency shift. Tapping opens the take-over modal.
 function EmergencyCard({ e, theme, t, lang, onOpen }: { e: EmergencyMsg; theme: any; t: any; lang: string; onOpen: () => void }) {
   const taken = e.status === "besetzt";
@@ -728,6 +732,7 @@ function EmergencyCard({ e, theme, t, lang, onOpen }: { e: EmergencyMsg; theme: 
       ) : (
         <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("messages.emNotEligible")}</Text>
       )}
+      <Text style={[styles.cardFoot, { color: theme.muted }]}>{postedAt(e.erstellt_am, lang)}</Text>
     </Pressable>
   );
 }
@@ -810,6 +815,7 @@ function OpenShiftCard({ o, theme, t, lang, onOpen }: { o: OpenShift; theme: any
       ) : (
         <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("messages.osNotEligible")}</Text>
       )}
+      <Text style={[styles.cardFoot, { color: theme.muted }]}>{postedAt(o.erstellt_am, lang)}</Text>
     </Pressable>
   );
 }
@@ -908,6 +914,7 @@ function SwapCard({ s, theme, t, lang, onOpen }: { s: SwapMsg; theme: any; t: an
       ) : (
         <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.notEligible")}</Text>
       )}
+      <Text style={[styles.cardFoot, { color: theme.muted }]}>{postedAt(s.erstellt_am, lang)}</Text>
     </Pressable>
   );
 }

@@ -50,7 +50,6 @@
   },
   "home": {
     "greeting": "Hallo",
-    "nextShift": "Deine nächste Schicht",
     "noShift": "Keine anstehenden Schichten",
     "pendingApprovals": "Wartet auf deine Freigabe",
     "noApprovals": "Aktuell nichts zu entscheiden",
@@ -67,7 +66,8 @@
     "noNewMessages": "Alles gelesen",
     "viewAll": "Alle anzeigen",
     "today": "Heute",
-    "tomorrow": "Morgen"
+    "tomorrow": "Morgen",
+    "nextShifts": "Deine nächsten Schichten"
   },
   "legal": {
     "sectionTitle": "Rechtliches",
@@ -345,7 +345,13 @@
     "emReported": "Gemeldet",
     "emSearching": "Vertretung gesucht",
     "emReplaced": "Besetzt",
-    "emYourEmergencies": "Deine Notfälle"
+    "emYourEmergencies": "Deine Notfälle",
+    "cannotAttend": "Kann nicht kommen",
+    "emConfirmBody": "Deine Führungskraft wird benachrichtigt und sucht eine Vertretung.",
+    "emHoldToReport": "Zum Melden halten",
+    "emReportedTitle": "Gemeldet",
+    "emReportedBody": "Deine Führungskraft wurde benachrichtigt.",
+    "emReportFailed": "Konnte nicht gemeldet werden. Bitte erneut versuchen."
   },
   "settings": {
     "title": "Einstellungen",
@@ -419,6 +425,9 @@
     "details": "Details",
     "roster": "Team",
     "addPerson": "Person hinzufügen",
-    "pickRole": "Rolle"
+    "pickRole": "Rolle",
+    "openToTake": "Frei zu übernehmen",
+    "canceled": "Abgesagt",
+    "takeShiftBlurb": "Diese Schicht ist frei – du kannst sie übernehmen."
   }
 }

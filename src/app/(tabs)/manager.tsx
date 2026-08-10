@@ -439,7 +439,7 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, betrieb,
                 </View>
                 <DetailRow theme={theme} label={t("manager.role")} value={(roleNames[detail.id] ?? []).join(", ") || t(detail.rolle_typ === "chef" ? "manager.chef" : "manager.employee")} />
                 {detail.email ? <DetailRow theme={theme} label={t("manager.email")} value={detail.email} /> : null}
-                {detail.telefon ? <DetailRow theme={theme} label={t("manager.phone")} value={detail.telefon} /> : null}
+                <DetailRow theme={theme} label={t("manager.phone")} value={detail.telefon || "—"} />
                 {detail.vertrag_typ ? <DetailRow theme={theme} label={t("manager.contract")} value={detail.vertrag_typ} /> : null}
                 {detail.soll_stunden != null ? <DetailRow theme={theme} label={t("manager.targetHours")} value={`${detail.soll_stunden} ${t("manager.hours")}`} /> : null}
                 <DetailRow theme={theme} label={t("manager.overtimeBalance")} value={`${detail.ueberstunden_saldo > 0 ? "+" : ""}${detail.ueberstunden_saldo} ${t("manager.hours")}`} />

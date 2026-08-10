@@ -4,7 +4,7 @@
 // edit the shift: date/time, comment, and the roster (assign people + roles,
 // change roles, remove people).
 import { router, useLocalSearchParams } from "expo-router";
-import { ChevronLeft, Plus, Repeat, Users, X } from "lucide-react-native";
+import { ChevronLeft, Plus, Repeat, TriangleAlert, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -21,10 +21,16 @@ const RED = "#C1442D";
 type Participant = {
   name: string;
   mitarbeiter_id: string;
+  zuweisung_id: string;
   rolle_id: string | null;
   role_name: string | null;
   attendet: boolean;
   is_me: boolean;
+};
+type ClaimInfo = {
+  kind: "posting" | "emergency" | "swap";
+  benachrichtigung_id: string;
+  roles: { rolle_id: string; name: string | null }[];
 };
 type ShiftDetailData = {
   id: string;
@@ -35,6 +41,10 @@ type ShiftDetailData = {
   kommentar: string | null;
   mine: boolean;
   can_edit: boolean;
+  canceled: boolean;
+  open: boolean;
+  swap_wanted: boolean;
+  claim: ClaimInfo | null;
   participants: Participant[];
 };
 type TeamMember = { id: string; vorname: string; nachname: string | null };
@@ -68,6 +78,12 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
   const [swapOpen, setSwapOpen] = useState(false);
   const [alreadyOffered, setAlreadyOffered] = useState(false);
   const [offering, setOffering] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+
+  // employee "can't attend" (Notfall melden) — notify the manager to find cover
+  const [emOpen, setEmOpen] = useState(false);
+  const [emReason, setEmReason] = useState("");
+  const [emSending, setEmSending] = useState(false);
 
   // chef edit buffer (date/time/comment)
   const [dateVal, setDateVal] = useState<Date>(new Date());
@@ -188,6 +204,63 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
     load();
   };
 
+  // Employee reports they can't attend this shift (same as the scheduling tab's
+  // emergency flow) — the manager is notified to arrange cover.
+  const reportEmergency = async () => {
+    const zid = shift?.participants.find((p) => p.is_me)?.zuweisung_id;
+    if (!zid || emSending) return;
+    setEmSending(true);
+    const { error } = await supabase.rpc("notfall_melden", { p_zuweisung_id: zid, p_grund: emReason.trim() || null, p_mitarbeiter_id: activeMitarbeiter?.id ?? null });
+    setEmSending(false);
+    setEmOpen(false);
+    if (error) { Alert.alert(t("scheduling.emReportFailed")); return; }
+    setEmReason("");
+    Alert.alert(t("scheduling.emReportedTitle"), t("scheduling.emReportedBody"));
+    load();
+  };
+
+  // Employee claims an open shift (open posting slot or emergency replacement),
+  // mirroring the accept flow in the messages tab.
+  const claimShift = async (rolleId?: string) => {
+    if (!shift?.claim || claiming) return;
+    setClaiming(true);
+    const c = shift.claim;
+    let data: any, error: any;
+    if (c.kind === "posting") {
+      ({ data, error } = await supabase.rpc("schicht_ausschreibung_annehmen", {
+        p_benachrichtigung_id: c.benachrichtigung_id,
+        p_rolle_id: rolleId ?? c.roles[0]?.rolle_id ?? null,
+        p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+      }));
+    } else if (c.kind === "swap") {
+      ({ data, error } = await supabase.rpc("schicht_tausch_uebernehmen", {
+        p_benachrichtigung_id: c.benachrichtigung_id,
+        p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+      }));
+    } else {
+      ({ data, error } = await supabase.rpc("notfall_vertretung_uebernehmen", {
+        p_benachrichtigung_id: c.benachrichtigung_id,
+        p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+      }));
+    }
+    setClaiming(false);
+    // Map result codes to alerts, reusing the same copy as the messages tab.
+    const fail = c.kind === "posting" ? "messages.osClaimFailed" : c.kind === "swap" ? "shiftSwap.takeFailed" : "messages.emTakeFailed";
+    if (error) { Alert.alert(t(fail)); load(); return; }
+    const code = data as string;
+    if (code === "angenommen" || code === "besetzt") {
+      Alert.alert(
+        t(c.kind === "posting" ? "messages.osClaimedTitle" : c.kind === "swap" ? "shiftSwap.tookTitle" : "messages.emTookTitle"),
+        t(c.kind === "posting" ? "messages.osClaimedBody" : c.kind === "swap" ? "shiftSwap.tookBody" : "messages.emTookBody"),
+      );
+    } else if (code === "voll") Alert.alert(t("messages.osFull"));
+    else if (code === "bereits_besetzt") Alert.alert(t(c.kind === "swap" ? "shiftSwap.alreadyTaken" : "messages.emAlreadyTaken"));
+    else if (code === "schon_zugewiesen") Alert.alert(t(c.kind === "posting" ? "messages.osAlreadyOn" : c.kind === "swap" ? "shiftSwap.alreadyOn" : "messages.emAlreadyOnShift"));
+    else if (code === "nicht_qualifiziert") Alert.alert(t(c.kind === "posting" ? "messages.osNotQualified" : c.kind === "swap" ? "shiftSwap.notQualified" : "messages.emNotQualified"));
+    else Alert.alert(t(fail));
+    load();
+  };
+
   const roleName = (rid: string | null) => rollen.find((r) => r.id === rid)?.name ?? null;
   // employees (not the chef) may hand over a shift they're personally on
   const myPart = shift?.participants.find((p) => p.is_me);
@@ -265,6 +338,38 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
             )}
           </View>
 
+          {/* ---------- Take this open shift (employee only) ---------- */}
+          {!isChef && shift.claim ? (
+            <>
+              <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("calendar.openToTake")}</Text>
+              <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.accent }]}>
+                <Text style={{ color: theme.text, fontSize: 14 }}>{t("calendar.takeShiftBlurb")}</Text>
+                {shift.claim.kind === "posting" && shift.claim.roles.length > 1 ? (
+                  <>
+                    <Text style={[styles.fieldLabel, { color: theme.muted, marginTop: 6 }]}>{t("messages.osPickRole")}</Text>
+                    <View style={styles.chipRow}>
+                      {shift.claim.roles.map((r) => (
+                        <Pressable key={r.rolle_id} onPress={() => claimShift(r.rolle_id)} disabled={claiming}
+                          style={[styles.chip, { borderColor: theme.accent }]}>
+                          <Text style={{ color: theme.accent, fontSize: 13, fontWeight: "700" }}>{r.name ?? t("calendar.shift")}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  <Pressable
+                    style={[styles.swapBtn, { borderColor: theme.accent, backgroundColor: theme.accent }]}
+                    onPress={() => claimShift()} disabled={claiming}
+                  >
+                    <Text style={{ color: theme.accentText, fontWeight: "700" }}>
+                      {claiming ? "…" : t(shift.claim.kind === "emergency" ? "messages.emTakeOver" : shift.claim.kind === "swap" ? "shiftSwap.cardTitle" : "messages.osTake")}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </>
+          ) : null}
+
           {/* ---------- Roster ---------- */}
           <Text style={[styles.sectionLabel, { color: theme.muted }]}>
             {canEdit ? t("calendar.roster") : t("calendar.coworkers")}
@@ -334,6 +439,14 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
                     </Pressable>
                   </>
                 )}
+                {/* Can't attend → report an emergency (manager finds cover) */}
+                <Pressable
+                  style={[styles.swapBtn, { borderColor: RED }]}
+                  onPress={() => setEmOpen(true)}
+                >
+                  <TriangleAlert color={RED} size={18} />
+                  <Text style={{ color: RED, fontWeight: "700" }}>{t("scheduling.cannotAttend")}</Text>
+                </Pressable>
               </View>
             </>
           ) : null}
@@ -385,6 +498,44 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
                   color={theme.accent}
                   fillColor="rgba(0,0,0,0.28)"
                   textColor={theme.accentText}
+                  holdMs={1500}
+                />
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Confirm "can't attend" — reports an emergency so the manager finds cover. */}
+      <Modal visible={emOpen} transparent animationType="fade" onRequestClose={() => setEmOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setEmOpen(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e) => e.stopPropagation()}>
+            <Pressable onPress={() => setEmOpen(false)} hitSlop={10} style={styles.modalClose}>
+              <X color={theme.muted} size={24} />
+            </Pressable>
+            <View style={{ gap: 10 }}>
+              <View style={styles.swapRow}>
+                <TriangleAlert color={RED} size={18} />
+                <Text style={{ color: theme.text, fontSize: 17, fontWeight: "700" }}>{t("scheduling.cannotAttend")}</Text>
+              </View>
+              {shift ? (
+                <Text style={{ color: theme.muted, fontSize: 14 }}>
+                  {fmtDate(shift.datum)} · {hhmm(shift.start_zeit)}–{hhmm(shift.end_zeit)}
+                </Text>
+              ) : null}
+              <Text style={{ color: theme.text, fontSize: 14 }}>{t("scheduling.emConfirmBody")}</Text>
+              <TextInput
+                style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg, minHeight: 64, textAlignVertical: "top" }]}
+                placeholder={t("scheduling.reasonPlaceholder")} placeholderTextColor={theme.muted}
+                value={emReason} onChangeText={setEmReason} multiline maxLength={200}
+              />
+              <View style={{ marginTop: 6 }}>
+                <HoldButton
+                  label={t("scheduling.emHoldToReport")}
+                  onConfirm={reportEmergency}
+                  color={RED}
+                  fillColor="rgba(0,0,0,0.28)"
+                  textColor="#fff"
                   holdMs={1500}
                 />
               </View>

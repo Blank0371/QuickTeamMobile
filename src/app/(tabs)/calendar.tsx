@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { AlertTriangle, CalendarPlus, Check, ChevronLeft, ChevronRight, Minus, Plus, X } from "lucide-react-native";
+import { AlertTriangle, CalendarPlus, Check, ChevronLeft, ChevronRight, Minus, Plus, Repeat, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet,
@@ -29,7 +29,17 @@ export type CalShift = {
   kommentar: string | null;
   mine: boolean;
   can_edit: boolean;
+  canceled: boolean;     // I called out of this shift
+  open: boolean;         // open for me to claim (posting or replacement)
+  swap_wanted: boolean;  // someone on it wants to swap out
   participants: { name: string; role_name: string | null; attendet: boolean; is_me: boolean }[];
+};
+
+// Visual treatment for a shift's state: canceled → red, open → translucent.
+const shiftVisual = (s: CalShift, accent: string) => {
+  if (s.canceled) return { bg: RED, opacity: 1, canceled: true, open: false, dashed: false };
+  if (s.open) return { bg: accent, opacity: 0.5, canceled: false, open: true, dashed: true };
+  return { bg: accent, opacity: 1, canceled: false, open: false, dashed: false };
 };
 
 // Monday-first weekday i18n keys (matches startOfWeek below).
@@ -51,6 +61,33 @@ const startOfWeek = (d: Date) => {
   return c;
 };
 const coworkerNames = (s: CalShift) => s.participants.filter((p) => !p.is_me).map((p) => p.name);
+// The role I'm working this shift under, if I'm on it and it has a named role.
+const myRole = (s: CalShift) => s.participants.find((p) => p.is_me)?.role_name ?? null;
+
+const addDays = (d: Date, n: number) => { const c = new Date(d); c.setDate(c.getDate() + n); return c; };
+const startMin = (s: CalShift) => toMinutes(hhmm(s.start_zeit));
+const endMinRaw = (s: CalShift) => toMinutes(hhmm(s.end_zeit));
+// A shift whose end is at or before its start runs past midnight into the next day.
+const isOvernight = (s: CalShift) => endMinRaw(s) <= startMin(s);
+
+// The portion(s) of the shifts that fall on a given calendar day, in minutes
+// from midnight. An overnight shift contributes a "head" on its start day
+// (start → 24:00) and a "tail" on the following day (00:00 → end).
+type DaySeg = { shift: CalShift; from: number; to: number; tail: boolean };
+const daySegments = (shifts: CalShift[], date: Date): DaySeg[] => {
+  const d = iso(date);
+  const prev = iso(addDays(date, -1));
+  const out: DaySeg[] = [];
+  for (const s of shifts) {
+    const overnight = isOvernight(s);
+    if (s.datum === d) {
+      out.push({ shift: s, from: startMin(s), to: overnight ? 24 * 60 : endMinRaw(s), tail: false });
+    } else if (overnight && s.datum === prev) {
+      out.push({ shift: s, from: 0, to: endMinRaw(s), tail: true });
+    }
+  }
+  return out;
+};
 
 export default function CalendarScreen() {
   const { theme } = useTheme();
@@ -59,7 +96,7 @@ export default function CalendarScreen() {
   const betrieb = activeMitarbeiter?.betrieb_id ?? null;
   const isChef = activeMitarbeiter?.rolle_typ === "chef";
 
-  const [mode, setMode] = useState<ViewMode>("day");
+  const [mode, setMode] = useState<ViewMode>("week");
   const [cursor, setCursor] = useState(new Date()); // the focused day
   const [shifts, setShifts] = useState<CalShift[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,16 +261,14 @@ export default function CalendarScreen() {
     </SafeAreaView>
   );
 }
-function packLanes(shifts: CalShift[]) {
-  const sorted = [...shifts].sort((a, b) => toMinutes(hhmm(a.start_zeit)) - toMinutes(hhmm(b.start_zeit)));
-  const laneEnds: number[] = [];          // end-time of the last shift in each lane
-  const placed = sorted.map((s) => {
-    const start = toMinutes(hhmm(s.start_zeit));
-    const end = toMinutes(hhmm(s.end_zeit));
-    let lane = laneEnds.findIndex((e) => e <= start);
-    if (lane === -1) { lane = laneEnds.length; laneEnds.push(end); }
-    else laneEnds[lane] = end;
-    return { shift: s, lane };
+function packLanes(segs: DaySeg[]) {
+  const sorted = [...segs].sort((a, b) => a.from - b.from);
+  const laneEnds: number[] = [];          // end-minute of the last segment in each lane
+  const placed = sorted.map((seg) => {
+    let lane = laneEnds.findIndex((e) => e <= seg.from);
+    if (lane === -1) { lane = laneEnds.length; laneEnds.push(seg.to); }
+    else laneEnds[lane] = seg.to;
+    return { seg, lane };
   });
   return { placed, laneCount: laneEnds.length };
 }
@@ -241,25 +276,25 @@ function packLanes(shifts: CalShift[]) {
 function DayView({ date, shifts, onOpenShift }: { date: Date; shifts: CalShift[]; onOpenShift: (id: string) => void }) {
   const { theme } = useTheme();
   const { t } = useI18n();
-  const dayShifts = shifts.filter((s) => s.datum === iso(date));
+  const segs = useMemo(() => daySegments(shifts, date), [shifts, date]);
 
   const { from, to } = useMemo(() => {
-    if (!dayShifts.length) return { from: 8 * 60, to: 18 * 60 };
-    const starts = dayShifts.map((s) => toMinutes(hhmm(s.start_zeit)));
-    const ends = dayShifts.map((s) => toMinutes(hhmm(s.end_zeit)));
+    if (!segs.length) return { from: 8 * 60, to: 18 * 60 };
+    const froms = segs.map((s) => s.from);
+    const tos = segs.map((s) => s.to);
     return {
-      from: Math.max(0, Math.min(...starts) - 60),
-      to: Math.min(24 * 60, Math.max(...ends) + 60),
+      from: Math.max(0, Math.min(...froms) - 60),
+      to: Math.min(24 * 60, Math.max(...tos) + 60),
     };
-  }, [dayShifts]);
+  }, [segs]);
 
-  const { placed, laneCount } = useMemo(() => packLanes(dayShifts), [dayShifts]);
+  const { placed, laneCount } = useMemo(() => packLanes(segs), [segs]);
 
   const PX_PER_MIN = 1.1;
   const height = (to - from) * PX_PER_MIN;
   const GUTTER = 56;   // space for hour labels
 
-  if (!dayShifts.length) return <Empty text={t("calendar.noShifts")} />;
+  if (!segs.length) return <Empty text={t("calendar.noShifts")} />;
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
@@ -277,14 +312,14 @@ function DayView({ date, shifts, onOpenShift }: { date: Date; shifts: CalShift[]
 
         {/* shift blocks, packed into lanes */}
         <View style={{ position: "absolute", top: 0, bottom: 0, left: GUTTER, right: 8 }}>
-          {placed.map(({ shift: s, lane }) => {
-            const top = (toMinutes(hhmm(s.start_zeit)) - from) * PX_PER_MIN;
-            const h = (toMinutes(hhmm(s.end_zeit)) - toMinutes(hhmm(s.start_zeit))) * PX_PER_MIN;
+          {placed.map(({ seg, lane }) => {
+            const top = (seg.from - from) * PX_PER_MIN;
+            const h = (seg.to - seg.from) * PX_PER_MIN;
             const laneWidthPct = 100 / laneCount;
             return (
               <ShiftBlock
-                key={s.id}
-                shift={s}
+                key={seg.shift.id + (seg.tail ? "-tail" : "")}
+                shift={seg.shift}
                 onOpen={onOpenShift}
                 style={{
                   position: "absolute",
@@ -303,34 +338,133 @@ function DayView({ date, shifts, onOpenShift }: { date: Date; shifts: CalShift[]
 }
 
 // ---------- WEEK ----------
+// A Studo-style time grid: a day-header row, an hour axis down the left, and
+// seven day columns with shift blocks positioned by their start/end time.
+const WEEK_GUTTER = 40;
+const WEEK_PX_PER_MIN = 0.9;
+
 function WeekView({ date, shifts, onOpenShift }: { date: Date; shifts: CalShift[]; onOpenShift: (id: string) => void }) {
   const { theme } = useTheme();
-  const { t } = useI18n();
+  const { lang } = useI18n();
   const start = startOfWeek(date);
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return d;
-  });
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(start, i)), [start.getTime()]);
+  const todayIso = iso(new Date());
+
+  // Segments per day, and the visible time window across the whole week.
+  const perDay = useMemo(() => days.map((d) => daySegments(shifts, d)), [days, shifts]);
+  const { from, to } = useMemo(() => {
+    const all = perDay.flat();
+    if (!all.length) return { from: 8 * 60, to: 18 * 60 };
+    return {
+      from: Math.max(0, Math.min(...all.map((s) => s.from)) - 60),
+      to: Math.min(24 * 60, Math.max(...all.map((s) => s.to)) + 60),
+    };
+  }, [perDay]);
+
+  // Scale so the whole time window fills the available height — no scrolling.
+  const [gridH, setGridH] = useState(0);
+  const pxPerMin = gridH > 0 ? gridH / (to - from) : WEEK_PX_PER_MIN;
+  const firstHour = Math.floor(from / 60);
+  const lastHour = Math.ceil(to / 60);
+  const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, i) => firstHour + i);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 12, gap: 8 }}>
-      {days.map((d, i) => {
-        const dayShifts = shifts.filter((s) => s.datum === iso(d));
-        return (
-          <View key={i} style={styles.weekRow}>
-            <Text style={[styles.weekDay, { color: theme.muted }]}>{t(`calendar.${WEEKDAY_KEYS[i]}`)}</Text>
-            <View style={{ flex: 1, gap: 6 }}>
-              {dayShifts.length === 0 ? (
-                <View style={[styles.weekEmpty, { borderColor: theme.border }]} />
-              ) : (
-                dayShifts.map((s) => <ShiftBlock key={s.id} shift={s} compact onOpen={onOpenShift} />)
-              )}
+    <View style={{ flex: 1 }}>
+      {/* fixed day headers */}
+      <View style={[styles.weekHeaderRow, { borderBottomColor: theme.border }]}>
+        <View style={{ width: WEEK_GUTTER }} />
+        {days.map((d, i) => {
+          const isToday = iso(d) === todayIso;
+          return (
+            <View key={i} style={styles.weekHeadCell}>
+              <Text style={[styles.weekHeadDow, { color: theme.muted }]}>
+                {d.toLocaleDateString(lang, { weekday: "short" })}
+              </Text>
+              <View style={[styles.weekHeadNum, isToday && { backgroundColor: theme.accent }]}>
+                <Text style={{ color: isToday ? theme.accentText : theme.text, fontWeight: "700", fontSize: 13 }}>
+                  {d.getDate()}
+                </Text>
+              </View>
             </View>
+          );
+        })}
+      </View>
+
+      {/* time grid — fills remaining height */}
+      <View
+        style={{ flex: 1, flexDirection: "row", paddingBottom: 8 }}
+        onLayout={(e) => setGridH(e.nativeEvent.layout.height - 8)}
+      >
+        {/* hour axis */}
+        <View style={{ width: WEEK_GUTTER }}>
+          {hours.map((h) => (
+            <Text key={h} style={[styles.weekHourLabel, { top: (h * 60 - from) * pxPerMin - 6, color: theme.muted }]}>
+              {h}:00
+            </Text>
+          ))}
+        </View>
+
+        {/* columns */}
+        <View style={{ flex: 1, position: "relative" }}>
+          {/* hour lines behind everything */}
+          {hours.map((h) => (
+            <View key={h} style={[styles.weekHourLine, { top: (h * 60 - from) * pxPerMin, borderColor: theme.border }]} />
+          ))}
+          <View style={{ flexDirection: "row", position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }}>
+            {days.map((d, i) => {
+              const { placed, laneCount } = packLanes(perDay[i]);
+              return (
+                <View key={i} style={[styles.weekCol, { borderLeftColor: theme.border }]}>
+                  {placed.map(({ seg, lane }) => {
+                    const w = 100 / laneCount;
+                    return (
+                      <WeekGridBlock
+                        key={seg.shift.id + (seg.tail ? "-tail" : "")}
+                        shift={seg.shift}
+                        onOpen={onOpenShift}
+                        style={{
+                          position: "absolute",
+                          top: (seg.from - from) * pxPerMin,
+                          height: Math.max(12, (seg.to - seg.from) * pxPerMin - 2),
+                          left: `${lane * w}%`,
+                          width: `${w}%`,
+                        }}
+                      />
+                    );
+                  })}
+                </View>
+              );
+            })}
           </View>
-        );
-      })}
-    </ScrollView>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// A compact shift block sized for the narrow week columns.
+function WeekGridBlock({ shift, style, onOpen }: { shift: CalShift; style?: any; onOpen: (id: string) => void }) {
+  const { theme } = useTheme();
+  const { t } = useI18n();
+  const v = shiftVisual(shift, theme.accent);
+  return (
+    <Pressable
+      onPress={() => onOpen(shift.id)}
+      style={[
+        styles.weekBlock,
+        { backgroundColor: v.bg, borderColor: v.dashed ? "#ffffffcc" : theme.bg, opacity: v.opacity },
+        v.dashed && { borderStyle: "dashed" },
+        style,
+      ]}
+    >
+      <View style={styles.blockTitleRow}>
+        <Text style={[styles.weekBlockTitle, v.canceled && styles.strike]} numberOfLines={1}>
+          {shift.label || t("calendar.shift")}
+        </Text>
+        {shift.swap_wanted ? <Repeat color="#fff" size={10} /> : null}
+      </View>
+      <Text style={styles.weekBlockTime} numberOfLines={1}>{hhmm(shift.start_zeit)}</Text>
+    </Pressable>
   );
 }
 
@@ -357,7 +491,7 @@ function MonthView({ date, shifts, onPickDay }: { date: Date; shifts: CalShift[]
       <View style={styles.monthGrid}>
         {cells.map((d, i) => {
           if (!d) return <View key={i} style={styles.monthCell} />;
-          const has = shifts.some((s) => s.datum === iso(d));
+          const has = daySegments(shifts, d).length > 0;
           return (
             <Pressable key={i} style={styles.monthCell} onPress={() => onPickDay(d)}>
               <View style={[
@@ -379,16 +513,31 @@ function ShiftBlock({ shift, style, compact, onOpen }: { shift: CalShift; style?
   const { theme } = useTheme();
   const { t } = useI18n();
   const coworkers = coworkerNames(shift);
+  const role = myRole(shift);
+  const v = shiftVisual(shift, theme.accent);
   return (
     <Pressable
       onPress={() => (onOpen ? onOpen(shift.id) : router.push({ pathname: "/shift/[id]", params: { id: shift.id } }))}
       style={[
         styles.block,
-        { backgroundColor: theme.accent, borderColor: theme.border },
+        { backgroundColor: v.bg, borderColor: v.dashed ? "#ffffffaa" : theme.border, opacity: v.opacity },
+        v.dashed && { borderStyle: "dashed" },
         style,
       ]}
     >
-      <Text style={styles.blockTitle} numberOfLines={1}>{shift.label || t("calendar.shift")}</Text>
+      <View style={styles.blockTitleRow}>
+        <Text style={[styles.blockTitle, v.canceled && styles.strike]} numberOfLines={1}>
+          {shift.label || t("calendar.shift")}
+        </Text>
+        {shift.swap_wanted ? <Repeat color="#fff" size={13} /> : null}
+      </View>
+      {v.open ? <Text style={styles.blockFlag} numberOfLines={1}>{t("calendar.openToTake")}</Text> : null}
+      {v.canceled ? <Text style={styles.blockFlag} numberOfLines={1}>{t("calendar.canceled")}</Text> : null}
+      {role ? (
+        <View style={styles.roleTag}>
+          <Text style={styles.roleTagText} numberOfLines={1}>{role}</Text>
+        </View>
+      ) : null}
       {compact ? (
         <Text style={styles.blockSub} numberOfLines={1}>{hhmm(shift.start_zeit)}–{hhmm(shift.end_zeit)}</Text>
       ) : null}
@@ -697,12 +846,24 @@ const styles = StyleSheet.create({
   overflow: "hidden",
   borderWidth: 1.5,
   },
-  blockTitle: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  blockTitle: { color: "#fff", fontWeight: "700", fontSize: 14, flexShrink: 1 },
+  blockTitleRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   blockSub: { color: "#fff", fontSize: 11, opacity: 0.8, marginTop: 2 },
+  blockFlag: { color: "#fff", fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 1 },
+  strike: { textDecorationLine: "line-through" },
+  roleTag: { alignSelf: "flex-start", backgroundColor: "#ffffff33", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, marginTop: 3 },
+  roleTagText: { color: "#fff", fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
 
-  weekRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  weekDay: { width: 36, fontSize: 15, fontWeight: "700", paddingTop: 8 },
-  weekEmpty: { height: 20, borderRadius: 8, borderWidth: 1, borderStyle: "dashed" },
+  weekHeaderRow: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: 6, paddingTop: 2 },
+  weekHeadCell: { flex: 1, alignItems: "center", gap: 3 },
+  weekHeadDow: { fontSize: 11, fontWeight: "600", textTransform: "uppercase" },
+  weekHeadNum: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  weekHourLabel: { position: "absolute", right: 6, fontSize: 10 },
+  weekHourLine: { position: "absolute", left: 0, right: 0, borderTopWidth: StyleSheet.hairlineWidth },
+  weekCol: { flex: 1, borderLeftWidth: StyleSheet.hairlineWidth, position: "relative" },
+  weekBlock: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 3, paddingVertical: 2, overflow: "hidden" },
+  weekBlockTitle: { color: "#fff", fontWeight: "700", fontSize: 10, flexShrink: 1 },
+  weekBlockTime: { color: "#fff", fontSize: 9, opacity: 0.85 },
 
   monthHeader: { flexDirection: "row", marginBottom: 8 },
   monthHeaderCell: { flex: 1, textAlign: "center", fontWeight: "600" },

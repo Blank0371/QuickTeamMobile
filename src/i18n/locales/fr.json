@@ -50,7 +50,6 @@
   },
   "home": {
     "greeting": "Bonjour",
-    "nextShift": "Votre prochain service",
     "noShift": "Aucun service à venir",
     "pendingApprovals": "En attente de votre validation",
     "noApprovals": "Rien à valider pour le moment",
@@ -67,7 +66,8 @@
     "noNewMessages": "Vous êtes à jour",
     "viewAll": "Voir tout",
     "today": "Aujourd'hui",
-    "tomorrow": "Demain"
+    "tomorrow": "Demain",
+    "nextShifts": "Vos prochains services"
   },
   "legal": {
     "sectionTitle": "Mentions légales",
@@ -345,7 +345,13 @@
     "emReported": "Signalé",
     "emSearching": "Recherche de remplaçant",
     "emReplaced": "Couvert",
-    "emYourEmergencies": "Vos urgences"
+    "emYourEmergencies": "Vos urgences",
+    "cannotAttend": "Indisponible",
+    "emConfirmBody": "Votre responsable sera prévenu et cherchera un remplaçant.",
+    "emHoldToReport": "Maintenir pour signaler",
+    "emReportedTitle": "Signalé",
+    "emReportedBody": "Votre responsable a été prévenu.",
+    "emReportFailed": "Échec du signalement. Réessayez."
   },
   "settings": {
     "title": "Paramètres",
@@ -419,6 +425,9 @@
     "details": "Détails",
     "roster": "Équipe",
     "addPerson": "Ajouter une personne",
-    "pickRole": "Rôle"
+    "pickRole": "Rôle",
+    "openToTake": "À prendre",
+    "canceled": "Annulé",
+    "takeShiftBlurb": "Ce service est libre — vous pouvez le prendre."
   }
 }
