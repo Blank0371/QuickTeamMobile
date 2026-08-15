@@ -98,14 +98,20 @@ export default function MessagesScreen() {
     if (!activeMitarbeiter || emgRows.length === 0) { setEmergencies([]); return; }
     const notfallIds = emgRows.map((m: any) => m.inhalt?.notfall_id).filter(Boolean);
 
-    const [notf, myRoles, people] = await Promise.all([
+    const [notf, myRoles] = await Promise.all([
       supabase.from("notfaelle").select("id, status, melder_id, uebernehmer_id").in("id", notfallIds),
       supabase.from("mitarbeiter_rollen").select("rolle_id").eq("mitarbeiter_id", activeMitarbeiter.id),
-      supabase.from("mitarbeiter").select("id, vorname, nachname").eq("betrieb_id", activeMitarbeiter.betrieb_id),
     ]);
     const nById = new Map((notf.data ?? []).map((n: any) => [n.id, n]));
     const myRoleSet = new Set((myRoles.data ?? []).map((r: any) => r.rolle_id));
-    const nameOf = new Map((people.data ?? []).map((p: any) => [p.id, `${p.vorname} ${p.nachname}`.trim()]));
+    // Names of the people referenced by these emergencies (reporter / taker only).
+    const nameIds = Array.from(new Set(
+      (notf.data ?? []).flatMap((n: any) => [n.melder_id, n.uebernehmer_id]).filter(Boolean)
+    )) as string[];
+    const { data: people } = nameIds.length > 0
+      ? await supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: nameIds })
+      : { data: [] as any[] };
+    const nameOf = new Map((people ?? []).map((p: any) => [p.id, p.name]));
 
     const built: EmergencyMsg[] = emgRows.map((m: any) => {
       const inhalt = m.inhalt ?? {};
@@ -178,14 +184,20 @@ export default function MessagesScreen() {
     if (!activeMitarbeiter || rows.length === 0) { setSwaps([]); return; }
     const anfrageIds = rows.map((m: any) => m.inhalt?.anfrage_id).filter(Boolean);
 
-    const [anfragen, myRoles, people] = await Promise.all([
+    const [anfragen, myRoles] = await Promise.all([
       supabase.from("schichttausch_anfragen").select("id, status, anbietender_mitarbeiter_id, uebernehmender_mitarbeiter_id").in("id", anfrageIds),
       supabase.from("mitarbeiter_rollen").select("rolle_id").eq("mitarbeiter_id", activeMitarbeiter.id),
-      supabase.from("mitarbeiter").select("id, vorname, nachname").eq("betrieb_id", activeMitarbeiter.betrieb_id),
     ]);
     const aById = new Map((anfragen.data ?? []).map((a: any) => [a.id, a]));
     const myRoleSet = new Set((myRoles.data ?? []).map((r: any) => r.rolle_id));
-    const nameOf = new Map((people.data ?? []).map((p: any) => [p.id, `${p.vorname} ${p.nachname}`.trim()]));
+    // Only the offering employees named on these swap broadcasts.
+    const nameIds = Array.from(new Set(
+      rows.map((m: any) => m.inhalt?.anbieter_id).filter(Boolean)
+    )) as string[];
+    const { data: people } = nameIds.length > 0
+      ? await supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: nameIds })
+      : { data: [] as any[] };
+    const nameOf = new Map((people ?? []).map((p: any) => [p.id, p.name]));
 
     const built: SwapMsg[] = rows.map((m: any) => {
       const inhalt = m.inhalt ?? {};
@@ -234,21 +246,23 @@ export default function MessagesScreen() {
     const ids = list.map((m: any) => m.id);
     if (ids.length === 0) { setMessages([]); setLoading(false); return; }
 
-    const [tasks, opts, votes, atts, reads, people] = await Promise.all([
+    // Resolve just the broadcast authors' names; my own ids drive vote highlighting.
+    const autorIds = Array.from(new Set(list.map((m: any) => m.autor_id).filter(Boolean))) as string[];
+    const [tasks, opts, votes, atts, reads, people, meRows] = await Promise.all([
       supabase.from("aufgaben").select("id, benachrichtigung_id, text, reihenfolge, erledigt_von, erledigt_am").in("benachrichtigung_id", ids),
       supabase.from("umfrage_optionen").select("id, benachrichtigung_id, text, reihenfolge").in("benachrichtigung_id", ids),
       supabase.from("umfrage_stimmen").select("benachrichtigung_id, option_id, mitarbeiter_id").in("benachrichtigung_id", ids),
       supabase.from("nachricht_anhaenge").select("id, benachrichtigung_id, datei_name").in("benachrichtigung_id", ids),
       supabase.from("benachrichtigung_gelesen").select("benachrichtigung_id").in("benachrichtigung_id", ids),
-      supabase.from("mitarbeiter").select("id, vorname, nachname, auth_id"),
+      autorIds.length > 0
+        ? supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: autorIds })
+        : Promise.resolve({ data: [] as any[] }),
+      supabase.from("mitarbeiter").select("id").eq("auth_id", user.id),
     ]);
 
     const nameOf = new Map<string, string>();
-    const mine = new Set<string>();
-    (people.data ?? []).forEach((p: any) => {
-      nameOf.set(p.id, `${p.vorname} ${p.nachname}`.trim());
-      if (p.auth_id === user.id) mine.add(p.id);
-    });
+    (people.data ?? []).forEach((p: any) => nameOf.set(p.id, p.name));
+    const mine = new Set<string>((meRows.data ?? []).map((r: any) => r.id));
     const readSet = new Set((reads.data ?? []).map((r: any) => r.benachrichtigung_id));
 
     const byMsg = <T,>(arr: any[] | null) => {

@@ -4,7 +4,7 @@
 // edit the shift: date/time, comment, and the roster (assign people + roles,
 // change roles, remove people).
 import { router, useLocalSearchParams } from "expo-router";
-import { ChevronLeft, Plus, Repeat, TriangleAlert, Users, X } from "lucide-react-native";
+import { ChevronLeft, Plus, Repeat, Trash2, TriangleAlert, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -45,6 +45,8 @@ type ShiftDetailData = {
   open: boolean;
   swap_wanted: boolean;
   claim: ClaimInfo | null;
+  understaffed?: boolean;
+  bedarf?: { rolle_id: string; role_name: string | null; benoetigt: number; besetzt: number }[] | null;
   participants: Participant[];
 };
 type TeamMember = { id: string; vorname: string; nachname: string | null };
@@ -93,6 +95,8 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [rosterBusy, setRosterBusy] = useState(false);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // chef-only: team + roles for editing the roster
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -177,19 +181,81 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
     load();
   };
 
+  // Recompute the per-role staffing counts from the current participants so the
+  // "Staffing" card stays in sync after an optimistic roster edit.
+  const withRecomputedBedarf = (s: ShiftDetailData): ShiftDetailData => {
+    if (!s.bedarf) return s;
+    const bedarf = s.bedarf.map((b) => ({
+      ...b,
+      besetzt: s.participants.filter((p) => p.attendet && p.rolle_id === b.rolle_id).length,
+    }));
+    return { ...s, bedarf, understaffed: bedarf.some((b) => b.besetzt < b.benoetigt) };
+  };
+
+  // The assignment trigger (pruefe_zuweisung_constraints) raises German
+  // exceptions with a stable code/keyword we can map to a readable reason.
+  const assignFailureReason = (msg?: string): string => {
+    const m = msg ?? "";
+    if (m.includes("HC-1") || m.includes("Urlaub")) return t("calendar.assignFailedVacation");
+    if (m.includes("HC-2") || m.includes("ueberlappende")) return t("calendar.assignFailedOverlap");
+    if (m.includes("HC-4") || m.includes("Ruhezeit")) return t("calendar.assignFailedRest");
+    if (m.includes("Tageshoechstarbeitszeit")) return t("calendar.assignFailedMaxDay");
+    if (m.includes("Wochenhoechstarbeitszeit") || m.includes("HC-5") || m.includes("max_stunden_hart")) return t("calendar.assignFailedMaxWeek");
+    if (m.includes("HC-3") || m.includes("qualifiziert")) return t("calendar.assignFailedRole");
+    if (m.includes("deaktiviert")) return t("calendar.assignFailedDisabled");
+    return t("calendar.assignFailed");
+  };
+
+  // Assign / remove roster members. The RPC persists immediately, but we update
+  // the popup's local state in place (no full reload) so the view doesn't flash
+  // back to a spinner while the chef keeps editing. Any failure surfaces as an
+  // inline error banner and leaves the roster untouched.
   const assign = async (mid: string, rid: string) => {
     if (!shift || rosterBusy) return;
     setRosterBusy(true);
-    await supabase.rpc("schicht_zuweisen", { p_instanz_id: shift.id, p_mitarbeiter_id: mid, p_rolle_id: rid });
-    await load();
+    const { error } = await supabase.rpc("schicht_zuweisen", { p_instanz_id: shift.id, p_mitarbeiter_id: mid, p_rolle_id: rid });
     setRosterBusy(false);
+    if (error) {
+      setRosterError(assignFailureReason(error.message));
+      return;
+    }
+    setRosterError(null);
+    setShift((prev) => {
+      if (!prev) return prev;
+      const existing = prev.participants.find((p) => p.mitarbeiter_id === mid);
+      let participants: Participant[];
+      if (existing) {
+        // role change on someone already on the shift
+        participants = prev.participants.map((p) =>
+          p.mitarbeiter_id === mid ? { ...p, rolle_id: rid, role_name: roleName(rid) } : p);
+      } else {
+        const m = team.find((tm) => tm.id === mid);
+        participants = [...prev.participants, {
+          name: m ? `${m.vorname}${m.nachname ? " " + m.nachname : ""}` : "",
+          mitarbeiter_id: mid,
+          zuweisung_id: `local-${mid}`,
+          rolle_id: rid,
+          role_name: roleName(rid),
+          attendet: true,
+          is_me: false,
+        }];
+      }
+      return withRecomputedBedarf({ ...prev, participants });
+    });
   };
   const unassign = async (mid: string) => {
     if (!shift || rosterBusy) return;
     setRosterBusy(true);
-    await supabase.rpc("schicht_zuweisung_loeschen", { p_instanz_id: shift.id, p_mitarbeiter_id: mid });
-    await load();
+    const { error } = await supabase.rpc("schicht_zuweisung_loeschen", { p_instanz_id: shift.id, p_mitarbeiter_id: mid });
     setRosterBusy(false);
+    if (error) {
+      setRosterError(t("calendar.removeFailed"));
+      return;
+    }
+    setRosterError(null);
+    setShift((prev) => prev
+      ? withRecomputedBedarf({ ...prev, participants: prev.participants.filter((p) => p.mitarbeiter_id !== mid) })
+      : prev);
   };
 
   const offerSwap = async () => {
@@ -259,6 +325,22 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
     else if (code === "nicht_qualifiziert") Alert.alert(t(c.kind === "posting" ? "messages.osNotQualified" : c.kind === "swap" ? "shiftSwap.notQualified" : "messages.emNotQualified"));
     else Alert.alert(t(fail));
     load();
+  };
+
+  // Chef: delete this single shift instance (cascades its assignments).
+  const deleteShift = async () => {
+    if (!shift || deleting) return;
+    setDeleting(true);
+    const { error } = await supabase.from("schicht_instanzen").delete().eq("id", shift.id);
+    setDeleting(false);
+    if (error) { Alert.alert(t("calendar.deleteShiftFailed")); return; }
+    if (onClose) onClose(); else router.back();
+  };
+  const confirmDelete = () => {
+    Alert.alert(t("calendar.deleteShiftTitle"), t("calendar.deleteShiftBody"), [
+      { text: t("calendar.cancel"), style: "cancel" },
+      { text: t("calendar.deleteShiftGo"), style: "destructive", onPress: deleteShift },
+    ]);
   };
 
   const roleName = (rid: string | null) => rollen.find((r) => r.id === rid)?.name ?? null;
@@ -417,6 +499,30 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
             )}
           </View>
 
+          {/* ---------- Staffing (chef only) — required vs. filled per role ---------- */}
+          {canEdit && shift.bedarf && shift.bedarf.length > 0 ? (
+            <>
+              <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("calendar.staffing")}</Text>
+              <View style={[styles.card, { backgroundColor: theme.surface, borderColor: shift.understaffed ? RED : theme.border }]}>
+                {shift.understaffed ? (
+                  <View style={[styles.swapRow, { marginBottom: 2 }]}>
+                    <TriangleAlert color={RED} size={18} />
+                    <Text style={{ color: RED, fontSize: 13, fontWeight: "700", flex: 1 }}>{t("calendar.understaffedBlurb")}</Text>
+                  </View>
+                ) : null}
+                {shift.bedarf.map((b, idx) => {
+                  const short = b.besetzt < b.benoetigt;
+                  return (
+                    <View key={b.rolle_id} style={[styles.personRow, idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.border }]}>
+                      <Text style={{ color: theme.text, fontWeight: "600", flex: 1 }}>{b.role_name ?? t("calendar.shift")}</Text>
+                      <Text style={{ color: short ? RED : theme.muted, fontWeight: "800", fontSize: 15 }}>{b.besetzt}/{b.benoetigt}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+
           {/* ---------- Hand over shift (employee only) ---------- */}
           {canOfferSwap ? (
             <>
@@ -455,7 +561,13 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
           {canEdit && addable.length > 0 ? (
             <>
               <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("calendar.addPerson")}</Text>
-              <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              {rosterError ? (
+                <View style={[styles.swapRow, { marginBottom: 8 }]}>
+                  <TriangleAlert color={RED} size={18} />
+                  <Text style={{ color: RED, fontSize: 13, fontWeight: "700", flex: 1 }}>{rosterError}</Text>
+                </View>
+              ) : null}
+              <View style={[styles.card, { backgroundColor: theme.surface, borderColor: rosterError ? RED : theme.border }]}>
                 {addable.map((m, idx) => {
                   const firstRole = (roleIdsByMember[m.id] ?? [])[0];
                   return (
@@ -469,6 +581,17 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
                 })}
               </View>
             </>
+          ) : null}
+
+          {/* ---------- Delete this shift (chef only) ---------- */}
+          {canEdit ? (
+            <Pressable
+              style={[styles.deleteShiftBtn, { borderColor: RED }]}
+              onPress={confirmDelete} disabled={deleting}
+            >
+              <Trash2 color={RED} size={18} />
+              <Text style={{ color: RED, fontWeight: "700" }}>{deleting ? "…" : t("calendar.deleteShift")}</Text>
+            </Pressable>
           ) : null}
         </ScrollView>
       )}
@@ -576,6 +699,7 @@ const styles = StyleSheet.create({
 
   swapRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   swapBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5, borderRadius: 999, paddingVertical: 12, marginTop: 8 },
+  deleteShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5, borderRadius: 999, paddingVertical: 14, marginTop: 8 },
   backdrop: { flex: 1, backgroundColor: "#00000088", alignItems: "center", justifyContent: "center", padding: 20 },
   modalCard: { width: "100%", borderWidth: 1.5, borderRadius: 16, padding: 20, paddingTop: 40 },
   modalClose: { position: "absolute", top: 12, right: 12, zIndex: 1 },

@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { AlertTriangle, CalendarPlus, Check, ChevronLeft, ChevronRight, Minus, Plus, Repeat, X } from "lucide-react-native";
+import { AlertTriangle, CalendarPlus, Check, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Trash2, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet,
@@ -8,20 +8,21 @@ import {
 } from "react-native";
 import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { DateTimeField } from "../../components/DateTimeField";
+import { ScreenGradient } from "../../components/ScreenGradient";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
-import { ScreenGradient } from "../../components/ScreenGradient";
-import { DateTimeField } from "../../components/DateTimeField";
 import { ShiftDetailView } from "../shift/[id]";
 
-type ViewMode = "day" | "week" | "month";
+type ViewMode = "week" | "month";
 
 // A shift as returned by the kalender_schichten RPC (roster already trimmed by
 // the business visibility settings on the server).
 export type CalShift = {
   id: string;
+  status: string;     // 'geplant' (draft proposal), 'veroeffentlicht', 'archiviert'
   datum: string;      // YYYY-MM-DD
   start_zeit: string; // HH:MM:SS
   end_zeit: string;
@@ -32,14 +33,21 @@ export type CalShift = {
   canceled: boolean;     // I called out of this shift
   open: boolean;         // open for me to claim (posting or replacement)
   swap_wanted: boolean;  // someone on it wants to swap out
+  understaffed?: boolean; // chef-only: a role's mindestbesetzung isn't met
   participants: { name: string; role_name: string | null; attendet: boolean; is_me: boolean }[];
 };
 
-// Visual treatment for a shift's state: canceled → red, open → translucent.
+// Blueprint blue for not-yet-published (draft) shifts — reads as a plan, not a
+// confirmed shift.
+const BLUEPRINT = "#2f5f8f";
+
+// Visual treatment for a shift's state: canceled → red, open → translucent,
+// planned (not yet published) → blueprinty blue with a dashed outline.
 const shiftVisual = (s: CalShift, accent: string) => {
-  if (s.canceled) return { bg: RED, opacity: 1, canceled: true, open: false, dashed: false };
-  if (s.open) return { bg: accent, opacity: 0.5, canceled: false, open: true, dashed: true };
-  return { bg: accent, opacity: 1, canceled: false, open: false, dashed: false };
+  if (s.canceled) return { bg: RED, opacity: 1, canceled: true, open: false, dashed: false, blueprint: false };
+  if (s.open) return { bg: accent, opacity: 0.5, canceled: false, open: true, dashed: true, blueprint: false };
+  if (s.status === "geplant") return { bg: BLUEPRINT, opacity: 0.96, canceled: false, open: false, dashed: true, blueprint: true };
+  return { bg: accent, opacity: 1, canceled: false, open: false, dashed: false, blueprint: false };
 };
 
 // Monday-first weekday i18n keys (matches startOfWeek below).
@@ -101,6 +109,32 @@ export default function CalendarScreen() {
   const [shifts, setShifts] = useState<CalShift[]>([]);
   const [loading, setLoading] = useState(true);
   const [openShiftId, setOpenShiftId] = useState<string | null>(null); // shift shown in the detail popup
+  const [confirmPublish, setConfirmPublish] = useState(false); // "confirm planned shifts" popup
+  const [publishing, setPublishing] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false); // "delete planned shifts" popup
+  const [discarding, setDiscarding] = useState(false);
+
+  // Draft (geplant) shifts the chef can still publish. Only the chef ever sees these.
+  const plannedCount = shifts.filter((s) => s.status === "geplant").length;
+
+  const publishPlanned = async () => {
+    if (!betrieb) return;
+    setPublishing(true);
+    await supabase.rpc("geplante_schichten_veroeffentlichen", { p_betrieb_id: betrieb });
+    setPublishing(false);
+    setConfirmPublish(false);
+    load();
+  };
+
+  // Throw away the generated proposal (draft shifts + the awaiting-review cycle).
+  const discardPlanned = async () => {
+    if (!betrieb) return;
+    setDiscarding(true);
+    await supabase.rpc("geplante_schichten_verwerfen", { p_betrieb_id: betrieb });
+    setDiscarding(false);
+    setConfirmDiscard(false);
+    load();
+  };
 
   // Chef-only data for the "create shift" sheet.
   const [showCreate, setShowCreate] = useState(false);
@@ -109,7 +143,7 @@ export default function CalendarScreen() {
   const [roleNames, setRoleNames] = useState<Record<string, string[]>>({});
   const [roleIdsByMember, setRoleIdsByMember] = useState<Record<string, string[]>>({});
 
-  const modes: ViewMode[] = ["day", "week", "month"];
+  const modes: ViewMode[] = ["week", "month"];
   const idx = modes.indexOf(mode);
 
   // Reload whenever the focused month (or business) changes — the window we
@@ -162,22 +196,18 @@ export default function CalendarScreen() {
   }, [betrieb, isChef]);
 
   const slide = useAnimatedStyle(() => ({
-    left: withTiming(`${idx * 33.33 + 1}%`, { duration: 200 }),
+    left: withTiming(`${idx * 50 + 1}%`, { duration: 200 }),
   }));
 
-  // Step by the active view's unit: ±1 day, ±1 week, ±1 month.
+  // Step by the active view's unit: ±1 week, ±1 month.
   const move = (dir: 1 | -1) => setCursor((c) => {
     const d = new Date(c);
-    if (mode === "day") d.setDate(d.getDate() + dir);
-    else if (mode === "week") d.setDate(d.getDate() + 7 * dir);
+    if (mode === "week") d.setDate(d.getDate() + 7 * dir);
     else d.setMonth(d.getMonth() + dir);
     return d;
   });
 
   const title = useMemo(() => {
-    if (mode === "day") {
-      return cursor.toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" });
-    }
     if (mode === "month") {
       return cursor.toLocaleDateString(lang, { month: "long", year: "numeric" });
     }
@@ -210,9 +240,8 @@ export default function CalendarScreen() {
           <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />
         ) : (
           <>
-            {mode === "day" && <DayView date={cursor} shifts={shifts} onOpenShift={setOpenShiftId} />}
             {mode === "week" && <WeekView date={cursor} shifts={shifts} onOpenShift={setOpenShiftId} />}
-            {mode === "month" && <MonthView date={cursor} shifts={shifts} onPickDay={(d) => { setCursor(d); setMode("day"); }} />}
+            {mode === "month" && <MonthView date={cursor} shifts={shifts} onPickDay={(d) => { setCursor(d); setMode("week"); }} />}
           </>
         )}
       </View>
@@ -243,6 +272,64 @@ export default function CalendarScreen() {
         />
       )}
 
+      {/* Bottom-left: publish the draft (planned) shifts, or throw the proposal away. */}
+      {isChef && plannedCount > 0 && (
+        <View style={styles.plannedActions}>
+          <Pressable
+            style={[styles.fabLeft, { backgroundColor: theme.accent, shadowColor: theme.text }]}
+            onPress={() => setConfirmPublish(true)}
+          >
+            <Check color={theme.accentText} size={20} />
+            <Text style={{ color: theme.accentText, fontWeight: "800", fontSize: 14 }}>{t("calendar.confirmPlanned")}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.discardBtn, { backgroundColor: theme.surface, borderColor: RED, shadowColor: theme.text }]}
+            onPress={() => setConfirmDiscard(true)}
+          >
+            <Trash2 color={RED} size={18} />
+            <Text style={{ color: RED, fontWeight: "800", fontSize: 14 }}>{t("calendar.deletePlanned")}</Text>
+          </Pressable>
+        </View>
+      )}
+
+      <Modal visible={confirmPublish} transparent animationType="fade" onRequestClose={() => setConfirmPublish(false)}>
+        <Pressable style={styles.confirmBackdrop} onPress={() => setConfirmPublish(false)}>
+          <Pressable style={[styles.confirmSheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17, marginBottom: 8 }}>{t("calendar.confirmPlannedTitle")}</Text>
+            <Text style={{ color: theme.muted, fontSize: 14, marginBottom: 18 }}>
+              {t("calendar.confirmPlannedBody", { count: plannedCount })}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable style={[styles.confirmBtn, { borderColor: theme.border }]} onPress={() => setConfirmPublish(false)} disabled={publishing}>
+                <Text style={{ color: theme.text, fontWeight: "700" }}>{t("calendar.cancel")}</Text>
+              </Pressable>
+              <Pressable style={[styles.confirmBtn, { backgroundColor: theme.accent, borderColor: theme.accent }]} onPress={publishPlanned} disabled={publishing}>
+                <Text style={{ color: theme.accentText, fontWeight: "800" }}>{publishing ? "…" : t("calendar.confirmPlannedGo")}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={confirmDiscard} transparent animationType="fade" onRequestClose={() => setConfirmDiscard(false)}>
+        <Pressable style={styles.confirmBackdrop} onPress={() => setConfirmDiscard(false)}>
+          <Pressable style={[styles.confirmSheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 17, marginBottom: 8 }}>{t("calendar.deletePlannedTitle")}</Text>
+            <Text style={{ color: theme.muted, fontSize: 14, marginBottom: 18 }}>
+              {t("calendar.deletePlannedBody", { count: plannedCount })}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable style={[styles.confirmBtn, { borderColor: theme.border }]} onPress={() => setConfirmDiscard(false)} disabled={discarding}>
+                <Text style={{ color: theme.text, fontWeight: "700" }}>{t("calendar.cancel")}</Text>
+              </Pressable>
+              <Pressable style={[styles.confirmBtn, { backgroundColor: RED, borderColor: RED }]} onPress={discardPlanned} disabled={discarding}>
+                <Text style={{ color: "#fff", fontWeight: "800" }}>{discarding ? "…" : t("calendar.deletePlannedGo")}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Shift detail popup — same view as the /shift/[id] screen, shown inline. */}
       <Modal
         visible={!!openShiftId}
@@ -272,71 +359,6 @@ function packLanes(segs: DaySeg[]) {
   });
   return { placed, laneCount: laneEnds.length };
 }
-// ---------- DAY ----------
-function DayView({ date, shifts, onOpenShift }: { date: Date; shifts: CalShift[]; onOpenShift: (id: string) => void }) {
-  const { theme } = useTheme();
-  const { t } = useI18n();
-  const segs = useMemo(() => daySegments(shifts, date), [shifts, date]);
-
-  const { from, to } = useMemo(() => {
-    if (!segs.length) return { from: 8 * 60, to: 18 * 60 };
-    const froms = segs.map((s) => s.from);
-    const tos = segs.map((s) => s.to);
-    return {
-      from: Math.max(0, Math.min(...froms) - 60),
-      to: Math.min(24 * 60, Math.max(...tos) + 60),
-    };
-  }, [segs]);
-
-  const { placed, laneCount } = useMemo(() => packLanes(segs), [segs]);
-
-  const PX_PER_MIN = 1.1;
-  const height = (to - from) * PX_PER_MIN;
-  const GUTTER = 56;   // space for hour labels
-
-  if (!segs.length) return <Empty text={t("calendar.noShifts")} />;
-
-  return (
-    <ScrollView contentContainerStyle={{ padding: 16 }}>
-      <View style={{ height }}>
-        {/* hour lines */}
-        {Array.from({ length: Math.ceil(to / 60) - Math.floor(from / 60) + 1 }).map((_, i) => {
-          const hour = Math.floor(from / 60) + i;
-          const top = (hour * 60 - from) * PX_PER_MIN;
-          return (
-            <View key={hour} style={[styles.hourLine, { top, borderColor: theme.border }]}>
-              <Text style={[styles.hourLabel, { color: theme.muted }]}>{`${hour}:00`}</Text>
-            </View>
-          );
-        })}
-
-        {/* shift blocks, packed into lanes */}
-        <View style={{ position: "absolute", top: 0, bottom: 0, left: GUTTER, right: 8 }}>
-          {placed.map(({ seg, lane }) => {
-            const top = (seg.from - from) * PX_PER_MIN;
-            const h = (seg.to - seg.from) * PX_PER_MIN;
-            const laneWidthPct = 100 / laneCount;
-            return (
-              <ShiftBlock
-                key={seg.shift.id + (seg.tail ? "-tail" : "")}
-                shift={seg.shift}
-                onOpen={onOpenShift}
-                style={{
-                  position: "absolute",
-                  top,
-                  height: h,
-                  left: `${lane * laneWidthPct}%`,
-                  width: `${laneWidthPct}%`,
-                }}
-              />
-            );
-          })}
-        </View>
-      </View>
-    </ScrollView>
-  );
-}
-
 // ---------- WEEK ----------
 // A Studo-style time grid: a day-header row, an hour axis down the left, and
 // seven day columns with shift blocks positioned by their start/end time.
@@ -349,6 +371,15 @@ function WeekView({ date, shifts, onOpenShift }: { date: Date; shifts: CalShift[
   const start = startOfWeek(date);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(start, i)), [start.getTime()]);
   const todayIso = iso(new Date());
+
+  // Live clock for the "now" line — ticks once a minute.
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+  const todayIdx = days.findIndex((d) => iso(d) === todayIso);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
 
   // Segments per day, and the visible time window across the whole week.
   const perDay = useMemo(() => days.map((d) => daySegments(shifts, d)), [days, shifts]);
@@ -413,8 +444,10 @@ function WeekView({ date, shifts, onOpenShift }: { date: Date; shifts: CalShift[
           <View style={{ flexDirection: "row", position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }}>
             {days.map((d, i) => {
               const { placed, laneCount } = packLanes(perDay[i]);
+              const isToday = i === todayIdx;
+              const showNow = isToday && nowMin >= from && nowMin <= to;
               return (
-                <View key={i} style={[styles.weekCol, { borderLeftColor: theme.border }]}>
+                <View key={i} style={[styles.weekCol, { borderLeftColor: theme.border }, isToday && { backgroundColor: theme.accent + "1A" }]}>
                   {placed.map(({ seg, lane }) => {
                     const w = 100 / laneCount;
                     return (
@@ -432,6 +465,11 @@ function WeekView({ date, shifts, onOpenShift }: { date: Date; shifts: CalShift[
                       />
                     );
                   })}
+                  {showNow && (
+                    <View style={[styles.nowLine, { top: (nowMin - from) * pxPerMin }]} pointerEvents="none">
+                      <View style={styles.nowDot} />
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -461,9 +499,16 @@ function WeekGridBlock({ shift, style, onOpen }: { shift: CalShift; style?: any;
         <Text style={[styles.weekBlockTitle, v.canceled && styles.strike]} numberOfLines={1}>
           {shift.label || t("calendar.shift")}
         </Text>
+        {shift.understaffed ? <AlertTriangle color="#FFD400" size={11} /> : null}
         {shift.swap_wanted ? <Repeat color="#fff" size={10} /> : null}
       </View>
       <Text style={styles.weekBlockTime} numberOfLines={1}>{hhmm(shift.start_zeit)}</Text>
+      <Text style={styles.weekBlockTime} numberOfLines={1}>{hhmm(shift.end_zeit)}</Text>
+      {shift.participants.length > 0 && (
+        <Text style={styles.weekBlockNames} numberOfLines={3}>
+          {shift.participants.map((p) => p.name.split(" ")[0]).join(", ")}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -509,45 +554,6 @@ function MonthView({ date, shifts, onPickDay }: { date: Date; shifts: CalShift[]
 }
 
 // ---------- shared ----------
-function ShiftBlock({ shift, style, compact, onOpen }: { shift: CalShift; style?: any; compact?: boolean; onOpen?: (id: string) => void }) {
-  const { theme } = useTheme();
-  const { t } = useI18n();
-  const coworkers = coworkerNames(shift);
-  const role = myRole(shift);
-  const v = shiftVisual(shift, theme.accent);
-  return (
-    <Pressable
-      onPress={() => (onOpen ? onOpen(shift.id) : router.push({ pathname: "/shift/[id]", params: { id: shift.id } }))}
-      style={[
-        styles.block,
-        { backgroundColor: v.bg, borderColor: v.dashed ? "#ffffffaa" : theme.border, opacity: v.opacity },
-        v.dashed && { borderStyle: "dashed" },
-        style,
-      ]}
-    >
-      <View style={styles.blockTitleRow}>
-        <Text style={[styles.blockTitle, v.canceled && styles.strike]} numberOfLines={1}>
-          {shift.label || t("calendar.shift")}
-        </Text>
-        {shift.swap_wanted ? <Repeat color="#fff" size={13} /> : null}
-      </View>
-      {v.open ? <Text style={styles.blockFlag} numberOfLines={1}>{t("calendar.openToTake")}</Text> : null}
-      {v.canceled ? <Text style={styles.blockFlag} numberOfLines={1}>{t("calendar.canceled")}</Text> : null}
-      {role ? (
-        <View style={styles.roleTag}>
-          <Text style={styles.roleTagText} numberOfLines={1}>{role}</Text>
-        </View>
-      ) : null}
-      {compact ? (
-        <Text style={styles.blockSub} numberOfLines={1}>{hhmm(shift.start_zeit)}–{hhmm(shift.end_zeit)}</Text>
-      ) : null}
-      {coworkers.length > 0 && (
-        <Text style={styles.blockSub} numberOfLines={1}>{coworkers.join(", ")}</Text>
-      )}
-    </Pressable>
-  );
-}
-
 function Empty({ text }: { text: string }) {
   const { theme } = useTheme();
   return (
@@ -832,7 +838,7 @@ const styles = StyleSheet.create({
   titleWrap: { flex: 1, alignItems: "center" },
   topTitle: { fontSize: 17, fontWeight: "700", textTransform: "capitalize" },
   toggle: { flexDirection: "row", borderRadius: 999, padding: 4, margin: 16, position: "relative" },
-  highlight: { position: "absolute", top: 4, bottom: 4, width: "32.5%", borderRadius: 999 },
+  highlight: { position: "absolute", top: 4, bottom: 4, width: "49%", borderRadius: 999 },
   third: { flex: 1, paddingVertical: 12, alignItems: "center" },
   toggleText: { fontSize: 15, fontWeight: "600" },
 
@@ -862,8 +868,11 @@ const styles = StyleSheet.create({
   weekHourLine: { position: "absolute", left: 0, right: 0, borderTopWidth: StyleSheet.hairlineWidth },
   weekCol: { flex: 1, borderLeftWidth: StyleSheet.hairlineWidth, position: "relative" },
   weekBlock: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 3, paddingVertical: 2, overflow: "hidden" },
+  nowLine: { position: "absolute", left: 0, right: 0, height: 2, backgroundColor: "#fff", zIndex: 10 },
+  nowDot: { position: "absolute", left: -3, top: -2, width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" },
   weekBlockTitle: { color: "#fff", fontWeight: "700", fontSize: 10, flexShrink: 1 },
   weekBlockTime: { color: "#fff", fontSize: 9, opacity: 0.85 },
+  weekBlockNames: { color: "#fff", fontSize: 9, opacity: 0.95, marginTop: 1, fontWeight: "600" },
 
   monthHeader: { flexDirection: "row", marginBottom: 8 },
   monthHeaderCell: { flex: 1, textAlign: "center", fontWeight: "600" },
@@ -878,6 +887,20 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 6,
   },
+  plannedActions: { position: "absolute", left: 20, bottom: 92, gap: 10, alignItems: "flex-start" },
+  fabLeft: {
+    height: 48, borderRadius: 24,
+    paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 8,
+    shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 6,
+  },
+  discardBtn: {
+    height: 44, borderRadius: 22, borderWidth: 1.5,
+    paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 8,
+    shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+  },
+  confirmBackdrop: { flex: 1, backgroundColor: "#00000088", alignItems: "center", justifyContent: "center", padding: 28 },
+  confirmSheet: { width: "100%", maxWidth: 420, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 20 },
+  confirmBtn: { flex: 1, height: 46, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
 
   // shift detail popup
   detailBackdrop: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },

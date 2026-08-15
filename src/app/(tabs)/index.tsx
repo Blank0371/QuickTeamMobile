@@ -2,7 +2,7 @@
 // new messages. Opening a profile lands here (index is the initial tab route).
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
-import { CalendarClock, CheckCheck, ChevronRight, Clock, MapPin, MessageCircle, Repeat, TreePalm, TriangleAlert } from "lucide-react-native";
+import { CalendarCheck2, CalendarClock, CheckCheck, ChevronRight, Clock, MapPin, MessageCircle, Repeat, TreePalm, TriangleAlert } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator, Modal, Pressable,
@@ -69,6 +69,7 @@ export default function Home() {
   const [unread, setUnread] = useState<UnreadMsg[]>([]);
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
   const [upcoming, setUpcoming] = useState<CalShift[]>([]);
+  const [shiftsReady, setShiftsReady] = useState(0); // planning cycles with a proposal awaiting review
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -92,7 +93,7 @@ export default function Home() {
         .maybeSingle();
       const swapApprovalOn = !!settings?.tausch_freigabe_erforderlich;
 
-      const [vac, swaps, team, emg] = await Promise.all([
+      const [vac, swaps, team, emg, ready] = await Promise.all([
         supabase.from("urlaub")
           .select("id, mitarbeiter_id, von, bis")
           .eq("betrieb_id", activeMitarbeiter.betrieb_id)
@@ -114,7 +115,13 @@ export default function Home() {
           .eq("betrieb_id", activeMitarbeiter.betrieb_id)
           .eq("status", "gemeldet")
           .order("erstellt_am", { ascending: true }),
+        // Generated schedules waiting for the manager to review them.
+        supabase.from("planungszyklen")
+          .select("id")
+          .eq("betrieb_id", activeMitarbeiter.betrieb_id)
+          .eq("status", "vorschlag_bereit"),
       ]);
+      setShiftsReady((ready.data ?? []).length);
 
       const nameById = new Map<string, string>();
       (team.data ?? []).forEach((p: any) => nameById.set(p.id, `${p.vorname} ${p.nachname}`.trim()));
@@ -142,6 +149,7 @@ export default function Home() {
       setUpcoming([]);
     } else {
       setApprovals([]);
+      setShiftsReady(0);
       // Employees see their next few upcoming shifts, drawn from the same
       // roster RPC the calendar uses (respects the business visibility settings).
       const today = iso(new Date());
@@ -176,13 +184,20 @@ export default function Home() {
     // Anything newer counts as "new"; the first ever visit (null) shows all unread.
     const lastSeen = await AsyncStorage.getItem(seenKey(activeMitarbeiter.id));
 
+    // Resolve just the broadcast authors' names (respects the roster RLS: we
+    // only ask the server to name the specific ids we already have).
+    const authorIds = Array.from(
+      new Set(list.map((m: any) => m.autor_id).filter(Boolean))
+    ) as string[];
     const [reads, people] = await Promise.all([
       supabase.from("benachrichtigung_gelesen").select("benachrichtigung_id").in("benachrichtigung_id", ids),
-      supabase.from("mitarbeiter").select("id, vorname, nachname"),
+      authorIds.length > 0
+        ? supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: authorIds })
+        : Promise.resolve({ data: [] as any[] }),
     ]);
     const readSet = new Set((reads.data ?? []).map((r: any) => r.benachrichtigung_id));
     const nameOf = new Map<string, string>();
-    (people.data ?? []).forEach((p: any) => nameOf.set(p.id, `${p.vorname} ${p.nachname}`.trim()));
+    (people.data ?? []).forEach((p: any) => nameOf.set(p.id, p.name));
 
     const unreadList: UnreadMsg[] = list
       .filter((m: any) => !readSet.has(m.id))
@@ -248,13 +263,30 @@ export default function Home() {
         {isChef ? (
           <>
             <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("home.pendingApprovals")}</Text>
-            {emergencyCount === 0 && vacationCount === 0 && swapCount === 0 ? (
+            {emergencyCount === 0 && vacationCount === 0 && swapCount === 0 && shiftsReady === 0 ? (
               <View style={[styles.card, styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <CheckCheck color={theme.muted} size={22} />
                 <Text style={[styles.emptyText, { color: theme.muted }]}>{t("home.noApprovals")}</Text>
               </View>
             ) : (
               <>
+                {shiftsReady > 0 ? (
+                  <Pressable
+                    style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.accent }]}
+                    onPress={() => router.push("/manager")}
+                  >
+                    <View style={styles.shiftHead}>
+                      <View style={[styles.iconBadge, { backgroundColor: theme.accent }]}>
+                        <CalendarCheck2 color={theme.accentText} size={20} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.shiftDay, { color: theme.text }]}>{t("home.shiftsReadyTitle")}</Text>
+                        <Text style={[styles.shiftTitle, { color: theme.muted }]}>{t("home.shiftsReadyBody")}</Text>
+                      </View>
+                      <ChevronRight color={theme.muted} size={22} />
+                    </View>
+                  </Pressable>
+                ) : null}
                 {emergencyCount > 0 ? (
                   <Pressable
                     style={[styles.card, { backgroundColor: theme.surface, borderColor: RED }]}

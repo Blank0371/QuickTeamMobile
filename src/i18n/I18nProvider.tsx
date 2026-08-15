@@ -22,9 +22,9 @@ type I18nContextType = {
 const Ctx = createContext<I18nContextType>({} as I18nContextType);
 export const useI18n = () => useContext(Ctx);
 
-// "auth.signIn" -> walks the nested json
-function resolve(obj: any, key: string): string {
-  return key.split(".").reduce((o, k) => o?.[k], obj) ?? key;
+// "auth.signIn" -> walks the nested json; undefined if the key is missing
+function resolve(obj: any, key: string): string | undefined {
+  return key.split(".").reduce((o, k) => o?.[k], obj);
 }
 
 // Replaces {{name}} placeholders with values from params.
@@ -52,7 +52,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   // Stable per-language so memoized consumers don't re-render on unrelated renders.
   const t = useCallback(
-    (key: string, params?: Record<string, string | number>) => interpolate(resolve(resources[lang], key), params),
+    (key: string, params?: Record<string, string | number>) =>
+      interpolate(resolve(resources[lang], key) ?? resolve(resources.en, key) ?? key, params),
     [lang]
   );
 
