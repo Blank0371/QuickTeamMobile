@@ -69,7 +69,9 @@
     "viewAll": "Показати всі",
     "today": "Сьогодні",
     "tomorrow": "Завтра",
-    "nextShifts": "Ваші найближчі зміни"
+    "nextShifts": "Ваші найближчі зміни",
+    "hoursWorked": "Відпрацьовані години",
+    "hoursUnit": "год"
   },
   "legal": {
     "sectionTitle": "Правова інформація",

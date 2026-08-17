@@ -69,7 +69,9 @@
     "viewAll": "Alle anzeigen",
     "today": "Heute",
     "tomorrow": "Morgen",
-    "nextShifts": "Deine nächsten Schichten"
+    "nextShifts": "Deine nächsten Schichten",
+    "hoursWorked": "Gearbeitete Stunden",
+    "hoursUnit": "Std."
   },
   "legal": {
     "sectionTitle": "Rechtliches",

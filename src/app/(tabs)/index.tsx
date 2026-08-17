@@ -9,6 +9,7 @@ import {
   StyleSheet, Text, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
@@ -50,6 +51,35 @@ const seenKey = (mitarbeiterId: string) => `home:lastMsgSeen:${mitarbeiterId}`;
 const hhmm = (s: string) => (s ? s.slice(0, 5) : "");
 const myRole = (s: CalShift) => s.participants.find((p) => p.is_me)?.role_name ?? null;
 
+// Deep-green shading that echoes the app's background gradient, rather than a
+// flat vivid green. Horizontal wash from the near-black carbon-green used at the
+// bottom of the screen backdrop into a mid forest green, left to right.
+const HOURS_FILL = ["#16241C", "#2F6B44"] as [string, string];
+const monthKey = (datum: string) => datum.slice(0, 7); // 'YYYY-MM'
+
+// Hours of a shift already worked as of `now`: 0 before it starts, the elapsed
+// portion while it's in progress, and its full length once it's over. Handles
+// overnight shifts (end time on/before start rolls into the next day).
+const workedSoFar = (s: CalShift, now: Date) => {
+  const start = new Date(`${s.datum}T${s.start_zeit}`);
+  let end = new Date(`${s.datum}T${s.end_zeit}`);
+  if (end <= start) end = new Date(end.getTime() + 86400000);
+  const elapsedMs = Math.min(now.getTime(), end.getTime()) - start.getTime();
+  return Math.max(0, elapsedMs) / 3_600_000;
+};
+
+// The month's target: soll_stunden is a weekly-hours × 4.33 figure for a
+// "typical" month. Normalise back to a week (÷4.33), scale by how many weeks
+// this specific month actually spans (days ÷ 7), and round to the nearest hour.
+const monthTarget = (soll: number, ym: string) => {
+  const [y, m] = ym.split("-").map(Number);
+  const days = new Date(y, m, 0).getDate();
+  return Math.round((soll / 4.33) * (days / 7));
+};
+
+// One row per month: 'YYYY-MM' and the hours already worked in it.
+type MonthHours = { ym: string; worked: number };
+
 const catKey = (typ: string) =>
   typ === "allgemein" ? "announcement"
     : typ === "aufgabenliste" ? "tasks"
@@ -70,6 +100,9 @@ export default function Home() {
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
   const [upcoming, setUpcoming] = useState<CalShift[]>([]);
   const [shiftsReady, setShiftsReady] = useState(0); // planning cycles with a proposal awaiting review
+  const [sollStunden, setSollStunden] = useState<number | null>(null);
+  const [monthHours, setMonthHours] = useState<MonthHours[]>([]); // newest first, current month at [0]
+  const [hoursExpanded, setHoursExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -78,10 +111,11 @@ export default function Home() {
     // who am I (for the greeting)
     const { data: me } = await supabase
       .from("mitarbeiter")
-      .select("vorname")
+      .select("vorname, soll_stunden")
       .eq("id", activeMitarbeiter.id)
       .maybeSingle();
     setFirstName((me?.vorname ?? "").trim());
+    setSollStunden((me?.soll_stunden as number | null) ?? null);
 
     // Managers see what they still have to decide on: vacation requests always,
     // shift swaps only when the business requires manager approval for them.
@@ -150,21 +184,47 @@ export default function Home() {
     } else {
       setApprovals([]);
       setShiftsReady(0);
-      // Employees see their next few upcoming shifts, drawn from the same
-      // roster RPC the calendar uses (respects the business visibility settings).
-      const today = iso(new Date());
+      // Employees see their next few upcoming shifts plus a worked-hours bar for
+      // recent months, both drawn from the same roster RPC the calendar uses
+      // (respects the business visibility settings).
+      const now = new Date();
+      const today = iso(now);
       const to = iso(new Date(Date.now() + 60 * 86400000));
+      // Reach back to the start of the month six months ago so the expandable
+      // bar has some history to show; go forward 60 days for upcoming shifts.
+      const from = iso(new Date(now.getFullYear(), now.getMonth() - 5, 1));
       const { data: sh } = await supabase.rpc("kalender_schichten", {
         p_betrieb_id: activeMitarbeiter.betrieb_id,
-        p_von: today,
+        p_von: from,
         p_bis: to,
         p_mitarbeiter_id: activeMitarbeiter.id,
       });
-      const mine = ((sh as CalShift[]) ?? [])
+      const all = (sh as CalShift[]) ?? [];
+
+      const mine = all
         .filter((s) => s.mine && s.datum >= today)
         .sort((a, b) => (a.datum + a.start_zeit).localeCompare(b.datum + b.start_zeit))
         .slice(0, 3);
       setUpcoming(mine);
+
+      // Hours already worked, per month: my shifts up to and including this month,
+      // summed by calendar month. A shift counts only for the time already elapsed
+      // — a finished shift counts fully, one in progress counts up to now, and one
+      // that hasn't started yet counts zero. Called-out shifts don't count.
+      const curKey = monthKey(today);
+      const worked: Record<string, number> = {};
+      all
+        .filter((s) => s.mine && !s.canceled && monthKey(s.datum) <= curKey)
+        .forEach((s) => {
+          const k = monthKey(s.datum);
+          worked[k] = (worked[k] ?? 0) + workedSoFar(s, now);
+        });
+      // Always show the current month, even with zero worked hours yet.
+      if (worked[curKey] == null) worked[curKey] = 0;
+      const rows: MonthHours[] = Object.entries(worked)
+        .map(([ym, w]) => ({ ym, worked: w }))
+        .sort((a, b) => b.ym.localeCompare(a.ym)); // newest first
+      setMonthHours(rows);
     }
 
     // broadcast messages for this business, newest first
@@ -226,6 +286,10 @@ export default function Home() {
     if (date === today) return t("home.today");
     if (date === tomorrow) return t("home.tomorrow");
     return d.toLocaleDateString(lang, { weekday: "long", day: "numeric", month: "long" });
+  };
+  const fmtMonth = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString(lang, { month: "long", year: "numeric" });
   };
   const fmtMsg = (isoStr: string) =>
     new Date(isoStr).toLocaleDateString(lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -348,6 +412,39 @@ export default function Home() {
             )}
           </>
         ) : (<>
+        {/* ---- Worked-hours bar (current month; tap to reveal earlier months) ---- */}
+        {sollStunden != null && monthHours.length > 0 ? (
+          <>
+            <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("home.hoursWorked")}</Text>
+            <Pressable
+              disabled={monthHours.length <= 1}
+              onPress={() => setHoursExpanded((v) => !v)}
+              style={{ gap: 8 }}
+            >
+              {(hoursExpanded ? monthHours : monthHours.slice(0, 1)).map((row) => {
+                const max = Math.max(1, monthTarget(sollStunden, row.ym));
+                const pct = Math.max(0, Math.min(1, row.worked / max));
+                return (
+                  <View key={row.ym} style={[styles.hoursTrack, { backgroundColor: theme.surface, borderColor: theme.accent }]}>
+                    <LinearGradient
+                      colors={HOURS_FILL}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.hoursFill, { width: `${pct * 100}%`, borderColor: theme.accent }]}
+                    />
+                    <View style={styles.hoursLabelRow}>
+                      <Text style={[styles.hoursMonth, { color: theme.text }]} numberOfLines={1}>{fmtMonth(row.ym)}</Text>
+                      <Text style={[styles.hoursValue, { color: theme.text }]}>
+                        {Math.round(row.worked)} {t("home.hoursUnit")}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </Pressable>
+          </>
+        ) : null}
+
         {/* ---- Upcoming shifts ---- */}
         <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("home.nextShifts")}</Text>
         {upcoming.length === 0 ? (
@@ -482,6 +579,12 @@ const styles = StyleSheet.create({
   shiftMetaRow: { flexDirection: "row", gap: 20, borderTopWidth: StyleSheet.hairlineWidth, marginTop: 12, paddingTop: 12 },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   metaText: { fontSize: 14, fontWeight: "600" },
+
+  hoursTrack: { height: 44, borderRadius: 12, borderWidth: 1.5, overflow: "hidden", justifyContent: "center" },
+  hoursFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRightWidth: 2, borderTopRightRadius: 12, borderBottomRightRadius: 12 },
+  hoursLabelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, gap: 8 },
+  hoursMonth: { fontSize: 15, fontWeight: "700", textTransform: "capitalize", flexShrink: 1 },
+  hoursValue: { fontSize: 15, fontWeight: "800" },
 
   msgHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },

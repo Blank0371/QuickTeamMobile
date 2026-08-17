@@ -69,7 +69,9 @@
     "viewAll": "Tümünü gör",
     "today": "Bugün",
     "tomorrow": "Yarın",
-    "nextShifts": "Yaklaşan vardiyaların"
+    "nextShifts": "Yaklaşan vardiyaların",
+    "hoursWorked": "Çalışılan saatler",
+    "hoursUnit": "sa"
   },
   "legal": {
     "sectionTitle": "Yasal",

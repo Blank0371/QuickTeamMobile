@@ -69,7 +69,9 @@
     "viewAll": "View all",
     "today": "Today",
     "tomorrow": "Tomorrow",
-    "nextShifts": "Your upcoming shifts"
+    "nextShifts": "Your upcoming shifts",
+    "hoursWorked": "Hours worked",
+    "hoursUnit": "h"
   },
   "legal": {
     "sectionTitle": "Legal",

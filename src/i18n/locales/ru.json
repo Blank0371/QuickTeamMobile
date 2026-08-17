@@ -69,7 +69,9 @@
     "viewAll": "Показать все",
     "today": "Сегодня",
     "tomorrow": "Завтра",
-    "nextShifts": "Ваши ближайшие смены"
+    "nextShifts": "Ваши ближайшие смены",
+    "hoursWorked": "Отработанные часы",
+    "hoursUnit": "ч"
   },
   "legal": {
     "sectionTitle": "Правовая информация",

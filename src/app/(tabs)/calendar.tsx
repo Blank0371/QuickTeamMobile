@@ -1,4 +1,4 @@
-import { router, useFocusEffect } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { AlertTriangle, CalendarPlus, Check, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Trash2, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -924,5 +924,4 @@ const styles = StyleSheet.create({
   submit: { borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   submitText: { fontSize: 15, fontWeight: "700" },
   confirmCard: { width: "100%", borderWidth: 1.5, borderRadius: 16, padding: 20 },
-  confirmBtn: { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
 });

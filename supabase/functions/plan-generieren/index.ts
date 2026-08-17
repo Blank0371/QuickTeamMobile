@@ -1,17 +1,17 @@
 // =============================================================================
-// "quick" shift-generation solver (planungszyklen → schicht_zuweisungen)
+// shift-generation solver (planungszyklen → schicht_zuweisungen)
 // -----------------------------------------------------------------------------
-// This is the SIMPLE ("quick") method referenced by solver_methode_fuer_betrieb().
-// The manager "Generate shifts" flow invokes it automatically when the business's
-// solver_methode resolves to 'quick' (small teams). The pure algorithm lives in
-// solver.ts; this file is just the DB load / persist / HTTP layer.
+// The manager "Generate shifts" flow invokes this. The pure algorithm lives in
+// solver.ts — a FEASIBILITY-FIRST greedy fill (hardest shifts first) followed by
+// a hill-climbing swap phase — and this file is just the DB load / persist / HTTP
+// layer. See solver.ts for the full algorithm + objective description.
 //
 // What it does, end to end:
 //   1. Loads an OFFEN planning cycle (planungszyklen).
 //   2. Materializes shift instances (schicht_instanzen) from the weekly templates
 //      (schicht_vorlagen) for every matching weekday in the cycle's date range.
-//   3. Greedily assigns employees to each instance's required roles, honoring the
-//      hard constraints and doing best-effort on the soft preferences below.
+//   3. Assigns employees to each instance's required roles (fill + swap), honoring
+//      the hard constraints and optimizing the soft objective below.
 //   4. Writes schicht_zuweisungen (quelle = 'solver') and flips the cycle to
 //      'vorschlag_bereit', recording any unfilled slots as warnings.
 //
@@ -36,10 +36,10 @@
 //     so the more overtime banked, the later they are picked.
 //   - Fairness: distance above the monthly soll_stunden target raises cost.
 //
-// DELIBERATELY OUT OF SCOPE for the quick method (belongs in moderate/optimal):
-//   - Global optimization / backtracking — this is a single greedy chronological
-//     pass; it does not reorder shifts to protect scarce specialists.
-//   - Team-wide balancing of preference satisfaction beyond the per-person decay.
+// DELIBERATELY OUT OF SCOPE (belongs in an "optimal" ILP/CP method):
+//   - Proven optimality / exhaustive backtracking — local search reaches a good
+//     local optimum, not necessarily the global one.
+//   - Moves larger than a pairwise swap (3-cycles, chains).
 //
 // CONFIRMED assumptions:
 //   - A cycle is one month; soll_stunden is the optimal monthly hours, used
@@ -466,7 +466,7 @@ export async function handler(req: Request): Promise<Response> {
     await db.from("planungszyklen").update({
       status: "solver_laeuft",
       solver_gestartet_am: new Date().toISOString(),
-      solver_methode: "quick",
+      solver_methode: "moderate",
       solver_fehler: null,
     }).eq("id", zyklus.id);
 
