@@ -28,6 +28,7 @@ type Msg = {
   options: Opt[];
   voteCounts: Record<string, number>;
   myVotes: Set<string>;
+  voters: Record<string, string[]>; // option_id → voter names (only for non-anonymous polls)
   attachments: Attach[];
   gelesen: boolean;
 };
@@ -46,17 +47,29 @@ type EmergencyMsg = {
   melderName: string;
 };
 
-type SwapMsg = {
-  id: string;
-  erstellt_am: string;
+type SwapCandidate = {
+  zuweisung_id: string;
+  schicht_instanz_id: string;
   datum: string;
   start_zeit: string;
   end_zeit: string;
-  status: "offen" | "vergeben";
-  eligible: boolean;
-  isAnbieter: boolean;
-  takenByMe: boolean;
+};
+type SwapMsg = {
+  id: string;              // benachrichtigung id
+  anfrageId: string;
+  erstellt_am: string;
+  datum: string;           // person1's offered shift
+  start_zeit: string;
+  end_zeit: string;
+  status: "offen" | "angefragt" | "wartet_auf_chef" | string;
+  isAnbieter: boolean;     // viewer offered this shift
+  isUebernehmer: boolean;  // viewer is the responder
   anbieterName: string;
+  uebernehmerName: string;
+  prefDates: string[];
+  eligible: boolean;       // viewer may respond (status offen)
+  candidates: SwapCandidate[]; // viewer's eligible give-shifts
+  gegen: { datum: string; start_zeit: string; end_zeit: string } | null; // responder's offered-back shift
 };
 
 type OpenRole = { rolle_id: string; name: string; benoetigt: number; besetzt: number; eligible: boolean };
@@ -75,6 +88,7 @@ export default function MessagesScreen() {
   const { user, activeMitarbeiter } = useAuth();
   const { theme } = useTheme();
   const { t, lang } = useI18n();
+  const isChef = activeMitarbeiter?.rolle_typ === "chef";
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [emergencies, setEmergencies] = useState<EmergencyMsg[]>([]);
@@ -111,7 +125,7 @@ export default function MessagesScreen() {
     const { data: people } = nameIds.length > 0
       ? await supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: nameIds })
       : { data: [] as any[] };
-    const nameOf = new Map((people ?? []).map((p: any) => [p.id, p.name]));
+    const nameOf = new Map<string, string>((people ?? []).map((p: any) => [p.id, p.name]));
 
     const built: EmergencyMsg[] = emgRows.map((m: any) => {
       const inhalt = m.inhalt ?? {};
@@ -179,42 +193,86 @@ export default function MessagesScreen() {
     setOpenShifts(built);
   }, [activeMitarbeiter]);
 
-  // Turn schicht_tausch broadcasts into interactive "take over this shift" cards.
+  // Turn schicht_tausch broadcasts into interactive swap cards. The mutable
+  // state lives in schichttausch_anfragen; the card renders different actions
+  // for the offerer / responder / chef depending on the anfrage status.
   const loadSwaps = useCallback(async (rows: any[]) => {
     if (!activeMitarbeiter || rows.length === 0) { setSwaps([]); return; }
     const anfrageIds = rows.map((m: any) => m.inhalt?.anfrage_id).filter(Boolean);
+    const today = new Date().toISOString().slice(0, 10);
 
-    const [anfragen, myRoles] = await Promise.all([
-      supabase.from("schichttausch_anfragen").select("id, status, anbietender_mitarbeiter_id, uebernehmender_mitarbeiter_id").in("id", anfrageIds),
+    const [anfragen, myRoles, myZuw] = await Promise.all([
+      supabase.from("schichttausch_anfragen")
+        .select("id, status, anbietender_mitarbeiter_id, uebernehmender_mitarbeiter_id, gegen_schicht_zuweisung_id, praeferenz_tage, gegen_datum, gegen_start, gegen_end")
+        .in("id", anfrageIds),
       supabase.from("mitarbeiter_rollen").select("rolle_id").eq("mitarbeiter_id", activeMitarbeiter.id),
+      supabase.from("schicht_zuweisungen")
+        .select("id, rolle_id, schicht_instanz_id, schicht_instanzen(datum, start_zeit, end_zeit)")
+        .eq("mitarbeiter_id", activeMitarbeiter.id).eq("attendet", true),
     ]);
     const aById = new Map((anfragen.data ?? []).map((a: any) => [a.id, a]));
     const myRoleSet = new Set((myRoles.data ?? []).map((r: any) => r.rolle_id));
-    // Only the offering employees named on these swap broadcasts.
-    const nameIds = Array.from(new Set(
-      rows.map((m: any) => m.inhalt?.anbieter_id).filter(Boolean)
-    )) as string[];
+
+    // The viewer's own upcoming shifts — the pool of shifts they could offer back.
+    const myShifts: SwapCandidate[] = (myZuw.data ?? []).map((z: any) => {
+      const inst = Array.isArray(z.schicht_instanzen) ? z.schicht_instanzen[0] : z.schicht_instanzen;
+      return {
+        zuweisung_id: z.id, rolle_id: z.rolle_id, schicht_instanz_id: z.schicht_instanz_id,
+        datum: inst?.datum ?? "", start_zeit: inst?.start_zeit ?? "", end_zeit: inst?.end_zeit ?? "",
+      } as any;
+    }).filter((s: any) => s.datum && s.datum >= today);
+    // Days I already work — I can't take on a second shift on any of them.
+    const myShiftDates = new Set<string>(myShifts.map((s: any) => s.datum));
+
+    const nameIds = Array.from(new Set([
+      ...rows.map((m: any) => m.inhalt?.anbieter_id).filter(Boolean),
+      ...(anfragen.data ?? []).map((a: any) => a.uebernehmender_mitarbeiter_id).filter(Boolean),
+    ])) as string[];
     const { data: people } = nameIds.length > 0
       ? await supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: nameIds })
       : { data: [] as any[] };
-    const nameOf = new Map((people ?? []).map((p: any) => [p.id, p.name]));
+    const nameOf = new Map<string, string>((people ?? []).map((p: any) => [p.id, p.name]));
 
     const built: SwapMsg[] = rows.map((m: any) => {
       const inhalt = m.inhalt ?? {};
-      const a = aById.get(inhalt.anfrage_id);
-      const offen = (a?.status ?? "offen") === "offen";
+      const a = aById.get(inhalt.anfrage_id) ?? {};
+      const status = a.status ?? "offen";
       const isAnbieter = inhalt.anbieter_id === activeMitarbeiter.id;
+      const isUebernehmer = a.uebernehmender_mitarbeiter_id === activeMitarbeiter.id;
+      const prefDates = ((inhalt.praeferenz_tage ?? a.praeferenz_tage ?? []) as string[]);
+      const anbieterRollen = new Set<string>((inhalt.anbieter_rollen ?? []) as string[]);
+      // Days the offerer already works — they can't take a give-back shift then.
+      const anbieterBusy = new Set<string>((inhalt.anbieter_belegt_tage ?? []) as string[]);
+      const offMonth = (inhalt.datum ?? "").slice(0, 7);
+      // I can only take the offered shift if I'm qualified for it AND not already
+      // working that day.
+      const canTakeOffered = myRoleSet.has(inhalt.rolle_id) && !myShiftDates.has(inhalt.datum);
+      // Which of my shifts I could offer back: I'm qualified for the offered shift,
+      // the offerer is qualified for mine, and it falls on a preferred day (or, if
+      // none were named, in the same month as the offered shift).
+      const candidates = (!isAnbieter && canTakeOffered)
+        ? myShifts.filter((s: any) =>
+            s.schicht_instanz_id !== inhalt.schicht_instanz_id &&
+            anbieterRollen.has(s.rolle_id) &&
+            !anbieterBusy.has(s.datum) &&
+            (prefDates.length ? prefDates.includes(s.datum) : (s.datum.slice(0, 7) === offMonth)))
+        : [];
       return {
         id: m.id,
+        anfrageId: inhalt.anfrage_id,
         erstellt_am: m.erstellt_am,
         datum: inhalt.datum ?? "",
         start_zeit: inhalt.start_zeit ?? "",
         end_zeit: inhalt.end_zeit ?? "",
-        status: offen ? "offen" : "vergeben",
-        eligible: offen && myRoleSet.has(inhalt.rolle_id) && !isAnbieter,
+        status,
         isAnbieter,
-        takenByMe: a?.uebernehmender_mitarbeiter_id === activeMitarbeiter.id,
+        isUebernehmer,
         anbieterName: inhalt.anbieter_id ? (nameOf.get(inhalt.anbieter_id) ?? "") : "",
+        uebernehmerName: a.uebernehmender_mitarbeiter_id ? (nameOf.get(a.uebernehmender_mitarbeiter_id) ?? "") : "",
+        prefDates,
+        eligible: status === "offen" && !isAnbieter && canTakeOffered && candidates.length > 0,
+        candidates,
+        gegen: a.gegen_datum ? { datum: a.gegen_datum, start_zeit: a.gegen_start, end_zeit: a.gegen_end } : null,
       };
     });
     setSwaps(built);
@@ -246,23 +304,33 @@ export default function MessagesScreen() {
     const ids = list.map((m: any) => m.id);
     if (ids.length === 0) { setMessages([]); setLoading(false); return; }
 
-    // Resolve just the broadcast authors' names; my own ids drive vote highlighting.
-    const autorIds = Array.from(new Set(list.map((m: any) => m.autor_id).filter(Boolean))) as string[];
-    const [tasks, opts, votes, atts, reads, people, meRows] = await Promise.all([
+    // Which broadcasts are non-anonymous polls — for those we show voter names.
+    const openPollIds = new Set(list.filter((m: any) => m.typ === "umfrage" && !m.anonym).map((m: any) => m.id));
+
+    const [tasks, opts, votes, atts, reads] = await Promise.all([
       supabase.from("aufgaben").select("id, benachrichtigung_id, text, reihenfolge, erledigt_von, erledigt_am").in("benachrichtigung_id", ids),
       supabase.from("umfrage_optionen").select("id, benachrichtigung_id, text, reihenfolge").in("benachrichtigung_id", ids),
       supabase.from("umfrage_stimmen").select("benachrichtigung_id, option_id, mitarbeiter_id").in("benachrichtigung_id", ids),
       supabase.from("nachricht_anhaenge").select("id, benachrichtigung_id, datei_name").in("benachrichtigung_id", ids),
       supabase.from("benachrichtigung_gelesen").select("benachrichtigung_id").in("benachrichtigung_id", ids),
-      autorIds.length > 0
-        ? supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: autorIds })
-        : Promise.resolve({ data: [] as any[] }),
-      supabase.from("mitarbeiter").select("id").eq("auth_id", user.id),
     ]);
+
+    // Names to resolve: broadcast authors + voters of non-anonymous polls.
+    const autorIds = list.map((m: any) => m.autor_id).filter(Boolean) as string[];
+    const voterIds = (votes.data ?? [])
+      .filter((v: any) => openPollIds.has(v.benachrichtigung_id))
+      .map((v: any) => v.mitarbeiter_id);
+    const nameIds = Array.from(new Set([...autorIds, ...voterIds]));
+
+    const people = nameIds.length > 0
+      ? await supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: nameIds })
+      : { data: [] as any[] };
 
     const nameOf = new Map<string, string>();
     (people.data ?? []).forEach((p: any) => nameOf.set(p.id, p.name));
-    const mine = new Set<string>((meRows.data ?? []).map((r: any) => r.id));
+    // Only the currently active persona's votes count as "mine" — one auth
+    // account can back several mitarbeiter rows (persona switching).
+    const mine = new Set<string>([activeMitarbeiter.id]);
     const readSet = new Set((reads.data ?? []).map((r: any) => r.benachrichtigung_id));
 
     const byMsg = <T,>(arr: any[] | null) => {
@@ -282,9 +350,15 @@ export default function MessagesScreen() {
     const built: Msg[] = list.map((m: any) => {
       const voteCounts: Record<string, number> = {};
       const myVotes = new Set<string>();
+      const voters: Record<string, string[]> = {};
+      const showVoters = m.typ === "umfrage" && !m.anonym;
       (votesBy.get(m.id) ?? []).forEach((v: any) => {
         voteCounts[v.option_id] = (voteCounts[v.option_id] ?? 0) + 1;
         if (mine.has(v.mitarbeiter_id)) myVotes.add(v.option_id);
+        if (showVoters) {
+          const nm = nameOf.get(v.mitarbeiter_id);
+          if (nm) (voters[v.option_id] ??= []).push(nm);
+        }
       });
       return {
         ...m,
@@ -293,6 +367,7 @@ export default function MessagesScreen() {
         options: (optsBy.get(m.id) ?? []).sort((a, b) => a.reihenfolge - b.reihenfolge),
         voteCounts,
         myVotes,
+        voters,
         attachments: attsBy.get(m.id) ?? [],
         gelesen: readSet.has(m.id),
       };
@@ -318,6 +393,7 @@ export default function MessagesScreen() {
       .channel(`feed:${bid}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "schicht_zuweisungen", filter: `betrieb_id=eq.${bid}` }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "benachrichtigungen", filter: `betrieb_id=eq.${bid}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "schichttausch_anfragen", filter: `betrieb_id=eq.${bid}` }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [activeMitarbeiter, load]);
@@ -363,16 +439,63 @@ export default function MessagesScreen() {
     load();
   };
 
-  const takeSwap = async (m: SwapMsg) => {
+  // person2 responds to an open offer, giving one of their own shifts in return.
+  const respondSwap = async (m: SwapMsg, gegenZuweisungId: string) => {
     setSwapDetail(null);
-    const { data, error } = await supabase.rpc("schicht_tausch_uebernehmen", { p_benachrichtigung_id: m.id, p_mitarbeiter_id: activeMitarbeiter?.id ?? null });
+    const { data, error } = await supabase.rpc("tausch_annehmen", {
+      p_benachrichtigung_id: m.id,
+      p_gegen_zuweisung_id: gegenZuweisungId,
+      p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+    });
     if (error) { Alert.alert(t("shiftSwap.takeFailed")); load(); return; }
     const code = data as string;
-    if (code === "besetzt") Alert.alert(t("shiftSwap.tookTitle"), t("shiftSwap.tookBody"));
+    if (code === "angefragt") Alert.alert(t("shiftSwap.respondedTitle"), t("shiftSwap.respondedBody"));
     else if (code === "bereits_besetzt") Alert.alert(t("shiftSwap.alreadyTaken"));
     else if (code === "schon_zugewiesen") Alert.alert(t("shiftSwap.alreadyOn"));
-    else if (code === "nicht_qualifiziert") Alert.alert(t("shiftSwap.notQualified"));
+    else if (code === "nicht_qualifiziert" || code === "anbieter_nicht_qualifiziert") Alert.alert(t("shiftSwap.notQualified"));
+    else if (code === "nicht_wunschtag") Alert.alert(t("shiftSwap.notPreferredDay"));
+    else if (code === "schon_belegt") Alert.alert(t("shiftSwap.dayConflict"));
+    else if (code === "anbieter_belegt") Alert.alert(t("shiftSwap.anbieterDayConflict"));
     else Alert.alert(t("shiftSwap.takeFailed"));
+    load();
+  };
+
+  // person1 confirms or declines a responder's specific offer.
+  const anbieterDecide = async (m: SwapMsg, zustimmen: boolean) => {
+    setSwapDetail(null);
+    const { data, error } = await supabase.rpc("tausch_anbieter_entscheiden", {
+      p_anfrage_id: m.anfrageId, p_zustimmen: zustimmen, p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+    });
+    if (error) { Alert.alert(t("shiftSwap.takeFailed")); load(); return; }
+    const code = data as string;
+    if (code === "bestaetigt") Alert.alert(t("shiftSwap.swappedTitle"), t("shiftSwap.swappedBody"));
+    else if (code === "wartet_auf_chef") Alert.alert(t("shiftSwap.sentToChefTitle"), t("shiftSwap.sentToChefBody"));
+    else if (code === "abgelehnt") Alert.alert(t("shiftSwap.declinedTitle"), t("shiftSwap.declinedBody"));
+    else if (code === "abgelehnt_system") Alert.alert(t("shiftSwap.swapFailed"));
+    load();
+  };
+
+  // chef approves or rejects when the business requires approval.
+  const chefDecide = async (m: SwapMsg, genehmigt: boolean) => {
+    setSwapDetail(null);
+    const { data, error } = await supabase.rpc("tausch_entscheiden", {
+      p_anfrage_id: m.anfrageId, p_genehmigt: genehmigt, p_grund: null,
+    });
+    if (error) { Alert.alert(t("shiftSwap.takeFailed")); load(); return; }
+    const code = data as string;
+    if (code === "bestaetigt") Alert.alert(t("shiftSwap.swappedTitle"), t("shiftSwap.swappedBody"));
+    else if (code === "abgelehnt_chef") Alert.alert(t("shiftSwap.chefDeclinedTitle"), t("shiftSwap.chefDeclinedBody"));
+    else if (code === "abgelehnt_system") Alert.alert(t("shiftSwap.swapFailed"));
+    load();
+  };
+
+  // person1 withdraws their offer entirely.
+  const withdrawSwap = async (m: SwapMsg) => {
+    setSwapDetail(null);
+    const { error } = await supabase.rpc("tausch_zurueckziehen", {
+      p_anfrage_id: m.anfrageId, p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+    });
+    if (error) { Alert.alert(t("shiftSwap.withdrawFailed")); }
     load();
   };
 
@@ -390,7 +513,7 @@ export default function MessagesScreen() {
     } else {
       next = m.myVotes.has(optionId) ? [] : [optionId];
     }
-    await supabase.rpc("abstimmen", { p_benachrichtigung_id: m.id, p_option_ids: next });
+    await supabase.rpc("abstimmen", { p_benachrichtigung_id: m.id, p_option_ids: next, p_mitarbeiter_id: activeMitarbeiter?.id ?? null });
     load();
   };
 
@@ -446,7 +569,17 @@ export default function MessagesScreen() {
     })),
     ...emergencies.map((e) => ({ kind: "emergency" as const, ts: new Date(e.erstellt_am).getTime(), pinned: false as const, prio: 0, e })),
     ...openShifts.map((o) => ({ kind: "open" as const, ts: new Date(o.erstellt_am).getTime(), pinned: false as const, prio: 0, o })),
-    ...swaps.map((s) => ({ kind: "swap" as const, ts: new Date(s.erstellt_am).getTime(), pinned: false as const, prio: 0, s })),
+    ...swaps
+      .filter((s) => {
+        // The offerer and responder always see their own swap; the chef sees it
+        // once it needs approval. Everyone else only sees an OPEN offer they can
+        // actually respond to — people who can't take the shift never see it.
+        if (s.isAnbieter || s.isUebernehmer) return true;
+        if (s.status === "offen") return s.eligible;
+        if (s.status === "wartet_auf_chef") return isChef;
+        return false;
+      })
+      .map((s) => ({ kind: "swap" as const, ts: new Date(s.erstellt_am).getTime(), pinned: false as const, prio: 0, s })),
   ]
     .filter((item) => {
       if (category === "all") return true;
@@ -527,7 +660,7 @@ export default function MessagesScreen() {
           ) : item.kind === "open" ? (
             <OpenShiftCard key={item.o.id} o={item.o} theme={theme} t={t} lang={lang} onOpen={() => setOpenDetail(item.o)} />
           ) : item.kind === "swap" ? (
-            <SwapCard key={item.s.id} s={item.s} theme={theme} t={t} lang={lang} onOpen={() => setSwapDetail(item.s)} />
+            <SwapCard key={item.s.id} s={item.s} theme={theme} t={t} lang={lang} isChef={isChef} onOpen={() => setSwapDetail(item.s)} />
           ) : (
             <SummaryCard key={item.m.id} m={item.m} theme={theme} t={t} fmt={fmt}
               onPress={() => setSelectedId(item.m.id)} />
@@ -587,8 +720,12 @@ export default function MessagesScreen() {
         theme={theme}
         t={t}
         lang={lang}
+        isChef={isChef}
         onClose={() => setSwapDetail(null)}
-        onTake={() => swapDetail && takeSwap(swapDetail)}
+        onRespond={(gegenId: string) => swapDetail && respondSwap(swapDetail, gegenId)}
+        onAnbieterDecide={(ok: boolean) => swapDetail && anbieterDecide(swapDetail, ok)}
+        onChefDecide={(ok: boolean) => swapDetail && chefDecide(swapDetail, ok)}
+        onWithdraw={() => swapDetail && withdrawSwap(swapDetail)}
       />
     </SafeAreaView>
   );
@@ -689,15 +826,21 @@ function DetailBody({ m, theme, t, fmt, onToggleTask, onVote }: any) {
         const count = m.voteCounts[opt.id] ?? 0;
         const picked = m.myVotes.has(opt.id);
         const pct = totalVotes ? Math.round((count / totalVotes) * 100) : 0;
+        const voterNames: string[] = m.voters?.[opt.id] ?? [];
         return (
-          <Pressable key={opt.id} style={styles.optRow} onPress={() => onVote(opt.id)}>
-            <View style={[styles.optFill, { backgroundColor: theme.bg, width: `${pct}%` }]} />
-            <View style={[styles.radio, { borderColor: theme.border }, picked && { borderColor: theme.accent }]}>
-              {picked && <View style={[styles.radioDot, { backgroundColor: theme.accent }]} />}
-            </View>
-            <Text style={[styles.optText, { color: theme.text }]}>{opt.text}</Text>
-            <Text style={[styles.optCount, { color: theme.muted }]}>{count}</Text>
-          </Pressable>
+          <View key={opt.id}>
+            <Pressable style={styles.optRow} onPress={() => onVote(opt.id)}>
+              <View style={[styles.optFill, { backgroundColor: theme.bg, width: `${pct}%` }]} />
+              <View style={[styles.radio, { borderColor: theme.border }, picked && { borderColor: theme.accent }]}>
+                {picked && <View style={[styles.radioDot, { backgroundColor: theme.accent }]} />}
+              </View>
+              <Text style={[styles.optText, { color: theme.text }]}>{opt.text}</Text>
+              <Text style={[styles.optCount, { color: theme.muted }]}>{count}</Text>
+            </Pressable>
+            {!m.anonym && voterNames.length > 0 ? (
+              <Text style={[styles.voterNames, { color: theme.muted }]}>{voterNames.join(", ")}</Text>
+            ) : null}
+          </View>
         );
       })}
       {m.typ === "umfrage" ? (
@@ -916,9 +1059,36 @@ const swWhen = (s: SwapMsg, lang: string) => {
     : "";
 };
 
-// Tappable summary for a handed-over shift. Tapping opens the take-over modal.
-function SwapCard({ s, theme, t, lang, onOpen }: { s: SwapMsg; theme: any; t: any; lang: string; onOpen: () => void }) {
-  const taken = s.status === "vergeben";
+const swDay = (datum: string, start: string, end: string, lang: string) => {
+  const hhmm = (x: string) => (x ? x.slice(0, 5) : "");
+  return datum
+    ? `${new Date(datum + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" })} · ${hhmm(start)}–${hhmm(end)}`
+    : "";
+};
+
+// A short status line + whether the current viewer has an action to take.
+function swapStatus(s: SwapMsg, isChef: boolean, t: any): { line: string; action: boolean } {
+  if (s.status === "offen") {
+    if (s.isAnbieter) return { line: t("shiftSwap.yourOffer"), action: false };
+    if (s.eligible) return { line: t("shiftSwap.tapToRespond"), action: true };
+    return { line: t("shiftSwap.notEligible"), action: false };
+  }
+  if (s.status === "angefragt") {
+    if (s.isAnbieter) return { line: t("shiftSwap.needsYourConfirm"), action: true };
+    if (s.isUebernehmer) return { line: t("shiftSwap.waitingAnbieter"), action: false };
+    return { line: t("shiftSwap.statusPending"), action: false };
+  }
+  if (s.status === "wartet_auf_chef") {
+    if (isChef) return { line: t("shiftSwap.needsChefApproval"), action: true };
+    if (s.isAnbieter || s.isUebernehmer) return { line: t("shiftSwap.waitingChef"), action: false };
+    return { line: t("shiftSwap.statusPending"), action: false };
+  }
+  return { line: t("shiftSwap.statusPending"), action: false };
+}
+
+// Tappable summary for a shift-swap offer. Tapping opens the detail modal.
+function SwapCard({ s, theme, t, lang, isChef, onOpen }: { s: SwapMsg; theme: any; t: any; lang: string; isChef: boolean; onOpen: () => void }) {
+  const st = swapStatus(s, isChef, t);
   return (
     <Pressable style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.accent }]} onPress={onOpen}>
       <View style={styles.cardHead}>
@@ -929,29 +1099,27 @@ function SwapCard({ s, theme, t, lang, onOpen }: { s: SwapMsg; theme: any; t: an
       <Text style={[styles.cardText, { color: theme.text }]}>{swWhen(s, lang)}</Text>
       {s.anbieterName ? <Text style={[styles.taskMeta, { color: theme.muted }]}>{s.anbieterName}</Text> : null}
 
-      {taken ? (
-        <View style={[styles.eligible, { backgroundColor: GREEN + "22" }]}>
-          <Text style={{ color: GREEN, fontWeight: "700" }}>
-            ✓ {s.takenByMe ? t("shiftSwap.takenByYou") : t("shiftSwap.taken")}
-          </Text>
-        </View>
-      ) : s.isAnbieter ? (
-        <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.yourShift")}</Text>
-      ) : s.eligible ? (
+      {st.action ? (
         <View style={[styles.takeBtn, { backgroundColor: theme.accent, alignSelf: "flex-start" }]}>
-          <Text style={{ color: theme.accentText, fontWeight: "700" }}>{t("shiftSwap.tapToTake")}</Text>
+          <Text style={{ color: theme.accentText, fontWeight: "700" }}>{st.line}</Text>
         </View>
       ) : (
-        <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.notEligible")}</Text>
+        <Text style={[styles.taskMeta, { color: theme.muted }]}>{st.line}</Text>
       )}
       <Text style={[styles.cardFoot, { color: theme.muted }]}>{postedAt(s.erstellt_am, lang)}</Text>
     </Pressable>
   );
 }
 
-// Take-over modal — hold to commit, first come first served.
-function SwapModal({ s, theme, t, lang, onClose, onTake }: { s: SwapMsg | null; theme: any; t: any; lang: string; onClose: () => void; onTake: () => void }) {
-  const taken = s?.status === "vergeben";
+// Detail modal — renders the right action set for the viewer's role + status.
+function SwapModal({ s, theme, t, lang, isChef, onClose, onRespond, onAnbieterDecide, onChefDecide, onWithdraw }: {
+  s: SwapMsg | null; theme: any; t: any; lang: string; isChef: boolean;
+  onClose: () => void; onRespond: (gegenId: string) => void;
+  onAnbieterDecide: (ok: boolean) => void; onChefDecide: (ok: boolean) => void; onWithdraw: () => void;
+}) {
+  const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => { setPicked(null); }, [s?.id, s?.status]);
+
   return (
     <Modal visible={!!s} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -964,23 +1132,85 @@ function SwapModal({ s, theme, t, lang, onClose, onTake }: { s: SwapMsg | null; 
                 <Text style={[styles.badge, { color: theme.accent }]}>{t("notifications.item.shiftSwitch")}</Text>
               </View>
               <Text style={[styles.cardTitle, { color: theme.text }]}>{t("shiftSwap.cardTitle")}</Text>
+
+              {/* person1's shift being offered */}
+              <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.offeredShift")}</Text>
               <Text style={[styles.cardText, { color: theme.text }]}>{swWhen(s, lang)}</Text>
               {s.anbieterName ? <Text style={[styles.taskMeta, { color: theme.muted }]}>{s.anbieterName}</Text> : null}
 
-              {taken ? (
-                <View style={[styles.eligible, { backgroundColor: GREEN + "22" }]}>
-                  <Text style={{ color: GREEN, fontWeight: "700" }}>
-                    ✓ {s.takenByMe ? t("shiftSwap.takenByYou") : t("shiftSwap.taken")}
-                  </Text>
+              {/* preferred days */}
+              {s.prefDates.length > 0 ? (
+                <Text style={[styles.taskMeta, { color: theme.muted }]}>
+                  {t("shiftSwap.preferredDays")}: {s.prefDates.map((d) => new Date(d + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" })).join(", ")}
+                </Text>
+              ) : null}
+
+              {/* the offered-back shift, once a responder has chosen one */}
+              {s.gegen ? (
+                <View style={{ marginTop: 4 }}>
+                  <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.givenBack")}{s.uebernehmerName ? ` · ${s.uebernehmerName}` : ""}</Text>
+                  <Text style={[styles.cardText, { color: theme.text }]}>{swDay(s.gegen.datum, s.gegen.start_zeit, s.gegen.end_zeit, lang)}</Text>
                 </View>
-              ) : s.isAnbieter ? (
-                <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.yourShift")}</Text>
-              ) : s.eligible ? (
-                <View style={{ marginTop: 6 }}>
-                  <HoldButton label={t("shiftSwap.holdToTake")} onConfirm={onTake} color={theme.accent} fillColor="rgba(0,0,0,0.28)" textColor={theme.accentText} holdMs={2000} />
+              ) : null}
+
+              {/* ---- Action area ---- */}
+              {s.status === "offen" && s.isAnbieter ? (
+                <View style={{ marginTop: 8, gap: 8 }}>
+                  <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.yourOffer")}</Text>
+                  <Pressable style={[styles.takeBtn, { borderWidth: 1.5, borderColor: RED, alignSelf: "stretch", alignItems: "center" }]} onPress={onWithdraw}>
+                    <Text style={{ color: RED, fontWeight: "700" }}>{t("shiftSwap.withdraw")}</Text>
+                  </Pressable>
+                </View>
+              ) : s.status === "offen" && s.eligible ? (
+                <View style={{ marginTop: 8, gap: 8 }}>
+                  <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.pickGiveShift")}</Text>
+                  {s.candidates.map((c) => {
+                    const on = picked === c.zuweisung_id;
+                    return (
+                      <Pressable
+                        key={c.zuweisung_id}
+                        onPress={() => setPicked(c.zuweisung_id)}
+                        style={[styles.osRoleRow, { borderColor: on ? theme.accent : "#8883", borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 10 }]}
+                      >
+                        <View style={[styles.radio, { borderColor: theme.border }, on && { borderColor: theme.accent }]}>
+                          {on && <View style={[styles.radioDot, { backgroundColor: theme.accent }]} />}
+                        </View>
+                        <Text style={{ color: theme.text, fontWeight: "600", flex: 1 }}>
+                          {swDay(c.datum, c.start_zeit, c.end_zeit, lang)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                  <Pressable
+                    style={[styles.takeBtn, { backgroundColor: theme.accent, alignSelf: "stretch", alignItems: "center", marginTop: 4, opacity: picked ? 1 : 0.5 }]}
+                    disabled={!picked}
+                    onPress={() => picked && onRespond(picked)}
+                  >
+                    <Text style={{ color: theme.accentText, fontWeight: "700" }}>{t("shiftSwap.sendOffer")}</Text>
+                  </Pressable>
+                </View>
+              ) : s.status === "angefragt" && s.isAnbieter ? (
+                <View style={{ marginTop: 8, gap: 10 }}>
+                  <Text style={{ color: theme.text, fontSize: 14 }}>{t("shiftSwap.confirmSwapBody")}</Text>
+                  <Pressable style={[styles.takeBtn, { backgroundColor: theme.accent, alignSelf: "stretch", alignItems: "center" }]} onPress={() => onAnbieterDecide(true)}>
+                    <Text style={{ color: theme.accentText, fontWeight: "700" }}>{t("shiftSwap.confirmSwap")}</Text>
+                  </Pressable>
+                  <Pressable style={[styles.takeBtn, { borderWidth: 1.5, borderColor: RED, alignSelf: "stretch", alignItems: "center" }]} onPress={() => onAnbieterDecide(false)}>
+                    <Text style={{ color: RED, fontWeight: "700" }}>{t("shiftSwap.decline")}</Text>
+                  </Pressable>
+                </View>
+              ) : s.status === "wartet_auf_chef" && isChef ? (
+                <View style={{ marginTop: 8, gap: 10 }}>
+                  <Text style={{ color: theme.text, fontSize: 14 }}>{t("shiftSwap.chefApproveBody")}</Text>
+                  <Pressable style={[styles.takeBtn, { backgroundColor: theme.accent, alignSelf: "stretch", alignItems: "center" }]} onPress={() => onChefDecide(true)}>
+                    <Text style={{ color: theme.accentText, fontWeight: "700" }}>{t("shiftSwap.approve")}</Text>
+                  </Pressable>
+                  <Pressable style={[styles.takeBtn, { borderWidth: 1.5, borderColor: RED, alignSelf: "stretch", alignItems: "center" }]} onPress={() => onChefDecide(false)}>
+                    <Text style={{ color: RED, fontWeight: "700" }}>{t("shiftSwap.reject")}</Text>
+                  </Pressable>
                 </View>
               ) : (
-                <Text style={[styles.taskMeta, { color: theme.muted }]}>{t("shiftSwap.notEligible")}</Text>
+                <Text style={[styles.taskMeta, { color: theme.muted, marginTop: 8 }]}>{swapStatus(s, isChef, t).line}</Text>
               )}
             </ScrollView>
           )}
@@ -1038,6 +1268,7 @@ const styles = StyleSheet.create({
   radioDot: { width: 10, height: 10, borderRadius: 5 },
   optText: { fontSize: 15, flex: 1 },
   optCount: { fontSize: 14, fontWeight: "600" },
+  voterNames: { fontSize: 12, paddingHorizontal: 10, marginTop: 4, marginBottom: 8 },
 
   docRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 },
   docName: { fontSize: 15 },

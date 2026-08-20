@@ -54,7 +54,10 @@ const myRole = (s: CalShift) => s.participants.find((p) => p.is_me)?.role_name ?
 // Deep-green shading that echoes the app's background gradient, rather than a
 // flat vivid green. Horizontal wash from the near-black carbon-green used at the
 // bottom of the screen backdrop into a mid forest green, left to right.
-const HOURS_FILL = ["#16241C", "#2F6B44"] as [string, string];
+const HOURS_FILL_DARK = ["#16241C", "#2F6B44"] as [string, string];
+// Light: pale sage → soft green wash. Light enough that the dark-green labels
+// stay legible over the fill, while clearly reading as "progress".
+const HOURS_FILL_LIGHT = ["#CFE0C9", "#A7C8A0"] as [string, string];
 const monthKey = (datum: string) => datum.slice(0, 7); // 'YYYY-MM'
 
 // Hours of a shift already worked as of `now`: 0 before it starts, the elapsed
@@ -90,7 +93,7 @@ const catKey = (typ: string) =>
 
 export default function Home() {
   const { user, activeMitarbeiter } = useAuth();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { t, lang } = useI18n();
 
   const isChef = activeMitarbeiter?.rolle_typ === "chef";
@@ -122,10 +125,10 @@ export default function Home() {
     if (isChef) {
       const { data: settings } = await supabase
         .from("betriebs_einstellungen")
-        .select("tausch_freigabe_erforderlich")
+        .select("ask_chef_for_shift_switch")
         .eq("betrieb_id", activeMitarbeiter.betrieb_id)
         .maybeSingle();
-      const swapApprovalOn = !!settings?.tausch_freigabe_erforderlich;
+      const swapApprovalOn = !!settings?.ask_chef_for_shift_switch;
 
       const [vac, swaps, team, emg, ready] = await Promise.all([
         supabase.from("urlaub")
@@ -134,11 +137,10 @@ export default function Home() {
           .eq("status", "requested")
           .order("von", { ascending: true }),
         swapApprovalOn
-          ? supabase.from("benachrichtigungen")
-              .select("id, titel, autor_id, erstellt_am")
+          ? supabase.from("schichttausch_anfragen")
+              .select("id, anbietender_mitarbeiter_id, erstellt_am")
               .eq("betrieb_id", activeMitarbeiter.betrieb_id)
-              .eq("typ", "aenderungswunsch")
-              .is("geloescht_am", null)
+              .eq("status", "wartet_auf_chef")
               .order("erstellt_am", { ascending: false })
           : Promise.resolve({ data: [] as any[] }),
         supabase.from("mitarbeiter").select("id, vorname, nachname")
@@ -176,8 +178,8 @@ export default function Home() {
       const swapItems: PendingApproval[] = (swaps.data ?? []).map((s: any) => ({
         id: `swap:${s.id}`,
         kind: "swap",
-        who: s.autor_id ? (nameById.get(s.autor_id) ?? "") : "",
-        detail: s.titel ?? "",
+        who: s.anbietender_mitarbeiter_id ? (nameById.get(s.anbietender_mitarbeiter_id) ?? "") : "",
+        detail: "",
       }));
       setApprovals([...emgItems, ...vacItems, ...swapItems]);
       setUpcoming([]);
@@ -427,7 +429,7 @@ export default function Home() {
                 return (
                   <View key={row.ym} style={[styles.hoursTrack, { backgroundColor: theme.surface, borderColor: theme.accent }]}>
                     <LinearGradient
-                      colors={HOURS_FILL}
+                      colors={isDark ? HOURS_FILL_DARK : HOURS_FILL_LIGHT}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={[styles.hoursFill, { width: `${pct * 100}%`, borderColor: theme.accent }]}

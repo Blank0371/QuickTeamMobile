@@ -42,9 +42,11 @@
 //   - Moves larger than a pairwise swap (3-cycles, chains).
 //
 // CONFIRMED assumptions:
-//   - A cycle is one month; soll_stunden is the optimal monthly hours, used
-//     directly as the per-cycle fairness target (no scaling). max_stunden_hart is
-//     likewise a MONTHLY cap.
+//   - A cycle is one month; soll_stunden is the optimal monthly hours and
+//     max_stunden_hart the hard monthly cap. Both are PRO-RATED down by the share
+//     of an employee's would-be working days that approved urlaub removes, so a
+//     holiday shrinks the target instead of being crammed into the other days
+//     (see verfuegbarkeitsFaktor in solver.ts).
 //   - Availability (verfuegbarkeiten) is IGNORED; only approved urlaub blocks a day.
 //   - Reruns are AVOIDED: the function only runs on a cycle in 'offen' or
 //     'deadline_erreicht'. A cycle that is already running / has a proposal /

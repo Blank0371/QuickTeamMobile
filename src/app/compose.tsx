@@ -1,14 +1,14 @@
 // src/app/compose.tsx — chef composes a broadcast (announcement / tasks / poll)
 import { router, useLocalSearchParams } from "expo-router";
 import { ChevronDown, Plus, X } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-    ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet,
+    ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet,
     Switch, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n/I18nProvider";
-import { shifts } from "../lib/shifts";
+import { useAuth } from "../context/auth";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../theme/ThemeProvider";
 import { ScreenGradient } from "../components/ScreenGradient";
@@ -26,11 +26,12 @@ export default function ComposeScreen() {
   const { betrieb, role } = useLocalSearchParams<{ betrieb: string; role: string }>();
   const { theme } = useTheme();
   const { t } = useI18n();
+  const { activeMitarbeiter } = useAuth();
 
-  // manager posts all types; employee only announcements + switch requests
+  // manager posts all types; employees get announcements, polls + switch requests
   const CATS: Cat[] = role === "chef"
     ? ["allgemein", "aufgabenliste", "umfrage", "aenderungswunsch"]
-    : ["allgemein", "aenderungswunsch"];
+    : ["allgemein", "umfrage", "aenderungswunsch"];
 
   const [cat, setCat] = useState<Cat>("allgemein");
   const [titel, setTitel] = useState("");
@@ -41,27 +42,53 @@ export default function ComposeScreen() {
   const [anon, setAnon] = useState(false);
   const [prio, setPrio] = useState<"normal" | "wichtig" | "dringend">("normal");
   const [giveShiftId, setGiveShiftId] = useState<string | null>(null);
-  const [wantDate, setWantDate] = useState<string | null>(null);
+  const [prefDates, setPrefDates] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // shift-swap options (mock data source)
+  // shift-swap options — the current user's own upcoming published shifts.
+  type SwapShift = { id: string; datum: string; start_zeit: string; end_zeit: string; label: string | null };
+  const [myShifts, setMyShifts] = useState<SwapShift[]>([]);
   const today = isoDay(new Date());
-  const upcomingShifts = shifts
-    .filter((s) => s.date >= today)
-    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
-  const shiftDates = new Set(shifts.map((s) => s.date));
+
+  useEffect(() => {
+    if (!betrieb) return;
+    let cancelled = false;
+    (async () => {
+      const bis = new Date();
+      bis.setDate(bis.getDate() + 60);
+      const { data } = await supabase.rpc("kalender_schichten", {
+        p_betrieb_id: betrieb,
+        p_von: today,
+        p_bis: isoDay(bis),
+        p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+      });
+      if (cancelled) return;
+      const mine = ((data as any[]) ?? [])
+        .filter((s) => s.mine && !s.canceled && s.datum >= today)
+        .map((s) => ({ id: s.id, datum: s.datum, start_zeit: s.start_zeit, end_zeit: s.end_zeit, label: s.label }))
+        .sort((a, b) => (a.datum + a.start_zeit).localeCompare(b.datum + b.start_zeit));
+      setMyShifts(mine);
+    })();
+    return () => { cancelled = true; };
+  }, [betrieb, today, activeMitarbeiter?.id]);
+
+  const upcomingShifts = myShifts;
+  const shiftDates = new Set(myShifts.map((s) => s.datum));
   const freeDates = Array.from({ length: 30 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i + 1);
     return isoDay(d);
   }).filter((d) => !shiftDates.has(d));
 
+  const hhmm = (s: string) => (s ? s.slice(0, 5) : "");
   const fmtDate = (d: string) =>
     new Date(d + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
   const shiftLabel = (id: string) => {
-    const s = shifts.find((x) => x.id === id);
-    return s ? `${fmtDate(s.date)} · ${s.start}–${s.end} · ${s.title}` : "";
+    const s = myShifts.find((x) => x.id === id);
+    if (!s) return "";
+    const base = `${fmtDate(s.datum)} · ${hhmm(s.start_zeit)}–${hhmm(s.end_zeit)}`;
+    return s.label ? `${base} · ${s.label}` : base;
   };
 
   const cleanItems = items.map((s) => s.trim()).filter(Boolean);
@@ -78,23 +105,35 @@ export default function ComposeScreen() {
     titel.trim().length > 0 &&
     (cat !== "aufgabenliste" || cleanItems.length >= 1) &&
     (cat !== "umfrage" || cleanOptions.length >= 2) &&
-    (cat !== "aenderungswunsch" || (!!giveShiftId && !!wantDate));
+    (cat !== "aenderungswunsch" || !!giveShiftId);
 
   const input = [styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }];
 
   const submit = async () => {
     setBusy(true); setError(null);
-    // shift swap: always "important", body summarises the requested swap
-    const swapText =
-      cat === "aenderungswunsch" && giveShiftId && wantDate
-        ? `${t("messages.swapGive")}: ${shiftLabel(giveShiftId)}\n${t("messages.swapWant")}: ${fmtDate(wantDate)}`
-        : null;
+
+    // Shift swap is its own flow: offer one of my shifts for a real swap, with
+    // up to three preferred days I'd like to work in return.
+    if (cat === "aenderungswunsch") {
+      const { data: swapId, error: se } = await supabase.rpc("tausch_anbieten", {
+        p_instanz_id: giveShiftId,
+        p_praeferenz_tage: prefDates,
+        p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+      });
+      setBusy(false);
+      if (se) { setError(se.message); return; }
+      // null = nobody could complete this swap — nothing was posted.
+      if (!swapId) { Alert.alert(t("shiftSwap.notPossibleTitle"), t("shiftSwap.notPossibleBody")); return; }
+      router.back();
+      return;
+    }
+
     const { error: e } = await supabase.rpc("ankuendigung_erstellen", {
       p_betrieb_id: betrieb,
       p_typ: cat,
       p_titel: titel.trim(),
-      p_text: cat === "aenderungswunsch" ? swapText : cat === "allgemein" ? (text.trim() || null) : null,
-      p_prioritaet: cat === "aenderungswunsch" ? "wichtig" : prio,
+      p_text: cat === "allgemein" ? (text.trim() || null) : null,
+      p_prioritaet: prio,
       p_angeheftet: false,
       p_items: cat === "aufgabenliste" ? cleanItems : [],
       p_optionen: cat === "umfrage" ? cleanOptions : [],
@@ -197,16 +236,35 @@ export default function ComposeScreen() {
               onSelect={setGiveShiftId}
             />
 
-            <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("messages.swapWant")}</Text>
-            <Dropdown
-              theme={theme}
-              placeholder={t("messages.selectDate")}
-              emptyLabel={t("messages.noFreeDates")}
-              value={wantDate}
-              display={wantDate ? fmtDate(wantDate) : null}
-              options={freeDates.map((d) => ({ value: d, label: fmtDate(d) }))}
-              onSelect={setWantDate}
-            />
+            <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("shiftSwap.preferredDays")}</Text>
+            <Text style={[styles.counter, { color: theme.muted, textAlign: "left" }]}>{t("shiftSwap.preferredDaysHint")}</Text>
+            {prefDates.length > 0 && (
+              <View style={styles.chips}>
+                {prefDates.map((d) => (
+                  <Pressable
+                    key={d}
+                    onPress={() => setPrefDates(prefDates.filter((x) => x !== d))}
+                    style={[styles.chip, { borderColor: theme.accent, backgroundColor: theme.accent, flexDirection: "row", alignItems: "center", gap: 6 }]}
+                  >
+                    <Text style={{ color: theme.accentText, fontWeight: "600" }}>{fmtDate(d)}</Text>
+                    <X color={theme.accentText} size={16} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            {prefDates.length < 3 && (
+              <Dropdown
+                theme={theme}
+                placeholder={t("messages.selectDate")}
+                emptyLabel={t("messages.noFreeDates")}
+                value={null}
+                display={null}
+                options={freeDates
+                  .filter((d) => !prefDates.includes(d))
+                  .map((d) => ({ value: d, label: fmtDate(d) }))}
+                onSelect={(d) => setPrefDates([...prefDates, d].sort())}
+              />
+            )}
           </>
         )}
 

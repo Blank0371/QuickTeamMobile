@@ -8,7 +8,8 @@
     "scheme": "quickteammobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.blank037.QuickTeamMobile",
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {

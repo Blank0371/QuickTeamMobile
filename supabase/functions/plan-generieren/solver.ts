@@ -216,10 +216,11 @@ interface EmpState {
   belegt: Instanz[];       // every shift held (for the legal checks)
   gerne: number;           // gerne shifts granted so far
   ungerne: number;         // ungerne shifts forced so far
-  target: number;          // soll_stunden (0 = unset)
+  target: number;          // soll_stunden, PRO-RATED for in-cycle urlaub (0 = unset)
   scale: number;           // normalizer for the fairness/overtime terms
   gSub: number;            // "fewer wishes weigh more" multiplier
   otPen: number;           // overtime beyond tolerance (>= 0)
+  capHart: number;         // max_stunden_hart, PRO-RATED for in-cycle urlaub (Infinity = no cap)
 }
 
 // The concave/convex per-employee objective, defined purely on the tallies so it
@@ -271,11 +272,38 @@ export function solve(input: SolverInput): SolverResult {
     return Math.min(2, Math.max(0.5, avgSubmitted / Math.max(m.n_submitted ?? 0, 1)));
   };
 
+  // Pro-rate each employee's MONTHLY targets by the share of their would-be
+  // working days that approved urlaub removes. A "would-be working day" is a date
+  // in the cycle carrying at least one shift instance whose required role the
+  // employee holds — i.e. a day they could realistically be scheduled. Without
+  // this, someone on two weeks' holiday keeps their full monthly soll_stunden as
+  // the fairness target, so the solver tries to jam a whole month of hours into
+  // the remaining days (and their hard max_stunden_hart cap stays untouched too).
+  // Scaling both by the availability factor removes that bias. The factor only
+  // ever shrinks the targets, so the solver stays at least as conservative as the
+  // DB trigger (which enforces the un-prorated max_stunden_hart).
+  const verfuegbarkeitsFaktor = new Map<Uuid, number>();
+  for (const m of input.mitarbeiter) {
+    const rollen = input.rollenProMitarbeiter.get(m.id) ?? new Set<Uuid>();
+    const arbeitstage = new Set<IsoDate>();
+    const urlaubstage = new Set<IsoDate>();
+    for (const inst of input.instanzen) {
+      const bedarf = input.bedarfProInstanz.get(inst.id) ?? [];
+      if (!bedarf.some((b) => rollen.has(b.rolle_id))) continue; // can't fill this shift
+      arbeitstage.add(inst.datum);
+      if (istImUrlaub(input, m.id, inst.datum)) urlaubstage.add(inst.datum);
+    }
+    const faktor =
+      arbeitstage.size > 0 ? (arbeitstage.size - urlaubstage.size) / arbeitstage.size : 1;
+    verfuegbarkeitsFaktor.set(m.id, faktor);
+  }
+
   // Initialize per-employee state, seeded from any pre-existing (manuell/tausch)
   // shifts and the in-cycle hours those already contribute.
   const stateById = new Map<Uuid, EmpState>();
   for (const m of input.mitarbeiter) {
-    const target = m.soll_stunden ?? 0;
+    const faktor = verfuegbarkeitsFaktor.get(m.id) ?? 1;
+    const target = (m.soll_stunden ?? 0) * faktor;
     stateById.set(m.id, {
       m,
       stunden: input.startSaldo.get(m.id) ?? 0,
@@ -286,6 +314,7 @@ export function solve(input: SolverInput): SolverResult {
       scale: target > 0 ? target : FALLBACK_SOLL,
       gSub: gSubOf(m),
       otPen: Math.max(0, (m.ueberstunden ?? 0) - (m.toleranz_ueberstunden ?? 0)),
+      capHart: m.max_stunden_hart != null ? m.max_stunden_hart * faktor : Infinity,
     });
   }
 
@@ -329,8 +358,9 @@ export function solve(input: SolverInput): SolverResult {
     if (tagSumme + dauer > maxTagStunden) return false;
     if (wocheSumme + dauer > maxWocheStunden) return false;
 
-    // HC-5: MONTHLY (cycle) cap — max_stunden_hart; null = no cap. Uses live saldo.
-    const cap = stateById.get(mId)!.m.max_stunden_hart ?? Infinity;
+    // HC-5: MONTHLY (cycle) cap — max_stunden_hart, pro-rated for urlaub; null = no
+    // cap. Only ever <= the raw cap the DB trigger enforces, so still trigger-safe.
+    const cap = stateById.get(mId)!.capHart;
     let saldo = stateById.get(mId)!.stunden;
     if (ignore) for (const h of meine) if (ignore.has(`${mId}|${h.id}`)) saldo -= rangeCache.get(h.id)!.dauer;
     if (saldo + dauer > cap) return false;

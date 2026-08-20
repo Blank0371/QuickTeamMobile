@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { AlertTriangle, CalendarPlus, Check, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Trash2, X } from "lucide-react-native";
+import { AlertTriangle, CalendarPlus, Check, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Search, Trash2, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet,
@@ -603,15 +603,34 @@ function CreateShiftModal({ visible, theme, t, lang, betrieb, team, rollen, role
   const [error, setError] = useState<string | null>(null);
   // People flagged as on-vacation / prefer-not-to-work for the chosen day.
   const [warnings, setWarnings] = useState<{ name: string; reasons: string[] }[] | null>(null);
+  // Search box + role filter for the assignee picker.
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string | null>(null); // rolle_id or null = all
 
   const reset = () => {
     setDateVal(new Date()); setStartVal(atTime(9, 0)); setEndVal(atTime(17, 0));
     setKommentar(""); setMode("zuweisung"); setAssign({}); setBedarf({}); setError(null); setWarnings(null);
+    setQuery(""); setRoleFilter(null);
   };
   const close = () => { reset(); onClose(); };
 
   const assignedIds = Object.entries(assign).filter(([, r]) => r).map(([mid]) => mid);
   const bedarfList = Object.entries(bedarf).filter(([, n]) => n > 0).map(([rid, n]) => ({ rolle_id: rid, benoetigt: n }));
+
+  // Assignee list filtered by search text + role, then sorted by first role name.
+  const visibleTeam = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const roleOrder = (m: any) =>
+      ((roleNames[m.id] ?? [])[0] ?? "￿").toLowerCase(); // people with no role sink to the bottom
+    return (team as any[])
+      .filter((m) => {
+        if (q && !`${m.vorname} ${m.nachname}`.toLowerCase().includes(q)) return false;
+        if (roleFilter && !(roleIdsByMember[m.id] ?? []).includes(roleFilter)) return false;
+        return true;
+      })
+      .sort((a, b) => roleOrder(a).localeCompare(roleOrder(b)) ||
+        `${a.vorname} ${a.nachname}`.localeCompare(`${b.vorname} ${b.nachname}`));
+  }, [team, query, roleFilter, roleNames, roleIdsByMember]);
 
   const timesValid = timeToStr(startVal) !== timeToStr(endVal);
   const canSubmit = timesValid && (mode === "zuweisung" ? assignedIds.length > 0 : bedarfList.length > 0);
@@ -728,7 +747,39 @@ function CreateShiftModal({ visible, theme, t, lang, betrieb, team, rollen, role
             {mode === "zuweisung" ? (
               <>
                 <Text style={[styles.fieldLabel, { color: theme.muted, marginTop: 12 }]}>{t("manager.csPickPeople")}</Text>
-                {team.map((m: any) => {
+
+                {/* Search by name */}
+                <View style={[styles.csSearch, { borderColor: theme.border, backgroundColor: theme.bg }]}>
+                  <Search color={theme.muted} size={16} />
+                  <TextInput
+                    style={{ flex: 1, color: theme.text, paddingVertical: 8 }}
+                    placeholder={t("manager.csSearchPeople")} placeholderTextColor={theme.muted}
+                    value={query} onChangeText={setQuery} autoCorrect={false}
+                  />
+                  {query.length > 0 && (
+                    <Pressable onPress={() => setQuery("")} hitSlop={8}><X color={theme.muted} size={16} /></Pressable>
+                  )}
+                </View>
+
+                {/* Filter by role */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} keyboardShouldPersistTaps="handled">
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    {[{ id: null as string | null, name: t("manager.csAllRoles") }, ...rollen].map((r: any) => {
+                      const on = roleFilter === r.id;
+                      return (
+                        <Pressable key={r.id ?? "all"} onPress={() => setRoleFilter(r.id)}
+                          style={[styles.csChip, { borderColor: theme.border }, on && { backgroundColor: theme.accent, borderColor: theme.accent }]}>
+                          <Text style={{ color: on ? theme.accentText : theme.text, fontSize: 12, fontWeight: "600" }}>{r.name}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+
+                {visibleTeam.length === 0 && (
+                  <Text style={{ color: theme.muted, fontSize: 13, marginTop: 12 }}>{t("manager.csNoPeople")}</Text>
+                )}
+                {visibleTeam.map((m: any) => {
                   const roleIds: string[] = roleIdsByMember[m.id] ?? [];
                   const selected = !!assign[m.id];
                   const memberRoleNames: string[] = roleNames[m.id] ?? [];
@@ -919,6 +970,7 @@ const styles = StyleSheet.create({
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   csMemberRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
   csChip: { borderWidth: 1.5, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 10 },
+  csSearch: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, marginTop: 8 },
   csStepper: { flexDirection: "row", alignItems: "center", gap: 10 },
   csStepBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   submit: { borderRadius: 12, paddingVertical: 14, alignItems: "center" },

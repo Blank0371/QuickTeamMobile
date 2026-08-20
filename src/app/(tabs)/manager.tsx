@@ -9,7 +9,7 @@
 // betriebe (update), betriebs_einstellungen (update).
 import {
   Briefcase, CalendarCheck2, CalendarClock, CalendarPlus, Check, ChevronDown, ChevronRight, Clock,
-  Hourglass, Megaphone, Minus, Pencil, Plus, RefreshCw, Trash2, TriangleAlert, Users, X,
+  Hourglass, Megaphone, Minus, Pencil, Plus, RefreshCw, Repeat, Trash2, TriangleAlert, Users, X,
 } from "lucide-react-native";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -47,7 +47,7 @@ type Urlaub = {
   status: Status; kommentar: string | null; begruendung: string | null;
 };
 type Einstellungen = {
-  tausch_freigabe_erforderlich: boolean;
+  ask_chef_for_shift_switch: boolean;
   sprache_standard: string;
   verfuegbarkeit_deadline_tag: number;
   notfall_stunden_anrechnen: boolean;
@@ -65,6 +65,15 @@ type Emergency = {
   start_zeit: string;
   end_zeit: string;
   grund: string | null;
+};
+// A shift swap awaiting the chef's approval (status wartet_auf_chef).
+type SwapApproval = {
+  id: string; // anfrage id
+  anbieterName: string;   // person giving their shift
+  uebernehmerName: string; // person taking it (gives one back)
+  offeredLabel: string;
+  offeredDatum: string; offeredStart: string; offeredEnd: string; offeredRole: string;
+  gegenDatum: string; gegenStart: string; gegenEnd: string;
 };
 
 const dayDiff = (von: string, bis: string) =>
@@ -124,6 +133,7 @@ export default function ManagerScreen() {
   const [overtime, setOvertime] = useState<Record<string, number>>({}); // id -> computed overtime hours
   const [einstellungen, setEinstellungen] = useState<Einstellungen | null>(null);
   const [emergencies, setEmergencies] = useState<Emergency[]>([]);
+  const [swapApprovals, setSwapApprovals] = useState<SwapApproval[]>([]);
   const [templates, setTemplates] = useState<Vorlage[]>([]);
   const [templateReqs, setTemplateReqs] = useState<Record<string, RoleReq[]>>({}); // vorlage_id -> role reqs
   const [roles, setRoles] = useState<Rolle[]>([]);
@@ -138,7 +148,7 @@ export default function ManagerScreen() {
     setLoading(true);
     const yearStart = `${new Date().getFullYear()}-01-01`;
 
-    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, vorlagen, mindest, zyklenRes] = await Promise.all([
+    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, vorlagen, swapReq, mindest, zyklenRes] = await Promise.all([
       supabase.from("mitarbeiter")
         .select("id, vorname, nachname, email, telefon, rolle_typ, vertrag_typ, soll_stunden, ueberstunden_saldo, status, urlaubsanspruch_tage")
         .eq("betrieb_id", betrieb).order("nachname"),
@@ -147,14 +157,17 @@ export default function ManagerScreen() {
       supabase.from("urlaub").select("id, mitarbeiter_id, von, bis, status, kommentar, begruendung")
         .eq("betrieb_id", betrieb).order("von", { ascending: false }),
       supabase.from("betriebs_einstellungen")
-        .select("tausch_freigabe_erforderlich, sprache_standard, verfuegbarkeit_deadline_tag, notfall_stunden_anrechnen, mitarbeiter_sehen_andere_schichten, mitarbeiter_sehen_andere_mitarbeiter, abrechnung_bis")
+        .select("ask_chef_for_shift_switch, sprache_standard, verfuegbarkeit_deadline_tag, notfall_stunden_anrechnen, mitarbeiter_sehen_andere_schichten, mitarbeiter_sehen_andere_mitarbeiter, abrechnung_bis")
         .eq("betrieb_id", betrieb).single(),
-      supabase.from("schicht_zuweisungen").select("mitarbeiter_id, schicht_instanz_id, attendet").eq("betrieb_id", betrieb),
+      supabase.from("schicht_zuweisungen").select("id, mitarbeiter_id, schicht_instanz_id, rolle_id, attendet").eq("betrieb_id", betrieb),
       // All instances (not just this year) so overtime can span every worked month up to the cutoff.
       supabase.from("schicht_instanzen").select("id, start_zeit, end_zeit, datum, schicht_vorlage_id").eq("betrieb_id", betrieb),
       supabase.from("notfaelle").select("id, status, melder_id, schicht_instanz_id, rolle_id, grund, erstellt_am")
         .eq("betrieb_id", betrieb).in("status", ["gemeldet", "vertretung_gesucht"]).order("erstellt_am", { ascending: true }),
       supabase.from("schicht_vorlagen").select("id, bezeichnung, wochentag, start_zeit, end_zeit, aktiv").eq("betrieb_id", betrieb),
+      supabase.from("schichttausch_anfragen")
+        .select("id, schicht_zuweisung_id, anbietender_mitarbeiter_id, uebernehmender_mitarbeiter_id, gegen_datum, gegen_start, gegen_end")
+        .eq("betrieb_id", betrieb).eq("status", "wartet_auf_chef").order("erstellt_am", { ascending: true }),
       supabase.from("schicht_vorlage_mindestbesetzung").select("schicht_vorlage_id, rolle_id, mindestanzahl").eq("betrieb_id", betrieb),
       // Planning cycles that are still in flight or awaiting review (for the Shifts section banners).
       supabase.from("planungszyklen").select("id, status, zeitraum_start, zeitraum_ende")
@@ -230,6 +243,27 @@ export default function ManagerScreen() {
     });
     setEmergencies(emg);
 
+    // Shift swaps awaiting chef approval (needs the offered + given-back shift).
+    const zuwById = new Map((zuweis.data ?? []).map((z: any) => [z.id, z]));
+    const swaps: SwapApproval[] = (swapReq.data ?? []).map((a: any) => {
+      const offZ = zuwById.get(a.schicht_zuweisung_id);
+      const offInst = offZ ? instById.get(offZ.schicht_instanz_id) : null;
+      return {
+        id: a.id,
+        anbieterName: nameById.get(a.anbietender_mitarbeiter_id) ?? "—",
+        uebernehmerName: nameById.get(a.uebernehmender_mitarbeiter_id) ?? "—",
+        offeredLabel: (offInst?.schicht_vorlage_id && vorlById.get(offInst.schicht_vorlage_id)) || t("manager.shift"),
+        offeredDatum: offInst?.datum ?? "",
+        offeredStart: offInst?.start_zeit ?? "",
+        offeredEnd: offInst?.end_zeit ?? "",
+        offeredRole: offZ ? (roleById.get(offZ.rolle_id) ?? "") : "",
+        gegenDatum: a.gegen_datum ?? "",
+        gegenStart: a.gegen_start ?? "",
+        gegenEnd: a.gegen_end ?? "",
+      };
+    });
+    setSwapApprovals(swaps);
+
     setEinstellungen((settingsRow.data ?? null) as Einstellungen | null);
 
     // Shift templates + their per-role minimum staffing (for the Shifts section).
@@ -285,7 +319,7 @@ export default function ManagerScreen() {
           <EmployeesSection
             theme={theme} t={t} lang={lang} team={team} vacations={vacations} roleNames={roleNames} roleIds={roleIds}
             betrieb={betrieb!} roles={roles}
-            hoursWorked={hoursWorked} shiftsWorked={shiftsWorked} emergencies={emergencies}
+            hoursWorked={hoursWorked} shiftsWorked={shiftsWorked} emergencies={emergencies} swapApprovals={swapApprovals}
             monthlyHours={monthlyHours} overtime={overtime} abrechnungBis={einstellungen?.abrechnung_bis ?? null}
             reload={load} fmtDate={fmtDate}
           />
@@ -321,7 +355,7 @@ export default function ManagerScreen() {
 // =====================================================================
 // Employees
 // =====================================================================
-function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds, betrieb, roles, hoursWorked, shiftsWorked, emergencies, monthlyHours, overtime, abrechnungBis, reload, fmtDate }: any) {
+function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds, betrieb, roles, hoursWorked, shiftsWorked, emergencies, swapApprovals, monthlyHours, overtime, abrechnungBis, reload, fmtDate }: any) {
   const [showDecided, setShowDecided] = useState(false);
   const [denyFor, setDenyFor] = useState<string | null>(null); // urlaub id in deny mode
   const [denyReason, setDenyReason] = useState("");
@@ -362,6 +396,9 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds,
     <>
       {/* ---- Urgent: emergency call-outs ---- */}
       <UrgentEmergencies theme={theme} t={t} lang={lang} emergencies={emergencies} reload={reload} />
+
+      {/* ---- Shift swaps awaiting approval ---- */}
+      <SwapApprovals theme={theme} t={t} lang={lang} swapApprovals={swapApprovals} reload={reload} />
 
       {/* ---- Vacation requests ---- */}
       <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("manager.vacationRequests")}</Text>
@@ -778,6 +815,68 @@ function UrgentEmergencies({ theme, t, lang, emergencies, reload }: any) {
   );
 }
 
+// Shift swaps the chef must approve (business requires approval). Approving
+// executes the swap; rejecting cancels it. Mirrors the emergency urgent section.
+function SwapApprovals({ theme, t, lang, swapApprovals, reload }: any) {
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!swapApprovals || swapApprovals.length === 0) return null;
+
+  const hhmm = (s: string) => (s ? s.slice(0, 5) : "");
+  const fmtShift = (datum: string, start: string, end: string, role?: string) =>
+    `${role ? role + " · " : ""}${datum ? new Date(datum + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" }) : ""} · ${hhmm(start)}–${hhmm(end)}`;
+
+  const decide = async (id: string, genehmigt: boolean) => {
+    setBusy(id);
+    const { data, error } = await supabase.rpc("tausch_entscheiden", { p_anfrage_id: id, p_genehmigt: genehmigt, p_grund: null });
+    setBusy(null);
+    if (error) { Alert.alert(t("shiftSwap.swapFailed")); reload(); return; }
+    const code = data as string;
+    if (code === "bestaetigt") Alert.alert(t("shiftSwap.swappedTitle"), t("shiftSwap.swappedBody"));
+    else if (code === "abgelehnt_chef") Alert.alert(t("shiftSwap.chefDeclinedTitle"), t("shiftSwap.chefDeclinedBody"));
+    else if (code === "abgelehnt_system") Alert.alert(t("shiftSwap.swapFailed"));
+    reload();
+  };
+
+  return (
+    <>
+      <Text style={[styles.sectionLabel, { color: theme.accent }]}>{t("manager.swapApprovals")}</Text>
+      {swapApprovals.map((s: SwapApproval) => (
+        <View key={s.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.accent }]}>
+          <View style={styles.rowIcon}>
+            <Repeat color={theme.accent} size={20} />
+            <Text style={{ color: theme.accent, fontWeight: "800", flex: 1 }}>{t("manager.swapApprovalTitle")}</Text>
+          </View>
+          {/* who gives what */}
+          <Text style={{ color: theme.text, fontWeight: "700" }}>{s.anbieterName}</Text>
+          <Text style={{ color: theme.muted, fontSize: 13 }}>{t("manager.swapGives")}: {fmtShift(s.offeredDatum, s.offeredStart, s.offeredEnd, s.offeredRole)}</Text>
+          <View style={{ height: 6 }} />
+          <Text style={{ color: theme.text, fontWeight: "700" }}>{s.uebernehmerName}</Text>
+          <Text style={{ color: theme.muted, fontSize: 13 }}>{t("manager.swapGives")}: {fmtShift(s.gegenDatum, s.gegenStart, s.gegenEnd)}</Text>
+
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+            <Pressable
+              style={[styles.submit, { flex: 1, borderWidth: 1.5, borderColor: RED, flexDirection: "row", justifyContent: "center" }]}
+              onPress={() => decide(s.id, false)}
+              disabled={busy === s.id}
+            >
+              <X color={RED} size={18} />
+              <Text style={[styles.submitText, { color: RED, marginLeft: 6 }]}>{t("shiftSwap.reject")}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.submit, { flex: 1, backgroundColor: theme.accent, flexDirection: "row", justifyContent: "center" }]}
+              onPress={() => decide(s.id, true)}
+              disabled={busy === s.id}
+            >
+              <Check color={theme.accentText} size={18} />
+              <Text style={[styles.submitText, { color: theme.accentText, marginLeft: 6 }]}>{t("manager.swapApproveBtn")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ))}
+    </>
+  );
+}
+
 function vacationTaken(vacations: Urlaub[], mitarbeiterId: string) {
   return approvedDays(vacations, mitarbeiterId);
 }
@@ -854,14 +953,14 @@ function BusinessSection({ theme, t, lang, betrieb, einstellungen, setEinstellun
   const [saved, setSaved] = useState(false);
 
   const setSetting = (patch: Partial<Einstellungen>) =>
-    setEinstellungen((prev: Einstellungen | null) => ({ ...(prev ?? { tausch_freigabe_erforderlich: true, sprache_standard: "de", verfuegbarkeit_deadline_tag: 5, notfall_stunden_anrechnen: false, mitarbeiter_sehen_andere_schichten: false, mitarbeiter_sehen_andere_mitarbeiter: false, abrechnung_bis: null }), ...patch }));
+    setEinstellungen((prev: Einstellungen | null) => ({ ...(prev ?? { ask_chef_for_shift_switch: true, sprache_standard: "de", verfuegbarkeit_deadline_tag: 5, notfall_stunden_anrechnen: false, mitarbeiter_sehen_andere_schichten: false, mitarbeiter_sehen_andere_mitarbeiter: false, abrechnung_bis: null }), ...patch }));
 
   const save = async () => {
     if (!betrieb) return;
     setSaving(true);
     if (einstellungen) {
       await supabase.from("betriebs_einstellungen").update({
-        tausch_freigabe_erforderlich: einstellungen.tausch_freigabe_erforderlich,
+        ask_chef_for_shift_switch: einstellungen.ask_chef_for_shift_switch,
         verfuegbarkeit_deadline_tag: einstellungen.verfuegbarkeit_deadline_tag,
         notfall_stunden_anrechnen: einstellungen.notfall_stunden_anrechnen,
         mitarbeiter_sehen_andere_schichten: einstellungen.mitarbeiter_sehen_andere_schichten,
@@ -883,8 +982,15 @@ function BusinessSection({ theme, t, lang, betrieb, einstellungen, setEinstellun
             <View style={[styles.switchRow, { borderColor: theme.border }]}>
               <Text style={{ color: theme.text, fontWeight: "600", flex: 1 }}>{t("manager.swapApproval")}</Text>
               <Switch
-                value={einstellungen.tausch_freigabe_erforderlich}
-                onValueChange={(v) => setSetting({ tausch_freigabe_erforderlich: v })}
+                value={einstellungen.ask_chef_for_shift_switch}
+                onValueChange={(v) => {
+                  // Persist immediately so the setting always takes effect — a
+                  // toggle left unsaved would otherwise keep the old value.
+                  setSetting({ ask_chef_for_shift_switch: v });
+                  supabase.from("betriebs_einstellungen")
+                    .update({ ask_chef_for_shift_switch: v })
+                    .eq("betrieb_id", betrieb);
+                }}
                 trackColor={{ true: theme.accent, false: theme.border }}
               />
             </View>

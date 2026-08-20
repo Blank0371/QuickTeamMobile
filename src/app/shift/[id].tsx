@@ -4,7 +4,7 @@
 // edit the shift: date/time, comment, and the roster (assign people + roles,
 // change roles, remove people).
 import { router, useLocalSearchParams } from "expo-router";
-import { ChevronLeft, Plus, Repeat, Trash2, TriangleAlert, Users, X } from "lucide-react-native";
+import { ChevronLeft, Plus, Repeat, Search, Trash2, TriangleAlert, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -76,11 +76,15 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  // employee "hand over shift" (Schichtabgabe) — broadcast the shift to coworkers
+  // employee "offer shift for swap" — broadcast the shift + preferred days
   const [swapOpen, setSwapOpen] = useState(false);
   const [alreadyOffered, setAlreadyOffered] = useState(false);
   const [offering, setOffering] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [prefDates, setPrefDates] = useState<string[]>([]);
+  const [myShiftDates, setMyShiftDates] = useState<Set<string>>(new Set());
+  const [swapAnfrageId, setSwapAnfrageId] = useState<string | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   // employee "can't attend" (Notfall melden) — notify the manager to find cover
   const [emOpen, setEmOpen] = useState(false);
@@ -102,6 +106,9 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [rollen, setRollen] = useState<{ id: string; name: string }[]>([]);
   const [roleIdsByMember, setRoleIdsByMember] = useState<Record<string, string[]>>({});
+  // Search + role filter for the "Add person" picker.
+  const [addQuery, setAddQuery] = useState("");
+  const [addRoleFilter, setAddRoleFilter] = useState<string | null>(null); // rolle_id or null = all
 
   // Edit UI requires BOTH the server verdict and the local chef role — employees
   // are strictly read-only.
@@ -119,24 +126,50 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
       setStartVal(parseTime(s.start_zeit));
       setEndVal(parseTime(s.end_zeit));
       setKommentar(s.kommentar ?? "");
-      // is my shift already up for grabs?
+      // is my shift already up for swap? capture the anfrage so I can withdraw it.
       if (activeMitarbeiter && s.participants.some((p) => p.is_me)) {
         const { data: offer } = await supabase
           .from("benachrichtigungen")
-          .select("id")
+          .select("inhalt")
           .eq("typ", "schicht_tausch")
           .is("geloescht_am", null)
           .contains("inhalt", { schicht_instanz_id: id, anbieter_id: activeMitarbeiter.id })
           .limit(1);
-        setAlreadyOffered((offer?.length ?? 0) > 0);
+        const anfrageId = (offer?.[0]?.inhalt as any)?.anfrage_id ?? null;
+        setAlreadyOffered(!!anfrageId);
+        setSwapAnfrageId(anfrageId);
       } else {
         setAlreadyOffered(false);
+        setSwapAnfrageId(null);
       }
     }
     setLoading(false);
   }, [id, activeMitarbeiter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // My own upcoming shift days — I can't ask to work a day I already work, so
+  // those days are excluded from the preferred-day picker.
+  useEffect(() => {
+    if (!activeMitarbeiter) return;
+    let cancelled = false;
+    (async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("schicht_zuweisungen")
+        .select("schicht_instanzen(datum)")
+        .eq("mitarbeiter_id", activeMitarbeiter.id)
+        .eq("attendet", true);
+      if (cancelled) return;
+      const days = new Set<string>();
+      (data ?? []).forEach((z: any) => {
+        const inst = Array.isArray(z.schicht_instanzen) ? z.schicht_instanzen[0] : z.schicht_instanzen;
+        if (inst?.datum && inst.datum >= today) days.add(inst.datum);
+      });
+      setMyShiftDates(days);
+    })();
+    return () => { cancelled = true; };
+  }, [activeMitarbeiter, id]);
 
   // Once we know this is a chef-editable shift, load the team + roles so the chef
   // can add people and pick roles. Keyed off the shift so we have the betrieb.
@@ -261,12 +294,35 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
   const offerSwap = async () => {
     if (!shift || offering) return;
     setOffering(true);
-    const { error } = await supabase.rpc("tausch_ausschreiben", { p_instanz_id: shift.id });
+    const { data: swapId, error } = await supabase.rpc("tausch_anbieten", {
+      p_instanz_id: shift.id,
+      p_praeferenz_tage: prefDates,
+      p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+    });
     setOffering(false);
     setSwapOpen(false);
+    setPrefDates([]);
     if (error) { Alert.alert(t("shiftSwap.offerFailed")); return; }
+    // null = nobody could complete this swap — nothing was posted.
+    if (!swapId) { Alert.alert(t("shiftSwap.notPossibleTitle"), t("shiftSwap.notPossibleBody")); return; }
     setAlreadyOffered(true);
     Alert.alert(t("shiftSwap.offeredTitle"), t("shiftSwap.offeredBody"));
+    load();
+  };
+
+  // Take back an offer I put up for swap (only until it's confirmed).
+  const withdrawSwap = async () => {
+    if (!swapAnfrageId || withdrawing) return;
+    setWithdrawing(true);
+    const { error } = await supabase.rpc("tausch_zurueckziehen", {
+      p_anfrage_id: swapAnfrageId,
+      p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+    });
+    setWithdrawing(false);
+    if (error) { Alert.alert(t("shiftSwap.withdrawFailed")); return; }
+    setAlreadyOffered(false);
+    setSwapAnfrageId(null);
+    Alert.alert(t("shiftSwap.withdrawnTitle"), t("shiftSwap.withdrawnBody"));
     load();
   };
 
@@ -299,10 +355,12 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
         p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
       }));
     } else if (c.kind === "swap") {
-      ({ data, error } = await supabase.rpc("schicht_tausch_uebernehmen", {
-        p_benachrichtigung_id: c.benachrichtigung_id,
-        p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
-      }));
+      // A swap now requires offering a shift in return — done in the Messages
+      // feed, not with a single tap here.
+      setClaiming(false);
+      if (onClose) onClose();
+      router.push("/messages");
+      return;
     } else {
       ({ data, error } = await supabase.rpc("notfall_vertretung_uebernehmen", {
         p_benachrichtigung_id: c.benachrichtigung_id,
@@ -311,18 +369,18 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
     }
     setClaiming(false);
     // Map result codes to alerts, reusing the same copy as the messages tab.
-    const fail = c.kind === "posting" ? "messages.osClaimFailed" : c.kind === "swap" ? "shiftSwap.takeFailed" : "messages.emTakeFailed";
+    const fail = c.kind === "posting" ? "messages.osClaimFailed" : "messages.emTakeFailed";
     if (error) { Alert.alert(t(fail)); load(); return; }
     const code = data as string;
     if (code === "angenommen" || code === "besetzt") {
       Alert.alert(
-        t(c.kind === "posting" ? "messages.osClaimedTitle" : c.kind === "swap" ? "shiftSwap.tookTitle" : "messages.emTookTitle"),
-        t(c.kind === "posting" ? "messages.osClaimedBody" : c.kind === "swap" ? "shiftSwap.tookBody" : "messages.emTookBody"),
+        t(c.kind === "posting" ? "messages.osClaimedTitle" : "messages.emTookTitle"),
+        t(c.kind === "posting" ? "messages.osClaimedBody" : "messages.emTookBody"),
       );
     } else if (code === "voll") Alert.alert(t("messages.osFull"));
-    else if (code === "bereits_besetzt") Alert.alert(t(c.kind === "swap" ? "shiftSwap.alreadyTaken" : "messages.emAlreadyTaken"));
-    else if (code === "schon_zugewiesen") Alert.alert(t(c.kind === "posting" ? "messages.osAlreadyOn" : c.kind === "swap" ? "shiftSwap.alreadyOn" : "messages.emAlreadyOnShift"));
-    else if (code === "nicht_qualifiziert") Alert.alert(t(c.kind === "posting" ? "messages.osNotQualified" : c.kind === "swap" ? "shiftSwap.notQualified" : "messages.emNotQualified"));
+    else if (code === "bereits_besetzt") Alert.alert(t("messages.emAlreadyTaken"));
+    else if (code === "schon_zugewiesen") Alert.alert(t(c.kind === "posting" ? "messages.osAlreadyOn" : "messages.emAlreadyOnShift"));
+    else if (code === "nicht_qualifiziert") Alert.alert(t(c.kind === "posting" ? "messages.osNotQualified" : "messages.emNotQualified"));
     else Alert.alert(t(fail));
     load();
   };
@@ -348,11 +406,39 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
   const myPart = shift?.participants.find((p) => p.is_me);
   const canOfferSwap = !!myPart && myPart.attendet && !isChef;
   const fmtDate = (d: string) => new Date(d + "T00:00:00").toLocaleDateString(lang, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const fmtDayShort = (d: string) => new Date(d + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" });
+  // Preferred-day choices: the next 21 days, excluding this shift's own date and
+  // any day I already work (I couldn't take another shift then).
+  const swapDayOptions = useMemo(() => {
+    const out: string[] = [];
+    for (let i = 1; i <= 21; i++) {
+      const d = new Date(); d.setDate(d.getDate() + i);
+      const s = dateToStr(d);
+      if (s !== shift?.datum && !myShiftDates.has(s)) out.push(s);
+    }
+    return out;
+  }, [shift?.datum, myShiftDates]);
 
   // Members a chef can still add: have at least one role and aren't already on the shift.
   const assignedIds = useMemo(() => new Set(shift?.participants.map((p) => p.mitarbeiter_id) ?? []), [shift]);
-  const addable = useMemo(
-    () => team.filter((m) => !assignedIds.has(m.id) && (roleIdsByMember[m.id]?.length ?? 0) > 0),
+  const addable = useMemo(() => {
+    const q = addQuery.trim().toLowerCase();
+    const roleOrder = (m: TeamMember) =>
+      (roleName((roleIdsByMember[m.id] ?? [])[0] ?? null) ?? "￿").toLowerCase();
+    return team
+      .filter((m) => !assignedIds.has(m.id) && (roleIdsByMember[m.id]?.length ?? 0) > 0)
+      .filter((m) => {
+        if (q && !`${m.vorname} ${m.nachname ?? ""}`.toLowerCase().includes(q)) return false;
+        if (addRoleFilter && !(roleIdsByMember[m.id] ?? []).includes(addRoleFilter)) return false;
+        return true;
+      })
+      .sort((a, b) => roleOrder(a).localeCompare(roleOrder(b)) ||
+        `${a.vorname} ${a.nachname ?? ""}`.localeCompare(`${b.vorname} ${b.nachname ?? ""}`));
+  }, [team, assignedIds, roleIdsByMember, addQuery, addRoleFilter, rollen]);
+  // Members addable ignoring the search/role filter — drives whether to show the
+  // filter controls at all.
+  const anyAddable = useMemo(
+    () => team.some((m) => !assignedIds.has(m.id) && (roleIdsByMember[m.id]?.length ?? 0) > 0),
     [team, assignedIds, roleIdsByMember]
   );
 
@@ -529,10 +615,20 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
               <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("shiftSwap.section")}</Text>
               <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 {alreadyOffered ? (
-                  <View style={styles.swapRow}>
-                    <Repeat color={theme.accent} size={18} />
-                    <Text style={{ color: theme.muted, fontSize: 14, flex: 1 }}>{t("shiftSwap.pending")}</Text>
-                  </View>
+                  <>
+                    <View style={styles.swapRow}>
+                      <Repeat color={theme.accent} size={18} />
+                      <Text style={{ color: theme.muted, fontSize: 14, flex: 1 }}>{t("shiftSwap.pending")}</Text>
+                    </View>
+                    <Pressable
+                      style={[styles.swapBtn, { borderColor: RED }]}
+                      onPress={withdrawSwap}
+                      disabled={withdrawing}
+                    >
+                      <X color={RED} size={18} />
+                      <Text style={{ color: RED, fontWeight: "700" }}>{withdrawing ? "…" : t("shiftSwap.withdraw")}</Text>
+                    </Pressable>
+                  </>
                 ) : (
                   <>
                     <Text style={{ color: theme.text, fontSize: 14 }}>{t("shiftSwap.blurb")}</Text>
@@ -558,7 +654,7 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
           ) : null}
 
           {/* ---------- Add person (chef only) ---------- */}
-          {canEdit && addable.length > 0 ? (
+          {canEdit && anyAddable ? (
             <>
               <Text style={[styles.sectionLabel, { color: theme.muted }]}>{t("calendar.addPerson")}</Text>
               {rosterError ? (
@@ -567,6 +663,38 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
                   <Text style={{ color: RED, fontSize: 13, fontWeight: "700", flex: 1 }}>{rosterError}</Text>
                 </View>
               ) : null}
+
+              {/* Search by name */}
+              <View style={[styles.addSearch, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                <Search color={theme.muted} size={16} />
+                <TextInput
+                  style={{ flex: 1, color: theme.text, paddingVertical: 8 }}
+                  placeholder={t("manager.csSearchPeople")} placeholderTextColor={theme.muted}
+                  value={addQuery} onChangeText={setAddQuery} autoCorrect={false}
+                />
+                {addQuery.length > 0 && (
+                  <Pressable onPress={() => setAddQuery("")} hitSlop={8}><X color={theme.muted} size={16} /></Pressable>
+                )}
+              </View>
+
+              {/* Filter by role */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, marginBottom: 8 }} keyboardShouldPersistTaps="handled">
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  {[{ id: null as string | null, name: t("manager.csAllRoles") }, ...rollen].map((r) => {
+                    const on = addRoleFilter === r.id;
+                    return (
+                      <Pressable key={r.id ?? "all"} onPress={() => setAddRoleFilter(r.id)}
+                        style={[styles.addChip, { borderColor: theme.border }, on && { backgroundColor: theme.accent, borderColor: theme.accent }]}>
+                        <Text style={{ color: on ? theme.accentText : theme.text, fontSize: 12, fontWeight: "600" }}>{r.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+
+              {addable.length === 0 ? (
+                <Text style={{ color: theme.muted, fontSize: 13, marginBottom: 8 }}>{t("manager.csNoPeople")}</Text>
+              ) : (
               <View style={[styles.card, { backgroundColor: theme.surface, borderColor: rosterError ? RED : theme.border }]}>
                 {addable.map((m, idx) => {
                   const firstRole = (roleIdsByMember[m.id] ?? [])[0];
@@ -580,6 +708,7 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
                   );
                 })}
               </View>
+              )}
             </>
           ) : null}
 
@@ -598,9 +727,9 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
 
       {/* Confirm handing over the shift — first eligible coworker to accept wins. */}
       <Modal visible={swapOpen} transparent animationType="fade" onRequestClose={() => setSwapOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setSwapOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => { setSwapOpen(false); setPrefDates([]); }}>
           <Pressable style={[styles.modalCard, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e) => e.stopPropagation()}>
-            <Pressable onPress={() => setSwapOpen(false)} hitSlop={10} style={styles.modalClose}>
+            <Pressable onPress={() => { setSwapOpen(false); setPrefDates([]); }} hitSlop={10} style={styles.modalClose}>
               <X color={theme.muted} size={24} />
             </Pressable>
             <View style={{ gap: 10 }}>
@@ -614,16 +743,31 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
                 </Text>
               ) : null}
               <Text style={{ color: theme.text, fontSize: 14 }}>{t("shiftSwap.confirmBody")}</Text>
-              <View style={{ marginTop: 6 }}>
-                <HoldButton
-                  label={t("shiftSwap.holdToOffer")}
-                  onConfirm={offerSwap}
-                  color={theme.accent}
-                  fillColor="rgba(0,0,0,0.28)"
-                  textColor={theme.accentText}
-                  holdMs={1500}
-                />
+
+              <Text style={[styles.fieldLabel, { color: theme.muted, marginTop: 4 }]}>{t("shiftSwap.preferredDays")}</Text>
+              <Text style={{ color: theme.muted, fontSize: 12 }}>{t("shiftSwap.preferredDaysHint")}</Text>
+              <View style={styles.chipRow}>
+                {swapDayOptions.map((d) => {
+                  const on = prefDates.includes(d);
+                  return (
+                    <Pressable
+                      key={d}
+                      onPress={() => setPrefDates(on ? prefDates.filter((x) => x !== d) : (prefDates.length < 3 ? [...prefDates, d].sort() : prefDates))}
+                      style={[styles.chip, { borderColor: theme.border }, on && { backgroundColor: theme.accent, borderColor: theme.accent }]}
+                    >
+                      <Text style={{ color: on ? theme.accentText : theme.text, fontSize: 12, fontWeight: "600" }}>{fmtDayShort(d)}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
+
+              <Pressable
+                style={[styles.submit, { backgroundColor: theme.accent, marginTop: 6 }]}
+                onPress={offerSwap}
+                disabled={offering}
+              >
+                <Text style={[styles.submitText, { color: theme.accentText }]}>{offering ? "…" : t("shiftSwap.offer")}</Text>
+              </Pressable>
             </View>
           </Pressable>
         </Pressable>
@@ -690,6 +834,8 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, minHeight: 44 },
 
   personRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11 },
+  addSearch: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, marginTop: 8 },
+  addChip: { borderWidth: 1.5, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 10 },
   removeBtn: { padding: 2 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: { borderWidth: 1.5, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
