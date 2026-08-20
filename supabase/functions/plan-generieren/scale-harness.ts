@@ -14,7 +14,7 @@
 // numbers are comparable across code changes.
 // =============================================================================
 
-import { dauerStunden, solve, type Bedarf, type Instanz, type Mitarbeiter, type SolverInput } from "./solver.ts";
+import { dauerStunden, nettoStunden, solve, type Bedarf, type Instanz, type Mitarbeiter, type SolverInput } from "./solver.ts";
 
 // ---- seeded PRNG (mulberry32) so runs are reproducible ---------------------
 function rng(seed: number) {
@@ -35,7 +35,8 @@ const randint = (lo: number, hi: number) => lo + Math.floor(rand() * (hi - lo + 
 
 // ---- scenario parameters ---------------------------------------------------
 const N_EMP = 100;
-const LAND = { mindestruhezeit: 11, maxTagStunden: 10, maxWocheStunden: 48 }; // DE
+const LAND = { mindestruhezeit: 11, maxTagStunden: 10, maxWocheStunden: 48,
+  pausen: { schwelle1Std: 6, schwelle1Min: 30, schwelle2Std: 9, schwelle2Min: 45 } }; // DE
 const MONTH_START = "2026-09-01";
 const MONTH_END = "2026-09-30";
 
@@ -186,8 +187,9 @@ for (const [mId, shifts] of shiftsOf) {
   let month = 0;
   for (const i of s) {
     const d = dauerStunden(i.start_zeit, i.end_zeit);
-    perDay.set(i.datum, (perDay.get(i.datum) ?? 0) + d);
-    perWeek.set(wkOf(i.datum), (perWeek.get(wkOf(i.datum)) ?? 0) + d);
+    const net = nettoStunden(d, LAND.pausen); // legal caps are measured net of breaks
+    perDay.set(i.datum, (perDay.get(i.datum) ?? 0) + net);
+    perWeek.set(wkOf(i.datum), (perWeek.get(wkOf(i.datum)) ?? 0) + net);
     month += d;
   }
   for (const [d, h] of perDay) if (h > LAND.maxTagStunden + 1e-9) violations.push(`DAY ${mId} ${d} ${h}h`);

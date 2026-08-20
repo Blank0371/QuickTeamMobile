@@ -204,13 +204,21 @@ async function ladeSolverInput(db: SupabaseClient, zyklus: Zyklus, instanzen: In
   // Legal limits for the business's country (gesetzliche_parameter by betriebe.land).
   const land = (betriebeRes.data as any)?.land;
   const { data: paramRow } = await db.from("gesetzliche_parameter")
-    .select("mindestruhezeit_stunden, hoechstarbeitszeit_tag_stunden, hoechstarbeitszeit_woche_stunden")
+    .select("mindestruhezeit_stunden, hoechstarbeitszeit_tag_stunden, hoechstarbeitszeit_woche_stunden, pause_schwelle1_stunden, pause_schwelle1_minuten, pause_schwelle2_stunden, pause_schwelle2_minuten")
     .eq("land", land).maybeSingle();
   if (!paramRow) throw new Error(`Keine gesetzlichen Parameter fuer Land ${land} hinterlegt`);
+  const zahlOderNull = (v: unknown) => (v == null ? null : Number(v));
   const gesetzlich = {
     mindestruhezeit: Number(paramRow.mindestruhezeit_stunden),
     maxTagStunden: Number(paramRow.hoechstarbeitszeit_tag_stunden),
     maxWocheStunden: Number(paramRow.hoechstarbeitszeit_woche_stunden),
+    // Legal break tiers — deducted from gross hours before the daily/weekly caps.
+    pausen: {
+      schwelle1Std: zahlOderNull(paramRow.pause_schwelle1_stunden),
+      schwelle1Min: zahlOderNull(paramRow.pause_schwelle1_minuten),
+      schwelle2Std: zahlOderNull(paramRow.pause_schwelle2_stunden),
+      schwelle2Min: zahlOderNull(paramRow.pause_schwelle2_minuten),
+    },
   };
 
   // ---- Historical overtime (negative fairness weight in the solver) ----------

@@ -72,7 +72,8 @@ const input: SolverInput = {
   tagesvorliebe,
   vorbelegung: new Map(),   // no pre-existing shifts in this scenario
   startSaldo: new Map(),    // everyone starts the cycle at 0h
-  gesetzlich: { mindestruhezeit: 11, maxTagStunden: 10, maxWocheStunden: 48 }, // DE
+  gesetzlich: { mindestruhezeit: 11, maxTagStunden: 10, maxWocheStunden: 48,
+    pausen: { schwelle1Std: 6, schwelle1Min: 30, schwelle2Std: 9, schwelle2Min: 45 } }, // DE
 };
 
 // --- run it ---------------------------------------------------------------

@@ -113,7 +113,23 @@ export interface SolverInput {
   // inside the cycle range). Seeds the monthly saldo used for HC-5 + fairness.
   startSaldo: Map<Uuid, number>;
   // Legal limits for the business's country (gesetzliche_parameter by betriebe.land).
-  gesetzlich: { mindestruhezeit: number; maxTagStunden: number; maxWocheStunden: number };
+  // The daily/weekly maxima are measured against NET working time, so legally
+  // required breaks (pausen) are deducted before comparing to the caps.
+  gesetzlich: {
+    mindestruhezeit: number;
+    maxTagStunden: number;
+    maxWocheStunden: number;
+    pausen: Pausen;
+  };
+}
+
+// Legal break tiers: once NET working time exceeds schwelleNStd hours, at least
+// schwelleNMin minutes of break are required. A null tier is unused.
+export interface Pausen {
+  schwelle1Std: number | null;
+  schwelle1Min: number | null;
+  schwelle2Std: number | null;
+  schwelle2Min: number | null;
 }
 
 export interface Zuweisung {
@@ -172,6 +188,25 @@ export function dauerStunden(start: Time, end: Time): number {
   let diff = toMin(end) - toMin(start);
   if (diff <= 0) diff += 24 * 60; // overnight shift
   return diff / 60;
+}
+
+// NET working hours: gross duration minus the SMALLEST legally valid break.
+// Mirrors public.netto_arbeitszeit_stunden in the DB so the solver never proposes
+// a row the trigger would reject. Breaks stack on top of the daily/weekly caps —
+// a gross 10:45 shift is 10h net work + 45min break, legal under a 10h cap.
+export function nettoStunden(gross: number, p: Pausen): number {
+  if (gross <= 0) return gross;
+  const cands = Array.from(new Set([0, p.schwelle1Min ?? 0, p.schwelle2Min ?? 0]))
+    .sort((a, b) => a - b);
+  for (const b of cands) {
+    const net = gross - b / 60;
+    const req =
+      p.schwelle2Std != null && p.schwelle2Min != null && net > p.schwelle2Std ? p.schwelle2Min
+      : p.schwelle1Std != null && p.schwelle1Min != null && net > p.schwelle1Std ? p.schwelle1Min
+      : 0;
+    if (b >= req) return net;
+  }
+  return gross; // unreachable: the largest candidate always satisfies req
 }
 
 // Absolute [start, end] of a shift in ms, handling overnight (end <= start → +1 day).
@@ -247,7 +282,7 @@ function empCostAt(s: EmpState, gerne: number, ungerne: number, stunden: number)
 // THE SOLVER — pure function. This is the part to scrutinize.
 // ----------------------------------------------------------------------------
 export function solve(input: SolverInput): SolverResult {
-  const { mindestruhezeit, maxTagStunden, maxWocheStunden } = input.gesetzlich;
+  const { mindestruhezeit, maxTagStunden, maxWocheStunden, pausen } = input.gesetzlich;
   const ruheMs = mindestruhezeit * 3600 * 1000;
 
   // Auth peers: mitarbeiter ids sharing a non-null auth_id (incl. self). Only used
@@ -320,11 +355,15 @@ export function solve(input: SolverInput): SolverResult {
 
   // Pre-index instances for O(1) lookup and cache each instance's ms-range/duration.
   const instById = new Map<Uuid, Instanz>();
-  const rangeCache = new Map<Uuid, { ns: number; ne: number; dauer: number; wk: string }>();
+  // `dauer` is the GROSS clock span (monthly saldo / fairness use paid gross
+  // hours); `netto` is the working time after the legal break, used only for the
+  // daily/weekly legal caps so a longer gross shift can still be legal.
+  const rangeCache = new Map<Uuid, { ns: number; ne: number; dauer: number; netto: number; wk: string }>();
   for (const inst of input.instanzen) {
     instById.set(inst.id, inst);
     const [ns, ne] = bereichMs(inst.datum, inst.start_zeit, inst.end_zeit);
-    rangeCache.set(inst.id, { ns, ne, dauer: dauerStunden(inst.start_zeit, inst.end_zeit), wk: wochenStart(inst.datum) });
+    const dauer = dauerStunden(inst.start_zeit, inst.end_zeit);
+    rangeCache.set(inst.id, { ns, ne, dauer, netto: nettoStunden(dauer, pausen), wk: wochenStart(inst.datum) });
   }
 
   // --- HARD feasibility: may `mId` take `inst` (ignoring the role, checked by
@@ -332,7 +371,7 @@ export function solve(input: SolverInput): SolverResult {
   // `ignore` lets phase B test a move as if a shift had already been removed.
   function zulaessig(mId: Uuid, inst: Instanz, ignore?: Set<string>): boolean {
     if (istImUrlaub(input, mId, inst.datum)) return false; // HC-1
-    const { ns, ne, dauer, wk } = rangeCache.get(inst.id)!;
+    const { ns, ne, dauer, netto, wk } = rangeCache.get(inst.id)!;
 
     // HC-2 (overlap) + HC-4 (rest), unioned over auth peers.
     for (const peerId of authPeers(mId)) {
@@ -346,17 +385,22 @@ export function solve(input: SolverInput): SolverResult {
       }
     }
 
-    // Legal daily / weekly max hours are per-mitarbeiter (not auth-unioned).
+    // Legal daily / weekly max hours are per-mitarbeiter (not auth-unioned) and
+    // measured against NET working time (legal breaks deducted, so they stack on
+    // top of the cap — a 10:45 gross shift is 10h net under a 10h daily cap).
     const meine = stateById.get(mId)!.belegt;
     let tagSumme = 0, wocheSumme = 0;
     for (const h of meine) {
       if (ignore?.has(`${mId}|${h.id}`) || h.id === inst.id) continue;
-      const r = rangeCache.get(h.id) ?? { dauer: dauerStunden(h.start_zeit, h.end_zeit), wk: wochenStart(h.datum) } as any;
-      if (h.datum === inst.datum) tagSumme += r.dauer;
-      if ((r.wk ?? wochenStart(h.datum)) === wk) wocheSumme += r.dauer;
+      const r = rangeCache.get(h.id) ?? (() => {
+        const d = dauerStunden(h.start_zeit, h.end_zeit);
+        return { netto: nettoStunden(d, pausen), wk: wochenStart(h.datum) };
+      })() as any;
+      if (h.datum === inst.datum) tagSumme += r.netto;
+      if ((r.wk ?? wochenStart(h.datum)) === wk) wocheSumme += r.netto;
     }
-    if (tagSumme + dauer > maxTagStunden) return false;
-    if (wocheSumme + dauer > maxWocheStunden) return false;
+    if (tagSumme + netto > maxTagStunden) return false;
+    if (wocheSumme + netto > maxWocheStunden) return false;
 
     // HC-5: MONTHLY (cycle) cap — max_stunden_hart, pro-rated for urlaub; null = no
     // cap. Only ever <= the raw cap the DB trigger enforces, so still trigger-safe.
