@@ -4,7 +4,7 @@
 // edit the shift: date/time, comment, and the roster (assign people + roles,
 // change roles, remove people).
 import { router, useLocalSearchParams } from "expo-router";
-import { ChevronLeft, Plus, Repeat, Search, Trash2, TriangleAlert, Users, X } from "lucide-react-native";
+import { ChevronLeft, Pencil, Plus, Repeat, Search, StickyNote, Trash2, TriangleAlert, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -50,6 +50,15 @@ type ShiftDetailData = {
   participants: Participant[];
 };
 type TeamMember = { id: string; vorname: string; nachname: string | null };
+type ShiftNote = {
+  id: string;
+  text: string;
+  autor_id: string;
+  autor_name: string | null;
+  is_me: boolean;
+  erstellt_am: string;
+  aktualisiert_am: string;
+};
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const dateToStr = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -102,6 +111,14 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // shift notes (sticky note): visible to anyone who can see the shift; only
+  // people on the shift (or the chef) can add; each edits/deletes only their own.
+  const [notes, setNotes] = useState<ShiftNote[]>([]);
+  const [noteText, setNoteText] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+
   // chef-only: team + roles for editing the roster
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [rollen, setRollen] = useState<{ id: string; name: string }[]>([]);
@@ -147,6 +164,56 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
   }, [id, activeMitarbeiter]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadNotes = useCallback(async () => {
+    if (!id) return;
+    const { data } = await supabase.rpc("schicht_notizen_holen", {
+      p_instanz_id: id,
+      p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+    });
+    setNotes((data as ShiftNote[]) ?? []);
+  }, [id, activeMitarbeiter?.id]);
+
+  useEffect(() => { loadNotes(); }, [loadNotes]);
+
+  const addNote = async () => {
+    const text = noteText.trim();
+    if (!text || noteBusy) return;
+    setNoteBusy(true);
+    const { error } = await supabase.rpc("schicht_notiz_schreiben", {
+      p_instanz_id: id,
+      p_text: text,
+      p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
+    });
+    setNoteBusy(false);
+    if (error) { Alert.alert(t("notes.saveFailed")); return; }
+    setNoteText("");
+    loadNotes();
+  };
+
+  const saveNoteEdit = async () => {
+    const text = editingText.trim();
+    if (!editingNoteId || !text || noteBusy) return;
+    setNoteBusy(true);
+    const { error } = await supabase.rpc("schicht_notiz_bearbeiten", { p_notiz_id: editingNoteId, p_text: text });
+    setNoteBusy(false);
+    if (error) { Alert.alert(t("notes.saveFailed")); return; }
+    setEditingNoteId(null);
+    setEditingText("");
+    loadNotes();
+  };
+
+  const deleteNote = async (noteId: string) => {
+    const { error } = await supabase.rpc("schicht_notiz_loeschen", { p_notiz_id: noteId });
+    if (error) { Alert.alert(t("notes.deleteFailed")); return; }
+    loadNotes();
+  };
+  const confirmDeleteNote = (noteId: string) => {
+    Alert.alert(t("notes.deleteTitle"), t("notes.deleteBody"), [
+      { text: t("calendar.cancel"), style: "cancel" },
+      { text: t("notes.delete"), style: "destructive", onPress: () => deleteNote(noteId) },
+    ]);
+  };
 
   // My own upcoming shift days — I can't ask to work a day I already work, so
   // those days are excluded from the preferred-day picker.
@@ -585,6 +652,73 @@ export function ShiftDetailView({ id, onClose }: { id: string; onClose?: () => v
             )}
           </View>
 
+          {/* ---------- Shift notes (sticky note) ---------- */}
+          <View style={styles.noteHeadRow}>
+            <StickyNote color={theme.muted} size={16} />
+            <Text style={[styles.sectionLabel, { color: theme.muted, marginTop: 0 }]}>{t("notes.section")}</Text>
+          </View>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {notes.length === 0 ? (
+              <Text style={{ color: theme.muted, fontSize: 13 }}>{t("notes.empty")}</Text>
+            ) : (
+              notes.map((n, idx) => (
+                <View key={n.id} style={[styles.noteRow, idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.border }]}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <Text style={{ color: theme.muted, fontSize: 12, fontWeight: "700" }}>
+                      {n.autor_name ?? (n.is_me ? t("calendar.you") : t("calendar.coworkers"))}{n.is_me ? ` (${t("calendar.you")})` : ""}
+                    </Text>
+                    {n.is_me && editingNoteId !== n.id ? (
+                      <View style={{ flexDirection: "row", gap: 14 }}>
+                        <Pressable onPress={() => { setEditingNoteId(n.id); setEditingText(n.text); }} hitSlop={8}>
+                          <Pencil color={theme.muted} size={16} />
+                        </Pressable>
+                        <Pressable onPress={() => confirmDeleteNote(n.id)} hitSlop={8}>
+                          <Trash2 color={RED} size={16} />
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                  {editingNoteId === n.id ? (
+                    <View style={{ gap: 8, marginTop: 6 }}>
+                      <TextInput
+                        style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg, minHeight: 44 }]}
+                        value={editingText} onChangeText={setEditingText} multiline autoFocus maxLength={280}
+                      />
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Pressable style={[styles.noteBtn, { borderColor: theme.border }]} onPress={() => { setEditingNoteId(null); setEditingText(""); }}>
+                          <Text style={{ color: theme.text, fontWeight: "700" }}>{t("calendar.cancel")}</Text>
+                        </Pressable>
+                        <Pressable style={[styles.noteBtn, { backgroundColor: theme.accent, borderColor: theme.accent }]} onPress={saveNoteEdit} disabled={noteBusy}>
+                          <Text style={{ color: theme.accentText, fontWeight: "700" }}>{noteBusy ? "…" : t("manager.save")}</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
+                    <Text style={{ color: theme.text, fontSize: 14, marginTop: 3 }}>{n.text}</Text>
+                  )}
+                </View>
+              ))
+            )}
+            {(shift.participants.some((p) => p.is_me) || isChef) ? (
+              <View style={{ marginTop: notes.length ? 12 : 6, gap: 8 }}>
+                <TextInput
+                  style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg, minHeight: 44 }]}
+                  placeholder={t("notes.placeholder")} placeholderTextColor={theme.muted}
+                  value={noteText} onChangeText={setNoteText} multiline maxLength={280}
+                />
+                <Pressable
+                  style={[styles.noteAddBtn, { backgroundColor: noteText.trim() ? theme.accent : theme.border }]}
+                  onPress={addNote} disabled={!noteText.trim() || noteBusy}
+                >
+                  <Plus color={noteText.trim() ? theme.accentText : theme.muted} size={16} />
+                  <Text style={{ color: noteText.trim() ? theme.accentText : theme.muted, fontWeight: "700" }}>
+                    {noteBusy ? "…" : t("notes.add")}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+
           {/* ---------- Staffing (chef only) — required vs. filled per role ---------- */}
           {canEdit && shift.bedarf && shift.bedarf.length > 0 ? (
             <>
@@ -842,6 +976,11 @@ const styles = StyleSheet.create({
 
   submit: { borderRadius: 999, paddingVertical: 14, alignItems: "center" },
   submitText: { fontSize: 15, fontWeight: "700" },
+
+  noteHeadRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
+  noteRow: { paddingVertical: 10 },
+  noteBtn: { flex: 1, borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: "center", justifyContent: "center" },
+  noteAddBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 999, paddingVertical: 12 },
 
   swapRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   swapBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5, borderRadius: 999, paddingVertical: 12, marginTop: 8 },

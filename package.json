@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/ui": "~57.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "12.0.1",
     "@supabase/supabase-js": "^2.110.0",
     "expo": "~57.0.2",
     "expo-constants": "~57.0.3",
@@ -16,6 +17,7 @@
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.1",
     "expo-localization": "~57.0.0",
+    "expo-notifications": "~57.0.13",
     "expo-router": "~57.0.3",
     "expo-splash-screen": "~57.0.2",
     "expo-status-bar": "~57.0.0",
@@ -35,6 +37,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.1",
     "typescript": "~6.0.3"
   },
   "scripts": {

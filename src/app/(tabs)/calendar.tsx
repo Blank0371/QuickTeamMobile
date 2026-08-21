@@ -1,5 +1,7 @@
 import { useFocusEffect } from "expo-router";
-import { AlertTriangle, CalendarPlus, Check, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Search, Trash2, X } from "lucide-react-native";
+import { AlertTriangle, CalendarPlus, Check, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Search, StickyNote, Trash2, WifiOff, X } from "lucide-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo from "@react-native-community/netinfo";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet,
@@ -13,6 +15,8 @@ import { ScreenGradient } from "../../components/ScreenGradient";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
+import { readCache, writeCache } from "../../lib/cache";
+import { scheduleShiftReminders } from "../../lib/notifications";
 import { useTheme } from "../../theme/ThemeProvider";
 import { ShiftDetailView } from "../shift/[id]";
 
@@ -34,6 +38,7 @@ export type CalShift = {
   open: boolean;         // open for me to claim (posting or replacement)
   swap_wanted: boolean;  // someone on it wants to swap out
   understaffed?: boolean; // chef-only: a role's mindestbesetzung isn't met
+  notiz_anzahl?: number;  // number of shift notes (sticky-note marker)
   participants: { name: string; role_name: string | null; attendet: boolean; is_me: boolean }[];
 };
 
@@ -108,6 +113,7 @@ export default function CalendarScreen() {
   const [cursor, setCursor] = useState(new Date()); // the focused day
   const [shifts, setShifts] = useState<CalShift[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stale, setStale] = useState(false); // showing cached data (offline / fetch failed)
   const [openShiftId, setOpenShiftId] = useState<string | null>(null); // shift shown in the detail popup
   const [confirmPublish, setConfirmPublish] = useState(false); // "confirm planned shifts" popup
   const [publishing, setPublishing] = useState(false);
@@ -149,23 +155,64 @@ export default function CalendarScreen() {
   // Reload whenever the focused month (or business) changes — the window we
   // fetch (month ± 7 days) always covers the visible day/week/month.
   const monthKey = `${cursor.getFullYear()}-${cursor.getMonth()}`;
+  const cacheKey = `cal:${betrieb}:${activeMitarbeiter?.id}:${monthKey}`;
+
+  // Re-schedule on-device shift reminders from the freshest shift list we have.
+  const syncReminders = useCallback(async (list: CalShift[]) => {
+    const raw = await AsyncStorage.getItem("notifPrefs").catch(() => null);
+    const prefs = raw ? JSON.parse(raw) : {};
+    const enabled = prefs.shiftReminder !== false; // default on
+    await scheduleShiftReminders(
+      list.map((s) => ({ id: s.id, datum: s.datum, start_zeit: s.start_zeit, label: s.label, mine: s.mine })),
+      {
+        eveningTitle: t("reminders.eveningTitle"),
+        eveningBody: (label, time) => t("reminders.eveningBody", { label, time }),
+        soonTitle: t("reminders.soonTitle"),
+        soonBody: (label, time) => t("reminders.soonBody", { label, time }),
+        shiftWord: t("calendar.shift"),
+      },
+      enabled,
+    );
+  }, [t]);
+
   const load = useCallback(async () => {
     if (!betrieb) return;
     setLoading(true);
+    // Hydrate instantly from the last synced copy so the grid isn't blank.
+    const cached = await readCache<CalShift[]>(cacheKey);
+    if (cached) { setShifts(cached.value); setLoading(false); }
+
     const [y, mo] = monthKey.split("-").map(Number);
     const from = new Date(y, mo, 1); from.setDate(from.getDate() - 7);
     const to = new Date(y, mo + 1, 0); to.setDate(to.getDate() + 7);
-    const { data } = await supabase.rpc("kalender_schichten", {
+    const { data, error } = await supabase.rpc("kalender_schichten", {
       p_betrieb_id: betrieb,
       p_von: iso(from),
       p_bis: iso(to),
       p_mitarbeiter_id: activeMitarbeiter?.id ?? null,
     });
-    setShifts((data as CalShift[]) ?? []);
+    if (error || data == null) {
+      // Offline / failed — keep whatever cache we showed and flag it as stale.
+      setStale(!!cached);
+    } else {
+      const list = data as CalShift[];
+      setShifts(list);
+      setStale(false);
+      writeCache(cacheKey, list);
+      syncReminders(list);
+    }
     setLoading(false);
-  }, [betrieb, monthKey, activeMitarbeiter?.id]);
+  }, [betrieb, monthKey, cacheKey, activeMitarbeiter?.id, syncReminders]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // When connectivity returns while showing stale data, revalidate.
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener((s) => {
+      if (s.isConnected && stale) load();
+    });
+    return () => unsub();
+  }, [stale, load]);
 
   // Load the team + roles a chef needs to build a custom shift (once per business).
   useEffect(() => {
@@ -233,6 +280,13 @@ export default function CalendarScreen() {
           <ChevronRight color={theme.text} size={26} />
         </Pressable>
       </View>
+
+      {stale && (
+        <View style={[styles.offlineBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+          <WifiOff color={theme.muted} size={14} />
+          <Text style={{ color: theme.muted, fontSize: 12, fontWeight: "600" }}>{t("calendar.offlineStale")}</Text>
+        </View>
+      )}
 
       {/* segmented control */}
       <View style={styles.content}>
@@ -501,6 +555,7 @@ function WeekGridBlock({ shift, style, onOpen }: { shift: CalShift; style?: any;
         </Text>
         {shift.understaffed ? <AlertTriangle color="#FFD400" size={11} /> : null}
         {shift.swap_wanted ? <Repeat color="#fff" size={10} /> : null}
+        {shift.notiz_anzahl ? <StickyNote color="#fff" size={10} /> : null}
       </View>
       <Text style={styles.weekBlockTime} numberOfLines={1}>{hhmm(shift.start_zeit)}</Text>
       <Text style={styles.weekBlockTime} numberOfLines={1}>{hhmm(shift.end_zeit)}</Text>
@@ -536,7 +591,9 @@ function MonthView({ date, shifts, onPickDay }: { date: Date; shifts: CalShift[]
       <View style={styles.monthGrid}>
         {cells.map((d, i) => {
           if (!d) return <View key={i} style={styles.monthCell} />;
-          const has = daySegments(shifts, d).length > 0;
+          const segs = daySegments(shifts, d);
+          const has = segs.length > 0;
+          const hasNote = segs.some((seg) => seg.shift.notiz_anzahl);
           return (
             <Pressable key={i} style={styles.monthCell} onPress={() => onPickDay(d)}>
               <View style={[
@@ -544,6 +601,13 @@ function MonthView({ date, shifts, onPickDay }: { date: Date; shifts: CalShift[]
                 has && { backgroundColor: theme.accent },
               ]}>
                 <Text style={{ color: has ? theme.accentText : theme.text }}>{d.getDate()}</Text>
+                {hasNote ? (
+                  <StickyNote
+                    color={has ? theme.accentText : theme.muted}
+                    size={10}
+                    style={styles.monthNoteDot}
+                  />
+                ) : null}
               </View>
             </Pressable>
           );
@@ -930,6 +994,8 @@ const styles = StyleSheet.create({
   monthGrid: { flexDirection: "row", flexWrap: "wrap" },
   monthCell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: "center", justifyContent: "center" },
   monthDay: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  monthNoteDot: { position: "absolute", top: 1, right: 1 },
+  offlineBar: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
 
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40 },
 

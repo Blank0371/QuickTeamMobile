@@ -414,18 +414,17 @@
       "schedule": "Planning"
     },
     "item": {
-      "announcement": "Annonces",
-      "tasks": "Listes de tâches",
-      "shiftSwitch": "Échange de créneaux",
-      "polls": "Sondages",
-      "documents": "Documents",
-      "planPublished": "Planning publié",
-      "shiftChanged": "Créneau modifié",
-      "availabilityReminder": "Rappel de disponibilité",
-      "understaffing": "Sous-effectif",
-      "emergency": "Remplacement d'urgence",
-      "openShift": "Poste ouvert"
-    }
+      "allgemein": "Annonces",
+      "umfrage": "Sondages",
+      "schicht_tausch": "Échange de service",
+      "schicht_ausschreibung": "Créneau ouvert",
+      "schicht_geaendert": "Service modifié",
+      "aenderungswunsch": "Demande de modification",
+      "notfall_vertretung": "Remplacement d'urgence",
+      "shiftReminder": "Rappels de service"
+    },
+    "permDenied": "Les notifications sont désactivées dans les réglages du système.",
+    "permOpen": "Ouvrir"
   },
   "tabs": {
     "messages": "Messages",
@@ -589,6 +588,25 @@
     "assignFailedMaxWeek": "Cela dépasserait le nombre maximal d'heures de travail par semaine.",
     "assignFailedRole": "Elle n'est pas qualifiée pour ce rôle.",
     "assignFailedDisabled": "Cet employé est désactivé.",
-    "removeFailed": "Impossible de retirer cette personne du poste."
+    "removeFailed": "Impossible de retirer cette personne du poste.",
+    "offlineStale": "Hors ligne — dernière synchro",
+    "cancel": "Annuler"
+  },
+  "reminders": {
+    "eveningTitle": "Service demain",
+    "eveningBody": "{label} commence demain à {time}.",
+    "soonTitle": "Service bientôt",
+    "soonBody": "{label} commence à {time}."
+  },
+  "notes": {
+    "section": "Notes",
+    "empty": "Aucune note.",
+    "placeholder": "Ajouter une note pour ce service…",
+    "add": "Ajouter une note",
+    "saveFailed": "Impossible d'enregistrer la note.",
+    "deleteFailed": "Impossible de supprimer la note.",
+    "deleteTitle": "Supprimer la note ?",
+    "deleteBody": "Cette note sera définitivement supprimée.",
+    "delete": "Supprimer"
   }
 }

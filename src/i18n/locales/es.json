@@ -414,18 +414,17 @@
       "schedule": "Horario"
     },
     "item": {
-      "announcement": "Anuncio",
-      "tasks": "Lista de tareas",
-      "shiftSwitch": "Cambio de turno",
-      "polls": "Encuesta",
-      "documents": "Documentos",
-      "planPublished": "Plan publicado",
-      "shiftChanged": "Turno modificado",
-      "availabilityReminder": "Recordatorio de disponibilidad",
-      "understaffing": "Falta de personal",
-      "emergency": "Cobertura de emergencia",
-      "openShift": "Turno abierto"
-    }
+      "allgemein": "Anuncios",
+      "umfrage": "Encuestas",
+      "schicht_tausch": "Cambio de turno",
+      "schicht_ausschreibung": "Turno abierto",
+      "schicht_geaendert": "Turno modificado",
+      "aenderungswunsch": "Solicitud de cambio",
+      "notfall_vertretung": "Sustitución de emergencia",
+      "shiftReminder": "Recordatorios de turno"
+    },
+    "permDenied": "Las notificaciones están desactivadas en los ajustes del sistema.",
+    "permOpen": "Abrir"
   },
   "tabs": {
     "messages": "Mensajes",
@@ -589,6 +588,25 @@
     "assignFailedMaxWeek": "Esto superaría el máximo de horas de trabajo semanales.",
     "assignFailedRole": "No está cualificada para este rol.",
     "assignFailedDisabled": "Este empleado está desactivado.",
-    "removeFailed": "No se pudo quitar a esta persona del turno."
+    "removeFailed": "No se pudo quitar a esta persona del turno.",
+    "offlineStale": "Sin conexión: última sincronización",
+    "cancel": "Cancelar"
+  },
+  "reminders": {
+    "eveningTitle": "Turno mañana",
+    "eveningBody": "{label} empieza mañana a las {time}.",
+    "soonTitle": "Turno pronto",
+    "soonBody": "{label} empieza a las {time}."
+  },
+  "notes": {
+    "section": "Notas",
+    "empty": "Aún no hay notas.",
+    "placeholder": "Añade una nota para este turno…",
+    "add": "Añadir nota",
+    "saveFailed": "No se pudo guardar la nota.",
+    "deleteFailed": "No se pudo eliminar la nota.",
+    "deleteTitle": "¿Eliminar nota?",
+    "deleteBody": "Esta nota se eliminará permanentemente.",
+    "delete": "Eliminar"
   }
 }

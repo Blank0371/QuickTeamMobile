@@ -414,18 +414,17 @@
       "schedule": "Vardiya planı"
     },
     "item": {
-      "announcement": "Duyurular",
-      "tasks": "Görev listeleri",
-      "shiftSwitch": "Vardiya değişimi",
-      "polls": "Anketler",
-      "documents": "Belgeler",
-      "planPublished": "Plan yayınlandı",
-      "shiftChanged": "Vardiya değişti",
-      "availabilityReminder": "Uygunluk hatırlatıcısı",
-      "understaffing": "Personel yetersizliği",
-      "emergency": "Acil durum yedeği",
-      "openShift": "Açık vardiya"
-    }
+      "allgemein": "Duyurular",
+      "umfrage": "Anketler",
+      "schicht_tausch": "Vardiya değişimi",
+      "schicht_ausschreibung": "Açık vardiya",
+      "schicht_geaendert": "Vardiya değişti",
+      "aenderungswunsch": "Değişiklik talebi",
+      "notfall_vertretung": "Acil yerine geçme",
+      "shiftReminder": "Vardiya hatırlatıcıları"
+    },
+    "permDenied": "Bildirimler sistem ayarlarında kapalı.",
+    "permOpen": "Aç"
   },
   "tabs": {
     "messages": "Mesajlar",
@@ -589,6 +588,25 @@
     "assignFailedMaxWeek": "Bu, haftalık azami çalışma saatini aşar.",
     "assignFailedRole": "Bu rol için yeterliliği yok.",
     "assignFailedDisabled": "Bu çalışan devre dışı bırakılmış.",
-    "removeFailed": "Bu kişi vardiyadan çıkarılamadı."
+    "removeFailed": "Bu kişi vardiyadan çıkarılamadı.",
+    "offlineStale": "Çevrimdışı — son eşitleme",
+    "cancel": "İptal"
+  },
+  "reminders": {
+    "eveningTitle": "Yarın vardiya",
+    "eveningBody": "{label} yarın {time}'de başlıyor.",
+    "soonTitle": "Vardiya yakında",
+    "soonBody": "{label} {time}'de başlıyor."
+  },
+  "notes": {
+    "section": "Notlar",
+    "empty": "Henüz not yok.",
+    "placeholder": "Bu vardiya için not ekle…",
+    "add": "Not ekle",
+    "saveFailed": "Not kaydedilemedi.",
+    "deleteFailed": "Not silinemedi.",
+    "deleteTitle": "Not silinsin mi?",
+    "deleteBody": "Bu not kalıcı olarak silinecek.",
+    "delete": "Sil"
   }
 }

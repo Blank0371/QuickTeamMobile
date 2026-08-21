@@ -414,18 +414,17 @@
       "schedule": "График"
     },
     "item": {
-      "announcement": "Объявления",
-      "tasks": "Списки задач",
-      "shiftSwitch": "Обмен сменами",
-      "polls": "Опросы",
-      "documents": "Документы",
-      "planPublished": "План опубликован",
-      "shiftChanged": "Смена изменена",
-      "availabilityReminder": "Напоминание о доступности",
-      "understaffing": "Нехватка персонала",
-      "emergency": "Экстренная замена",
-      "openShift": "Открытая смена"
-    }
+      "allgemein": "Объявления",
+      "umfrage": "Опросы",
+      "schicht_tausch": "Обмен сменами",
+      "schicht_ausschreibung": "Открытая смена",
+      "schicht_geaendert": "Смена изменена",
+      "aenderungswunsch": "Запрос на изменение",
+      "notfall_vertretung": "Срочная замена",
+      "shiftReminder": "Напоминания о сменах"
+    },
+    "permDenied": "Уведомления отключены в настройках системы.",
+    "permOpen": "Открыть"
   },
   "tabs": {
     "messages": "Сообщения",
@@ -589,6 +588,25 @@
     "assignFailedMaxWeek": "Это превысит максимум рабочих часов в неделю.",
     "assignFailedRole": "У него нет квалификации для этой роли.",
     "assignFailedDisabled": "Этот сотрудник деактивирован.",
-    "removeFailed": "Не удалось убрать этого человека из смены."
+    "removeFailed": "Не удалось убрать этого человека из смены.",
+    "offlineStale": "Офлайн — последние данные",
+    "cancel": "Отмена"
+  },
+  "reminders": {
+    "eveningTitle": "Смена завтра",
+    "eveningBody": "{label} начинается завтра в {time}.",
+    "soonTitle": "Скоро смена",
+    "soonBody": "{label} начинается в {time}."
+  },
+  "notes": {
+    "section": "Заметки",
+    "empty": "Пока нет заметок.",
+    "placeholder": "Добавьте заметку к этой смене…",
+    "add": "Добавить заметку",
+    "saveFailed": "Не удалось сохранить заметку.",
+    "deleteFailed": "Не удалось удалить заметку.",
+    "deleteTitle": "Удалить заметку?",
+    "deleteBody": "Эта заметка будет удалена навсегда.",
+    "delete": "Удалить"
   }
 }

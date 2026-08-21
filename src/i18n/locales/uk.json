@@ -414,18 +414,17 @@
       "schedule": "Розклад"
     },
     "item": {
-      "announcement": "Оголошення",
-      "tasks": "Списки завдань",
-      "shiftSwitch": "Обмін змінами",
-      "polls": "Опитування",
-      "documents": "Документи",
-      "planPublished": "План опубліковано",
-      "shiftChanged": "Зміну змінено",
-      "availabilityReminder": "Нагадування про доступність",
-      "understaffing": "Нестача персоналу",
-      "emergency": "Термінова заміна",
-      "openShift": "Відкрита зміна"
-    }
+      "allgemein": "Оголошення",
+      "umfrage": "Опитування",
+      "schicht_tausch": "Обмін змінами",
+      "schicht_ausschreibung": "Відкрита зміна",
+      "schicht_geaendert": "Зміну змінено",
+      "aenderungswunsch": "Запит на зміну",
+      "notfall_vertretung": "Термінова заміна",
+      "shiftReminder": "Нагадування про зміни"
+    },
+    "permDenied": "Сповіщення вимкнені в налаштуваннях системи.",
+    "permOpen": "Відкрити"
   },
   "tabs": {
     "messages": "Повідомлення",
@@ -589,6 +588,25 @@
     "assignFailedMaxWeek": "Це перевищить максимум робочих годин на тиждень.",
     "assignFailedRole": "Вона не має кваліфікації для цієї ролі.",
     "assignFailedDisabled": "Цього працівника деактивовано.",
-    "removeFailed": "Не вдалося прибрати цю людину зі зміни."
+    "removeFailed": "Не вдалося прибрати цю людину зі зміни.",
+    "offlineStale": "Офлайн — останні дані",
+    "cancel": "Скасувати"
+  },
+  "reminders": {
+    "eveningTitle": "Зміна завтра",
+    "eveningBody": "{label} починається завтра о {time}.",
+    "soonTitle": "Скоро зміна",
+    "soonBody": "{label} починається о {time}."
+  },
+  "notes": {
+    "section": "Нотатки",
+    "empty": "Поки немає нотаток.",
+    "placeholder": "Додайте нотатку до цієї зміни…",
+    "add": "Додати нотатку",
+    "saveFailed": "Не вдалося зберегти нотатку.",
+    "deleteFailed": "Не вдалося видалити нотатку.",
+    "deleteTitle": "Видалити нотатку?",
+    "deleteBody": "Цю нотатку буде видалено назавжди.",
+    "delete": "Видалити"
   }
 }

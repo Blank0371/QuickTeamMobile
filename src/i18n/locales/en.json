@@ -414,18 +414,17 @@
       "schedule": "Schedule"
     },
     "item": {
-      "announcement": "Announcement",
-      "tasks": "Task list",
-      "shiftSwitch": "Shift switching",
-      "polls": "Poll",
-      "documents": "Documents",
-      "planPublished": "Plan published",
-      "shiftChanged": "Shift changed",
-      "availabilityReminder": "Availability reminder",
-      "understaffing": "Understaffing",
-      "emergency": "Emergency cover",
-      "openShift": "Open shift"
-    }
+      "allgemein": "Announcement",
+      "umfrage": "Poll",
+      "schicht_tausch": "Shift swap",
+      "schicht_ausschreibung": "Open shift",
+      "schicht_geaendert": "Shift changed",
+      "aenderungswunsch": "Change request",
+      "notfall_vertretung": "Emergency cover",
+      "shiftReminder": "Shift reminders"
+    },
+    "permDenied": "Notifications are turned off in system settings.",
+    "permOpen": "Open"
   },
   "tabs": {
     "messages": "Messages",
@@ -589,6 +588,25 @@
     "assignFailedMaxWeek": "This would exceed the maximum weekly working hours.",
     "assignFailedRole": "They aren't qualified for this role.",
     "assignFailedDisabled": "This employee is deactivated.",
-    "removeFailed": "Could not remove this person from the shift."
+    "removeFailed": "Could not remove this person from the shift.",
+    "offlineStale": "Offline — showing last synced",
+    "cancel": "Cancel"
+  },
+  "reminders": {
+    "eveningTitle": "Shift tomorrow",
+    "eveningBody": "{label} starts tomorrow at {time}.",
+    "soonTitle": "Shift soon",
+    "soonBody": "{label} starts at {time}."
+  },
+  "notes": {
+    "section": "Notes",
+    "empty": "No notes yet.",
+    "placeholder": "Add a note for this shift…",
+    "add": "Add note",
+    "saveFailed": "Couldn't save the note.",
+    "deleteFailed": "Couldn't delete the note.",
+    "deleteTitle": "Delete note?",
+    "deleteBody": "This note will be permanently removed.",
+    "delete": "Delete"
   }
 }

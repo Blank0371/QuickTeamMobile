@@ -35,7 +35,13 @@
           "imageWidth": 76
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-notifications",
+        {
+          "color": "#208AEF"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

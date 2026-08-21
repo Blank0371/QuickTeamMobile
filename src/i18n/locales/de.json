@@ -414,18 +414,17 @@
       "schedule": "Dienstplan"
     },
     "item": {
-      "announcement": "Ankündigungen",
-      "tasks": "Aufgabenlisten",
-      "shiftSwitch": "Schichttausch",
-      "polls": "Umfragen",
-      "documents": "Dokumente",
-      "planPublished": "Plan veröffentlicht",
-      "shiftChanged": "Schicht geändert",
-      "availabilityReminder": "Verfügbarkeits-Erinnerung",
-      "understaffing": "Unterbesetzung",
-      "emergency": "Notfallvertretung",
-      "openShift": "Offene Schicht"
-    }
+      "allgemein": "Ankündigungen",
+      "umfrage": "Umfragen",
+      "schicht_tausch": "Schichttausch",
+      "schicht_ausschreibung": "Offene Schicht",
+      "schicht_geaendert": "Schicht geändert",
+      "aenderungswunsch": "Änderungswunsch",
+      "notfall_vertretung": "Notfallvertretung",
+      "shiftReminder": "Schicht-Erinnerungen"
+    },
+    "permDenied": "Benachrichtigungen sind in den Systemeinstellungen deaktiviert.",
+    "permOpen": "Öffnen"
   },
   "tabs": {
     "messages": "Nachrichten",
@@ -589,6 +588,25 @@
     "assignFailedMaxWeek": "Das würde die maximale wöchentliche Arbeitszeit überschreiten.",
     "assignFailedRole": "Die Person ist für diese Rolle nicht qualifiziert.",
     "assignFailedDisabled": "Dieser Mitarbeiter ist deaktiviert.",
-    "removeFailed": "Diese Person konnte nicht aus der Schicht entfernt werden."
+    "removeFailed": "Diese Person konnte nicht aus der Schicht entfernt werden.",
+    "offlineStale": "Offline – letzter Stand",
+    "cancel": "Abbrechen"
+  },
+  "reminders": {
+    "eveningTitle": "Schicht morgen",
+    "eveningBody": "{label} beginnt morgen um {time} Uhr.",
+    "soonTitle": "Schicht bald",
+    "soonBody": "{label} beginnt um {time} Uhr."
+  },
+  "notes": {
+    "section": "Notizen",
+    "empty": "Noch keine Notizen.",
+    "placeholder": "Notiz für diese Schicht hinzufügen…",
+    "add": "Notiz hinzufügen",
+    "saveFailed": "Notiz konnte nicht gespeichert werden.",
+    "deleteFailed": "Notiz konnte nicht gelöscht werden.",
+    "deleteTitle": "Notiz löschen?",
+    "deleteBody": "Diese Notiz wird dauerhaft entfernt.",
+    "delete": "Löschen"
   }
 }

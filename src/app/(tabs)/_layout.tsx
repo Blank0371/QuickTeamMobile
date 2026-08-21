@@ -1,9 +1,12 @@
 // src/app/(tabs)/_layout.tsx
-import { Tabs } from "expo-router";
+import { router, Tabs } from "expo-router";
 import { Briefcase, Calendar, CalendarClock, Home, ListTodo, MessageCircle, Settings } from "lucide-react-native";
+import * as Notifications from "expo-notifications";
+import { useEffect } from "react";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useTheme } from "../../theme/ThemeProvider";
+import { registerForPush } from "../../lib/notifications";
 
 export const unstable_settings = {
   initialRouteName: "index", // Main is the landing tab
@@ -11,11 +14,27 @@ export const unstable_settings = {
 
 export default function TabsLayout() {
   const { theme } = useTheme();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { activeMitarbeiter } = useAuth();
 
   // Role of the position the user entered as -> chef sees the Manager tab.
   const isChef = activeMitarbeiter?.rolle_typ === "chef";
+
+  // Register this device for push once we know the entered position, and record
+  // the UI language so the server can localize pushes.
+  useEffect(() => {
+    registerForPush(activeMitarbeiter?.id ?? null, lang);
+  }, [activeMitarbeiter?.id, lang]);
+
+  // Tapping a push (or a scheduled reminder) deep-links to the relevant screen.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
+      const data = resp.notification.request.content.data as any;
+      if (data?.shift_id) router.push({ pathname: "/shift/[id]", params: { id: String(data.shift_id) } });
+      else if (data?.benachrichtigung_id || data?.typ) router.push("/messages");
+    });
+    return () => sub.remove();
+  }, []);
 
   return (
     <Tabs
