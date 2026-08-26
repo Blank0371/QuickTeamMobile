@@ -585,6 +585,8 @@ function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, rel
   const [bis, setBis] = useState<string | null>(null);
   const [kommentar, setKommentar] = useState("");
   const [sent, setSent] = useState(false);
+  const [errCode, setErrCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const yr = now.getFullYear();
   const usedDays = useMemo(() => vacations
@@ -600,6 +602,7 @@ function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, rel
 
   const today = isoDay(now);
   const onPick = (iso: string) => {
+    setErrCode(null);
     if (iso < today) return;
     if (!von || (von && bis)) { setVon(iso); setBis(null); return; }
     if (iso < von) { setVon(iso); return; }
@@ -611,18 +614,34 @@ function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, rel
     ? Math.floor((new Date(bis).getTime() - new Date(von).getTime()) / 86400000) + 1
     : von ? 1 : 0;
   // The picked range must fit within the days the employee still has left,
-  // so a request can never push the balance below zero.
+  // so a request can never push the balance below zero. Shown as an inline
+  // hint; the server (urlaub_beantragen) is the authoritative gate.
   const exceedsBalance = rangeDays > daysLeft;
-  const canRequest = !!von && rangeDays > 0 && !exceedsBalance;
+  const canRequest = !!von && rangeDays > 0 && !busy;
+
+  // Map the RPC's machine error codes to localized copy.
+  const ERR_KEYS: Record<string, string> = {
+    URLAUB_DATUM: "scheduling.errVacationDate",
+    URLAUB_KONTINGENT: "scheduling.notEnoughDays",
+    URLAUB_SCHICHTEN: "scheduling.errVacationShifts",
+    URLAUB_GEPLANT: "scheduling.errVacationPlanned",
+  };
 
   const request = async () => {
     if (!canRequest) return;
-    const { error } = await supabase.from("urlaub").insert({
-      mitarbeiter_id: me, betrieb_id: betrieb, von, bis: bis ?? von, status: "requested",
-      kommentar: kommentar.trim() || null,
+    setErrCode(null);
+    setBusy(true);
+    const { data, error } = await supabase.rpc("urlaub_beantragen", {
+      p_betrieb_id: betrieb, p_mitarbeiter_id: me, p_von: von, p_bis: bis ?? von,
+      p_kommentar: kommentar.trim() || null,
     });
-    if (error) return;
-    setVon(null); setBis(null); setKommentar("");
+    setBusy(false);
+    if (error || !data) {
+      const code = (error?.message ?? "").trim();
+      setErrCode(ERR_KEYS[code] ? code : "GENERIC");
+      return;
+    }
+    setVon(null); setBis(null); setKommentar(""); setErrCode(null);
     setSent(true);
     setTimeout(() => setSent(false), 2500);
     reload();
@@ -675,7 +694,11 @@ function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, rel
         <Text style={{ color: theme.muted, fontSize: 13, textAlign: "center" }}>
           {von ? `${fmtDate(von)}${bis ? "  –  " + fmtDate(bis) : ""}   ·   ${rangeDays} ${t("scheduling.days")}` : ""}
         </Text>
-        {exceedsBalance ? (
+        {errCode ? (
+          <Text style={{ color: RED, fontSize: 13, textAlign: "center", fontWeight: "600" }}>
+            {errCode === "GENERIC" ? t("scheduling.errVacationGeneric") : t(ERR_KEYS[errCode])}
+          </Text>
+        ) : exceedsBalance ? (
           <Text style={{ color: RED, fontSize: 13, textAlign: "center", fontWeight: "600" }}>
             {t("scheduling.notEnoughDays")}
           </Text>

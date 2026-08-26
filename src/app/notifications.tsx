@@ -22,7 +22,7 @@ import { ScreenGradient } from "../components/ScreenGradient";
 // local-only `shiftReminder`. Grouped for display only.
 const CATEGORIES = [
   { key: "messages", items: ["allgemein", "umfrage", "schicht_tausch", "schicht_ausschreibung"] },
-  { key: "schedule", items: ["schicht_geaendert", "aenderungswunsch", "notfall_vertretung", "shiftReminder"] },
+  { key: "schedule", items: ["schicht_geaendert", "aenderungswunsch", "notfall_vertretung", "urlaub_antrag", "urlaub_entscheidung", "shiftReminder"] },
 ] as const;
 
 const STORAGE_KEY = "notifPrefs";

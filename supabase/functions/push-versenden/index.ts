@@ -41,6 +41,14 @@ const CATALOG: Record<string, Record<string, Copy>> = {
     de: { title: "Vertretung gesucht", body: "Für eine Schicht wird dringend Vertretung gesucht." },
     en: { title: "Cover needed", body: "A shift urgently needs cover." },
   },
+  urlaub_antrag: {
+    de: { title: "Urlaubsantrag", body: "Ein Mitarbeiter hat Urlaub beantragt." },
+    en: { title: "Vacation request", body: "An employee has requested vacation." },
+  },
+  urlaub_entscheidung: {
+    de: { title: "Urlaubsantrag", body: "Über deinen Urlaubsantrag wurde entschieden." },
+    en: { title: "Vacation request", body: "Your vacation request has been answered." },
+  },
   allgemein: {
     de: { title: "Neue Nachricht", body: "Du hast eine neue Nachricht." },
     en: { title: "New message", body: "You have a new message." },
