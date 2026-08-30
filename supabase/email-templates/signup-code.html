@@ -1,22 +1,37 @@
 <!-- Supabase → Authentication → Email Templates → Confirm signup -->
 <!-- Requires {{ .Token }} in the template. Subject suggestion: "Your QuickTeam verification code" -->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0;padding:0;background-color:#f4f5f7;">
+<!-- Styled to match the app's "Werksdatenblatt" theme: Deep Green brand + Gold Bronze accent on warm paper. -->
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<style>
+  @media (prefers-color-scheme: dark) {
+    .qt-body   { background-color:#0D100E !important; }
+    .qt-card   { background-color:#1A1F1C !important; border-color:#352F1F !important; }
+    .qt-title  { color:#EDE9E0 !important; }
+    .qt-text   { color:#CFC9BD !important; }
+    .qt-codebox{ background-color:#0D100E !important; border-color:#352F1F !important; }
+    .qt-code   { color:#EDE9E0 !important; }
+    .qt-foot   { color:#7E796F !important; }
+    .qt-copy   { color:#6E736C !important; }
+  }
+</style>
+<table role="presentation" class="qt-body" width="100%" cellpadding="0" cellspacing="0" style="margin:0;padding:0;background-color:#F3F0E8;">
   <tr>
     <td align="center" style="padding:32px 16px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:440px;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e6e8eb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+      <table role="presentation" class="qt-card" width="100%" cellpadding="0" cellspacing="0" style="max-width:440px;background-color:#FFFDF8;border-radius:16px;overflow:hidden;border:1px solid #D9CFB6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
-        <!-- Brand bar -->
+        <!-- Brand bar: Deep Green with a Gold Bronze accent rule -->
         <tr>
-          <td style="background-color:#111827;padding:24px 32px;">
-            <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.02em;">QuickTeam</span>
+          <td style="background-color:#16241C;padding:24px 32px;border-bottom:3px solid #8A6B3C;">
+            <span style="color:#F3F0E8;font-size:20px;font-weight:700;letter-spacing:-0.02em;">QuickTeam</span>
           </td>
         </tr>
 
         <!-- Body -->
         <tr>
           <td style="padding:36px 32px 8px 32px;">
-            <h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#111827;">Confirm your email</h1>
-            <p style="margin:0;font-size:15px;line-height:1.6;color:#4b5563;">
+            <h1 class="qt-title" style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:700;color:#16241C;">Confirm your email</h1>
+            <p class="qt-text" style="margin:0;font-size:15px;line-height:1.6;color:#5B564A;">
               Enter this 8-digit code in the app to finish setting up your account. It expires in 60 minutes.
             </p>
           </td>
@@ -27,8 +42,8 @@
           <td style="padding:28px 32px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td align="center" style="background-color:#f4f5f7;border:1px solid #e6e8eb;border-radius:12px;padding:22px 0;">
-                  <span style="font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:34px;font-weight:700;letter-spacing:10px;color:#111827;">{{ .Token }}</span>
+                <td class="qt-codebox" align="center" style="background-color:#F3F0E8;border:1px solid #D9CFB6;border-radius:12px;padding:22px 0;">
+                  <span class="qt-code" style="font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:34px;font-weight:700;letter-spacing:10px;color:#16241C;">{{ .Token }}</span>
                 </td>
               </tr>
             </table>
@@ -38,7 +53,7 @@
         <!-- Footer note -->
         <tr>
           <td style="padding:0 32px 36px 32px;">
-            <p style="margin:0;font-size:13px;line-height:1.6;color:#9ca3af;">
+            <p class="qt-foot" style="margin:0;font-size:13px;line-height:1.6;color:#9A9280;">
               Didn't try to sign up? You can safely ignore this email — no account will be created without this code.
             </p>
           </td>
@@ -46,7 +61,7 @@
 
       </table>
 
-      <p style="margin:20px 0 0 0;font-size:12px;color:#9ca3af;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+      <p class="qt-copy" style="margin:20px 0 0 0;font-size:12px;color:#A79E8C;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
         © QuickTeam
       </p>
     </td>

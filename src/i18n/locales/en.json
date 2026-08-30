@@ -18,6 +18,7 @@
     "verify": "Verify",
     "resend": "Resend code",
     "codeResent": "A new code has been sent.",
+    "spamHint": "Can't find it? Check your spam folder.",
     "back": "Back",
     "forgotLink": "Forgot password?",
     "forgotTitle": "Reset password",

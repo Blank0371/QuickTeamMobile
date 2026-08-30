@@ -347,6 +347,7 @@ export default function AuthScreen() {
           <Text style={[styles.subtitle, { color: theme.muted }]}>
             {t("auth.verifySubtitle")} {email}
           </Text>
+          <Text style={[styles.spamHint, { color: theme.muted }]}>{t("auth.spamHint")}</Text>
 
           <TextInput
             style={[...inputStyle, styles.codeInput]}
@@ -404,6 +405,7 @@ export default function AuthScreen() {
           <Text style={[styles.subtitle, { color: theme.muted }]}>
             {t("auth.verifySubtitle")} {email}
           </Text>
+          <Text style={[styles.spamHint, { color: theme.muted }]}>{t("auth.spamHint")}</Text>
 
           <TextInput
             style={[...inputStyle, styles.codeInput]}
@@ -533,6 +535,7 @@ const styles = StyleSheet.create({
   form: { flex: 1, justifyContent: "center", gap: 12 },
   title: { fontSize: 28, fontWeight: "700", textAlign: "center", marginBottom: 8 },
   subtitle: { fontSize: 14, textAlign: "center", marginBottom: 8 },
+  spamHint: { fontSize: 12.5, textAlign: "center", marginTop: -8, opacity: 0.85 },
 
   input: {
     borderWidth: 1.5, borderRadius: 4, paddingVertical: 14,

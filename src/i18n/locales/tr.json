@@ -18,6 +18,7 @@
     "verify": "Doğrula",
     "resend": "Kodu yeniden gönder",
     "codeResent": "Yeni bir kod gönderildi.",
+    "spamHint": "Bulamıyor musunuz? Spam klasörünü kontrol edin.",
     "back": "Geri",
     "forgotLink": "Şifreni mi unuttun?",
     "forgotTitle": "Şifreyi sıfırla",
