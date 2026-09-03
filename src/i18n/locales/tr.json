@@ -542,7 +542,8 @@
       "phonePlaceholder": "+90 555 123 45 67",
       "emailPlaceholder": "sen@ornek.com",
       "error": "Bir şeyler ters gitti. Lütfen tekrar dene."
-    }
+    },
+    "deleteAccount": "Hesabı sil"
   },
   "calendar": {
     "day": "Gün",
@@ -615,5 +616,24 @@
     "deleteTitle": "Not silinsin mi?",
     "deleteBody": "Bu not kalıcı olarak silinecek.",
     "delete": "Sil"
+  },
+  "deleteAccount": {
+    "title": "Hesabı sil",
+    "lead": "Hesabını silmek şunları yapar:",
+    "bullet1": "Girişini ve kişisel profilini kalıcı olarak siler.",
+    "bullet2": "Adını, e-postanı ve telefon numaranı iş yerlerinden kaldırır.",
+    "bullet3": "Seni tüm cihazlarda oturumdan çıkarır ve erişimini sonlandırır.",
+    "bullet4": "İşverenin yasal olarak saklaması gereken anonimleştirilmiş vardiya kayıtlarını tutar.",
+    "irreversible": "Bu işlem geri alınamaz. Uygulamayı yeniden kullanmak için yeni bir davet gerekir.",
+    "continue": "Devam et",
+    "cancel": "İptal",
+    "confirmPassword": "Hesabını kalıcı olarak silmek istediğini onaylamak için şifreni gir.",
+    "passwordPlaceholder": "Şifren",
+    "confirmPhrase": "Hesabını kalıcı olarak silmek istediğini onaylamak için {{word}} yaz.",
+    "confirmWord": "SİL",
+    "holdToDelete": "Silmek için basılı tut",
+    "wrongPassword": "Yanlış şifre. Lütfen tekrar dene.",
+    "chefBlocked": "Hâlâ bir ekibi yönetiyorsun. Hesabını silmeden önce işletmeni devret veya kaldır.",
+    "error": "Hesabın silinemedi. Lütfen tekrar dene."
   }
 }

@@ -542,7 +542,8 @@
       "phonePlaceholder": "+34 612 345 678",
       "emailPlaceholder": "tu@ejemplo.com",
       "error": "Algo salió mal. Inténtalo de nuevo."
-    }
+    },
+    "deleteAccount": "Eliminar cuenta"
   },
   "calendar": {
     "day": "Día",
@@ -615,5 +616,24 @@
     "deleteTitle": "¿Eliminar nota?",
     "deleteBody": "Esta nota se eliminará permanentemente.",
     "delete": "Eliminar"
+  },
+  "deleteAccount": {
+    "title": "Eliminar cuenta",
+    "lead": "Eliminar tu cuenta hará lo siguiente:",
+    "bullet1": "Eliminará de forma permanente tu inicio de sesión y tu perfil personal.",
+    "bullet2": "Quitará tu nombre, correo y número de teléfono de tus empresas.",
+    "bullet3": "Cerrará tu sesión en todos los dispositivos y finalizará tu acceso.",
+    "bullet4": "Conservará registros de turnos anonimizados que tu empleador debe guardar por ley.",
+    "irreversible": "Esto no se puede deshacer. Necesitarás una nueva invitación para volver a usar la app.",
+    "continue": "Continuar",
+    "cancel": "Cancelar",
+    "confirmPassword": "Introduce tu contraseña para confirmar que quieres eliminar tu cuenta de forma permanente.",
+    "passwordPlaceholder": "Tu contraseña",
+    "confirmPhrase": "Escribe {{word}} para confirmar que quieres eliminar tu cuenta de forma permanente.",
+    "confirmWord": "ELIMINAR",
+    "holdToDelete": "Mantén pulsado para eliminar la cuenta",
+    "wrongPassword": "Contraseña incorrecta. Inténtalo de nuevo.",
+    "chefBlocked": "Todavía gestionas un equipo. Transfiere o elimina tu empresa antes de borrar tu cuenta.",
+    "error": "No se pudo eliminar tu cuenta. Inténtalo de nuevo."
   }
 }

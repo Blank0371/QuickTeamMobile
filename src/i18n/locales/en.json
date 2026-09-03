@@ -542,7 +542,8 @@
       "phonePlaceholder": "+1 555 123 4567",
       "emailPlaceholder": "you@example.com",
       "error": "Something went wrong. Please try again."
-    }
+    },
+    "deleteAccount": "Delete account"
   },
   "calendar": {
     "day": "Day",
@@ -615,5 +616,24 @@
     "deleteTitle": "Delete note?",
     "deleteBody": "This note will be permanently removed.",
     "delete": "Delete"
+  },
+  "deleteAccount": {
+    "title": "Delete account",
+    "lead": "Deleting your account will:",
+    "bullet1": "Permanently remove your login and personal profile.",
+    "bullet2": "Remove your name, email and phone number from your workplaces.",
+    "bullet3": "Sign you out on all devices and end your access.",
+    "bullet4": "Keep anonymised scheduling records your employer must retain by law.",
+    "irreversible": "This cannot be undone. You will need a new invitation to use the app again.",
+    "continue": "Continue",
+    "cancel": "Cancel",
+    "confirmPassword": "Enter your password to confirm you want to permanently delete your account.",
+    "passwordPlaceholder": "Your password",
+    "confirmPhrase": "Type {{word}} to confirm you want to permanently delete your account.",
+    "confirmWord": "DELETE",
+    "holdToDelete": "Hold to delete account",
+    "wrongPassword": "Incorrect password. Please try again.",
+    "chefBlocked": "You still manage a team. Hand over or remove your business before deleting your account.",
+    "error": "Could not delete your account. Please try again."
   }
 }

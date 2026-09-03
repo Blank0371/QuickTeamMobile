@@ -32,6 +32,7 @@ function RootNav() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="bug-report" />
+          <Stack.Screen name="delete-account" />
           <Stack.Screen name="compose" options={{ presentation: "modal" }} />
           <Stack.Screen name="shift/[id]" options={{ presentation: "modal" }} />
           <Stack.Screen name="legal/[doc]" />

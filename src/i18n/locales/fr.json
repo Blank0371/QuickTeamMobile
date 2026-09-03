@@ -542,7 +542,8 @@
       "phonePlaceholder": "+33 6 12 34 56 78",
       "emailPlaceholder": "vous@exemple.com",
       "error": "Une erreur s'est produite. Veuillez réessayer."
-    }
+    },
+    "deleteAccount": "Supprimer le compte"
   },
   "calendar": {
     "day": "Jour",
@@ -615,5 +616,24 @@
     "deleteTitle": "Supprimer la note ?",
     "deleteBody": "Cette note sera définitivement supprimée.",
     "delete": "Supprimer"
+  },
+  "deleteAccount": {
+    "title": "Supprimer le compte",
+    "lead": "La suppression de votre compte va :",
+    "bullet1": "Supprimer définitivement votre identifiant et votre profil personnel.",
+    "bullet2": "Retirer votre nom, votre e-mail et votre numéro de téléphone de vos établissements.",
+    "bullet3": "Vous déconnecter de tous les appareils et mettre fin à votre accès.",
+    "bullet4": "Conserver des données de planning anonymisées que votre employeur doit garder par la loi.",
+    "irreversible": "Cette action est irréversible. Vous aurez besoin d'une nouvelle invitation pour réutiliser l'application.",
+    "continue": "Continuer",
+    "cancel": "Annuler",
+    "confirmPassword": "Saisissez votre mot de passe pour confirmer la suppression définitive de votre compte.",
+    "passwordPlaceholder": "Votre mot de passe",
+    "confirmPhrase": "Saisissez {{word}} pour confirmer la suppression définitive de votre compte.",
+    "confirmWord": "SUPPRIMER",
+    "holdToDelete": "Maintenez pour supprimer le compte",
+    "wrongPassword": "Mot de passe incorrect. Veuillez réessayer.",
+    "chefBlocked": "Vous gérez encore une équipe. Transférez ou supprimez votre établissement avant de supprimer votre compte.",
+    "error": "Impossible de supprimer votre compte. Veuillez réessayer."
   }
 }

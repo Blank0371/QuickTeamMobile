@@ -1,6 +1,6 @@
 // src/app/(tabs)/settings.tsx
 import { router } from "expo-router";
-import { AlertCircle, Copyright, FileText, Settings as Gear, Mail, Moon, Phone, ScrollText, Shield, Sun, X } from "lucide-react-native";
+import { AlertCircle, Copyright, FileText, Settings as Gear, Mail, Moon, Phone, ScrollText, Shield, Sun, Trash2, X } from "lucide-react-native";
 import { useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
@@ -337,6 +337,16 @@ export default function SettingsScreen() {
         <View style={styles.danger}>
           <HoldButton label={t("settings.signOut")} onConfirm={() => { signOut(); }} />
           <Text style={[styles.holdHint, { color: theme.muted }]}>{t("settings.holdToConfirm")}</Text>
+
+          <Pressable
+            style={[styles.deleteRow, { borderColor: theme.danger }]}
+            onPress={() => router.push("/delete-account")}
+          >
+            <Trash2 color={theme.danger} size={20} />
+            <Text style={[styles.deleteText, { color: theme.danger }]}>
+              {t("settings.deleteAccount")}
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -372,6 +382,11 @@ const styles = StyleSheet.create({
 
   danger: { marginTop: 32, gap: 12 },
   holdHint: { fontSize: 13, textAlign: "center" },
+  deleteRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    borderWidth: 1.5, borderRadius: 999, paddingVertical: 14, marginTop: 8,
+  },
+  deleteText: { fontSize: 16, fontWeight: "700" },
 
   banner: { borderWidth: 1.5, borderRadius: 12, padding: 16, gap: 12 },
   bannerHead: { flexDirection: "row", alignItems: "center", gap: 10 },

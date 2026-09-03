@@ -542,7 +542,8 @@
       "phonePlaceholder": "+49 170 1234567",
       "emailPlaceholder": "du@beispiel.de",
       "error": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
-    }
+    },
+    "deleteAccount": "Konto löschen"
   },
   "calendar": {
     "day": "Tag",
@@ -615,5 +616,24 @@
     "deleteTitle": "Notiz löschen?",
     "deleteBody": "Diese Notiz wird dauerhaft entfernt.",
     "delete": "Löschen"
+  },
+  "deleteAccount": {
+    "title": "Konto löschen",
+    "lead": "Das Löschen deines Kontos wird:",
+    "bullet1": "Deinen Login und dein persönliches Profil dauerhaft entfernen.",
+    "bullet2": "Deinen Namen, deine E-Mail und Telefonnummer aus deinen Betrieben entfernen.",
+    "bullet3": "Dich auf allen Geräten abmelden und deinen Zugang beenden.",
+    "bullet4": "Anonymisierte Dienstplandaten behalten, die dein Arbeitgeber gesetzlich aufbewahren muss.",
+    "irreversible": "Dies kann nicht rückgängig gemacht werden. Du benötigst eine neue Einladung, um die App wieder zu nutzen.",
+    "continue": "Weiter",
+    "cancel": "Abbrechen",
+    "confirmPassword": "Gib dein Passwort ein, um zu bestätigen, dass du dein Konto dauerhaft löschen möchtest.",
+    "passwordPlaceholder": "Dein Passwort",
+    "confirmPhrase": "Gib {{word}} ein, um zu bestätigen, dass du dein Konto dauerhaft löschen möchtest.",
+    "confirmWord": "LÖSCHEN",
+    "holdToDelete": "Zum Löschen gedrückt halten",
+    "wrongPassword": "Falsches Passwort. Bitte versuche es erneut.",
+    "chefBlocked": "Du verwaltest noch ein Team. Übergib oder entferne deinen Betrieb, bevor du dein Konto löschst.",
+    "error": "Konto konnte nicht gelöscht werden. Bitte versuche es erneut."
   }
 }

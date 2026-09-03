@@ -70,6 +70,15 @@ type AuthContextType = {
    * user is signed in with the new credentials.
    */
   confirmPasswordReset: (email: string, code: string, newPassword: string) => Promise<void>;
+  /**
+   * Permanently delete the signed-in account (Apple Guideline 5.1.1(v) + GDPR
+   * erasure). Re-authenticates with `password` first when the account has one,
+   * then anonymises every position and deletes the auth user server-side, and
+   * finally signs out. Throws `Error("REAUTH_FAILED")` on a wrong password and
+   * an error whose message contains `CHEF_MIT_MITGLIEDERN` when the account
+   * still actively manages a team (must be handed over first).
+   */
+  deleteAccount: (password?: string) => Promise<void>;
   /** Enter the app as a specific mitarbeiter position (from the select screen). */
   enterApp: (m: { id: string; betrieb_id: string; rolle_typ: string }) => void;
   /** Return to the business-selection screen (manage connections / switch). */
@@ -194,6 +203,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (updErr) throw updErr;
   };
 
+  const deleteAccount = async (password?: string) => {
+    // Re-authenticate email/password accounts so a stolen unlocked phone can't
+    // wipe the account. verifyOtp-only (phone) accounts skip this step.
+    if (password && user?.email) {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password,
+      });
+      if (error) throw new Error("REAUTH_FAILED");
+    }
+    const { error } = await supabase.rpc("konto_selbst_loeschen");
+    if (error) throw error;
+    await supabase.auth.signOut();
+  };
+
   const enterApp = (m: { id: string; betrieb_id: string; rolle_typ: string }) => {
     setActiveMitarbeiter(m);
     setEntered(true);
@@ -228,6 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resendCode,
         sendPasswordReset,
         confirmPasswordReset,
+        deleteAccount,
         enterApp,
         exitToSelection,
         signOut,
