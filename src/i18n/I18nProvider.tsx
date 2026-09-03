@@ -5,13 +5,15 @@ import de from "./locales/de.json";
 import en from "./locales/en.json";
 import es from "./locales/es.json";
 import fr from "./locales/fr.json";
+import it from "./locales/it.json";
+import pt from "./locales/pt.json";
 import ru from "./locales/ru.json";
 import tr from "./locales/tr.json";
 import uk from "./locales/uk.json";
 
-const resources: Record<string, any> = { en, de, ru, es, fr, tr, uk };
-type Lang = "en" | "de" | "ru" | "es" | "fr" | "tr" | "uk";
-const SUPPORTED: Lang[] = ["en", "de", "ru", "es", "fr", "tr", "uk"];
+const resources: Record<string, any> = { en, de, ru, es, fr, pt, it, tr, uk };
+type Lang = "en" | "de" | "ru" | "es" | "fr" | "pt" | "it" | "tr" | "uk";
+const SUPPORTED: Lang[] = ["en", "de", "ru", "es", "fr", "pt", "it", "tr", "uk"];
 
 type I18nContextType = {
   lang: Lang;

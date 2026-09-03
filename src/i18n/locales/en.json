@@ -518,7 +518,9 @@
       "es": "Spanish",
       "tr": "Turkish",
       "uk": "Ukrainian",
-      "fr": "French"
+      "fr": "French",
+      "pt": "Portuguese",
+      "it": "Italian"
     },
     "bugReport": {
       "title": "Report a problem",

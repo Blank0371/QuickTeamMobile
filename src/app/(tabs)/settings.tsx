@@ -20,6 +20,8 @@ const LANGS = [
   { code: "es" as const, flag: "🇪🇸", label: "Español" },
   { code: "tr" as const, flag: "🇹🇷", label: "Türkçe" },
   { code: "uk" as const, flag: "🇺🇦", label: "Українська" },
+  { code: "pt" as const, flag: "🇵🇹", label: "Português" },
+  { code: "it" as const, flag: "🇮🇹", label: "Italiano" },
   { code: "fr" as const, flag: "🇫🇷", label: "Français" },
 ];
 
