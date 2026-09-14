@@ -7,11 +7,16 @@
 //   • Local reminders — scheduleShiftReminders() schedules on-device
 //     notifications for the user's upcoming shifts. These fire with no network,
 //     so they keep working offline.
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
+
+// The token last registered from this device, so sign-out can unregister it
+// without another round-trip to Expo (which may be unreachable offline).
+const PUSH_TOKEN_KEY = "pushToken";
 
 // Show an alert + play a sound even when the app is foregrounded.
 Notifications.setNotificationHandler({
@@ -76,6 +81,7 @@ export async function registerForPush(mitarbeiterId: string | null, sprache: str
     if (!token) return null;
 
     await supabase.rpc("push_token_speichern", { p_token: token, p_platform: Platform.OS });
+    await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
     if (mitarbeiterId) {
       await supabase.rpc("mitarbeiter_sprache_setzen", {
         p_mitarbeiter_id: mitarbeiterId,
@@ -86,6 +92,36 @@ export async function registerForPush(mitarbeiterId: string | null, sprache: str
   } catch (e) {
     console.warn("[push] register failed", e);
     return null;
+  }
+}
+
+/**
+ * Detach this device from the signed-in account, so its pushes stop arriving
+ * here after sign-out. Must run BEFORE signOut(): push_token_loeschen matches
+ * on auth.uid(). Best-effort and capped at 5 s — being offline must not block
+ * signing out; the next sign-in on this device re-points the token anyway.
+ */
+export async function unregisterPush(): Promise<void> {
+  if (Platform.OS === "web") return;
+  try {
+    const token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+    if (!token) return;
+    const call = supabase.rpc("push_token_loeschen", { p_token: token }).then(({ error }) => {
+      if (error) console.warn("[push] unregister failed", error.message);
+    });
+    await Promise.race([call, new Promise((resolve) => setTimeout(resolve, 5000))]);
+  } catch (e) {
+    console.warn("[push] unregister failed", e);
+  }
+}
+
+/** Cancel every on-device shift reminder (e.g. the previous user's, on sign-out). */
+export async function cancelShiftReminders(): Promise<void> {
+  if (Platform.OS === "web" || !Device.isDevice) return;
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch (e) {
+    console.warn("[push] cancel reminders failed", e);
   }
 }
 

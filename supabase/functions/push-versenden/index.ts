@@ -127,7 +127,22 @@ Deno.serve(async (req) => {
   });
   const receipt = await res.json().catch(() => null);
 
-  return new Response(JSON.stringify({ sent: messages.length, receipt }), {
+  // Expo answers with one ticket per message, in the same order. A ticket with
+  // DeviceNotRegistered means the app was uninstalled or the token rotated —
+  // Expo asks senders to stop using it, so drop it instead of retrying forever.
+  // (The same error can also surface later in push *receipts*; those are not
+  // polled here.)
+  const tickets: { status?: string; details?: { error?: string } }[] =
+    Array.isArray(receipt?.data) ? receipt.data : [];
+  const stale = messages
+    .filter((_, i) => tickets[i]?.status === "error" && tickets[i]?.details?.error === "DeviceNotRegistered")
+    .map((m) => m.to);
+  if (stale.length > 0) {
+    const { error } = await supabase.from("push_tokens").delete().in("expo_token", stale);
+    if (error) console.warn("[push] stale token cleanup failed", error.message);
+  }
+
+  return new Response(JSON.stringify({ sent: messages.length, removed: stale.length, receipt }), {
     status: 200, headers: { "Content-Type": "application/json" },
   });
 });

@@ -1,8 +1,8 @@
-﻿// src/app/(tabs)/manager.tsx â€” chef-only management area, two sections:
-//  â€¢ Employees â€” vacation requests to approve/deny (pending open, decided folded)
+﻿// src/app/(tabs)/manager.tsx — chef-only management area, two sections:
+//  • Employees — vacation requests to approve/deny (pending open, decided folded)
 //                and the full team list; tapping a member opens their detail
 //                sheet (roles, hours worked, overtime, vacation taken, contract).
-//  â€¢ Business  â€” editable business settings (name, country) plus the
+//  • Business  — editable business settings (name, country) plus the
 //                betriebs_einstellungen row (default language, swap approval,
 //                availability deadline).
 // Reads/writes Supabase under chef RLS: urlaub (update status/begruendung),
@@ -148,7 +148,7 @@ export default function ManagerScreen() {
     setLoading(true);
     const yearStart = `${new Date().getFullYear()}-01-01`;
 
-    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, vorlagen, swapReq, mindest, zyklenRes] = await Promise.all([
+    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, gruendeRes, vorlagen, swapReq, mindest, zyklenRes] = await Promise.all([
       supabase.from("mitarbeiter")
         .select("id, vorname, nachname, email, telefon, rolle_typ, vertrag_typ, soll_stunden, ueberstunden_saldo, status, urlaubsanspruch_tage")
         .eq("betrieb_id", betrieb).order("nachname"),
@@ -162,8 +162,11 @@ export default function ManagerScreen() {
       supabase.from("schicht_zuweisungen").select("id, mitarbeiter_id, schicht_instanz_id, rolle_id, attendet").eq("betrieb_id", betrieb),
       // All instances (not just this year) so overtime can span every worked month up to the cutoff.
       supabase.from("schicht_instanzen").select("id, start_zeit, end_zeit, datum, schicht_vorlage_id").eq("betrieb_id", betrieb),
-      supabase.from("notfaelle").select("id, status, melder_id, schicht_instanz_id, rolle_id, grund, erstellt_am")
+      supabase.from("notfaelle").select("id, status, melder_id, schicht_instanz_id, rolle_id, erstellt_am")
         .eq("betrieb_id", betrieb).in("status", ["gemeldet", "vertretung_gesucht"]).order("erstellt_am", { ascending: true }),
+      // The free-text reason may be health data, so it gets its own table with
+      // narrower RLS (management, reporter, cover) — see the fallback below.
+      supabase.from("notfall_gruende").select("notfall_id, grund").eq("betrieb_id", betrieb),
       supabase.from("schicht_vorlagen").select("id, bezeichnung, wochentag, start_zeit, end_zeit, aktiv").eq("betrieb_id", betrieb),
       supabase.from("schichttausch_anfragen")
         .select("id, schicht_zuweisung_id, anbietender_mitarbeiter_id, uebernehmender_mitarbeiter_id, gegen_datum, gegen_start, gegen_end")
@@ -227,18 +230,27 @@ export default function ManagerScreen() {
 
     // Active emergencies for the urgent section (needs shift labels).
     const nList = notf.data ?? [];
+    // Transitional: until the notfall_gruende migration is applied the table
+    // doesn't exist and the reason is still notfaelle.grund. Reading it from
+    // there only in that case keeps this build working on both schemas, so it
+    // can ship before the migration. Remove once the migration is live.
+    let gruende = new Map<string, string>((gruendeRes.data ?? []).map((g: any) => [g.notfall_id, g.grund]));
+    if (gruendeRes.error && nList.length > 0) {
+      const { data: alt } = await supabase.from("notfaelle").select("id, grund").in("id", nList.map((n: any) => n.id));
+      gruende = new Map((alt ?? []).filter((n: any) => n.grund).map((n: any) => [n.id, n.grund]));
+    }
     const emg: Emergency[] = nList.map((n: any) => {
       const inst = instById.get(n.schicht_instanz_id);
       return {
         id: n.id,
         status: n.status,
-        melderName: nameById.get(n.melder_id) ?? "â€”",
+        melderName: nameById.get(n.melder_id) ?? "—",
         roleName: roleById.get(n.rolle_id) ?? "",
         label: (inst?.schicht_vorlage_id && vorlById.get(inst.schicht_vorlage_id)) || t("manager.shift"),
         datum: inst?.datum ?? "",
         start_zeit: inst?.start_zeit ?? "",
         end_zeit: inst?.end_zeit ?? "",
-        grund: n.grund ?? null,
+        grund: gruende.get(n.id) ?? null,
       };
     });
     setEmergencies(emg);
@@ -366,7 +378,7 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds,
   const decided = vacations.filter((v: Urlaub) => v.status !== "requested");
   const nameOf = (id: string) => {
     const m = team.find((x: Mitarbeiter) => x.id === id);
-    return m ? `${m.vorname} ${m.nachname}` : "â€”";
+    return m ? `${m.vorname} ${m.nachname}` : "—";
   };
 
   const decide = async (id: string, status: Status, begruendung: string | null) => {
@@ -412,10 +424,10 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds,
             <View key={v.id} style={[styles.reqRow, { borderColor: theme.border }]}>
               <Text style={{ color: theme.text, fontWeight: "700" }}>{nameOf(v.mitarbeiter_id)}</Text>
               <Text style={{ color: theme.muted, fontSize: 13 }}>
-                {fmtDate(v.von)}{v.bis !== v.von ? "  â€“  " + fmtDate(v.bis) : ""}   Â·   {dayDiff(v.von, v.bis)} {t("manager.days")}
+                {fmtDate(v.von)}{v.bis !== v.von ? "  –  " + fmtDate(v.bis) : ""}   ·   {dayDiff(v.von, v.bis)} {t("manager.days")}
               </Text>
               {v.kommentar ? (
-                <Text style={{ color: theme.muted, fontSize: 13 }}>â€œ{v.kommentar}â€</Text>
+                <Text style={{ color: theme.muted, fontSize: 13 }}>“{v.kommentar}”</Text>
               ) : null}
 
               {denyFor === v.id ? (
@@ -453,7 +465,7 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds,
         )}
       </View>
 
-      {/* decided â€” folded */}
+      {/* decided — folded */}
       <Pressable
         style={[styles.foldHead, { backgroundColor: theme.surface, borderColor: theme.border }]}
         onPress={() => setShowDecided((o) => !o)}
@@ -473,7 +485,7 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds,
                 <View>
                   <Text style={{ color: theme.text, fontWeight: "600" }}>{nameOf(v.mitarbeiter_id)}</Text>
                   <Text style={{ color: theme.muted, fontSize: 12 }}>
-                    {fmtDate(v.von)}{v.bis !== v.von ? "  â€“  " + fmtDate(v.bis) : ""}   Â·   {dayDiff(v.von, v.bis)} {t("manager.days")}
+                    {fmtDate(v.von)}{v.bis !== v.von ? "  –  " + fmtDate(v.bis) : ""}   ·   {dayDiff(v.von, v.bis)} {t("manager.days")}
                   </Text>
                   {v.begruendung ? (
                     <Text style={{ color: RED, fontSize: 12 }}>{v.begruendung}</Text>
@@ -773,7 +785,7 @@ function UrgentEmergencies({ theme, t, lang, emergencies, reload }: any) {
 
   const hhmm = (s: string) => (s ? s.slice(0, 5) : "");
   const fmtShift = (e: Emergency) =>
-    `${e.label}${e.roleName ? " Â· " + e.roleName : ""} Â· ${e.datum ? new Date(e.datum + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" }) : ""} Â· ${hhmm(e.start_zeit)}â€“${hhmm(e.end_zeit)}`;
+    `${e.label}${e.roleName ? " · " + e.roleName : ""} · ${e.datum ? new Date(e.datum + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" }) : ""} · ${hhmm(e.start_zeit)}–${hhmm(e.end_zeit)}`;
 
   const callOut = async (id: string) => {
     setBusy(id);
@@ -793,7 +805,7 @@ function UrgentEmergencies({ theme, t, lang, emergencies, reload }: any) {
           </View>
           <Text style={{ color: theme.text, fontWeight: "700" }}>{e.melderName}</Text>
           <Text style={{ color: theme.muted, fontSize: 13 }}>{fmtShift(e)}</Text>
-          {e.grund ? <Text style={{ color: theme.text, fontSize: 13 }}>â€œ{e.grund}â€</Text> : null}
+          {e.grund ? <Text style={{ color: theme.text, fontSize: 13 }}>“{e.grund}”</Text> : null}
 
           {e.status === "vertretung_gesucht" ? (
             <View style={[styles.eligible, { backgroundColor: AMBER + "22" }]}>
@@ -1064,7 +1076,7 @@ function BusinessSection({ theme, t, lang, betrieb, einstellungen, setEinstellun
 
         <Pressable style={[styles.submit, { backgroundColor: theme.accent }]} onPress={save} disabled={saving}>
           <Text style={[styles.submitText, { color: theme.accentText }]}>
-            {saving ? "â€¦" : saved ? `âœ“ ${t("manager.saved")}` : t("manager.save")}
+            {saving ? "…" : saved ? `✓ ${t("manager.saved")}` : t("manager.save")}
           </Text>
         </Pressable>
       </View>
@@ -1525,7 +1537,13 @@ function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }
     const zyklusId = (data as any)?.id as string | undefined;
     const methode = (data as any)?.solver_methode as string | undefined;
     if (!error && methode === "quick" && zyklusId) {
-      await supabase.functions.invoke("plan-generieren", { body: { planungszyklus_id: zyklusId } });
+      // The function throttles server-side (429: another run of this business
+      // within 30 s; 409: already running) — say so instead of failing silently.
+      const { error: solverErr } = await supabase.functions.invoke("plan-generieren", { body: { planungszyklus_id: zyklusId } });
+      if (solverErr) {
+        console.warn("[plan-generieren]", solverErr.message);
+        notify(t("manager.solverNotStarted"));
+      }
     }
 
     setSending(false);

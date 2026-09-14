@@ -23,3 +23,15 @@ export async function writeCache<T>(key: string, value: T): Promise<void> {
     // best-effort; a failed cache write must never break the screen
   }
 }
+
+// Drop every cached entry. Run on sign-out: the cache holds the previous user's
+// roster, and on a shared device the next person must not see it offline.
+export async function clearCache(): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const ours = keys.filter((k) => k.startsWith(PREFIX));
+    if (ours.length > 0) await AsyncStorage.multiRemove(ours);
+  } catch {
+    // best-effort, like the writes
+  }
+}

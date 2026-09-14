@@ -19,11 +19,11 @@
 // so the solver never proposes a row the DB would reject (priority #1):
 //   - HC-3: employee holds the required role AND the role is active.
 //   - HC-1: not on approved holiday (urlaub) covering that date.
-//   - HC-2: no overlapping shift — unioned across mitarbeiter that share an
-//     auth_id (the trigger treats them as one body for overlap/rest).
+//   - HC-2: no overlapping shift — per mitarbeiter_id; profiles that share an
+//     auth_id are independent workers (launch checklist item 32).
 //   - HC-4: rest gap between any two shifts >= gesetzliche mindestruhezeit.
 //   - legal daily / weekly maxima (gesetzliche_parameter by betriebe.land).
-//   - HC-5: MONTHLY (cycle) hours must not exceed max_stunden_hart.
+//   - HC-5: CALENDAR-MONTH gross hours must not exceed max_stunden_hart.
 //   Pre-existing manuell/tausch assignments seed all of the above.
 //
 // SOFT ranking (priority: preference > überstunden > fairness) — lowest COST wins:
@@ -53,6 +53,8 @@
 //     is published is refused (409) unless the caller passes { force: true }.
 //     A forced rerun wipes the previous 'solver' assignments and redoes them;
 //     'manuell' and 'tausch' assignments are always left untouched.
+//   - Throttled server-side: one run per business every 30 s (429), never two
+//     runs on the same cycle at once (409, claimed atomically — see handler).
 // =============================================================================
 
 
@@ -428,6 +430,13 @@ async function speichereZuweisungen(
 // ----------------------------------------------------------------------------
 // HTTP entrypoint
 // ----------------------------------------------------------------------------
+// Server-side throttle (launch checklist item 10). Client-side cooldowns are
+// comfort only: callers invoke this directly with their own token.
+const SPERRE_MS = 30_000;          // min. gap between two runs of one business
+// A 'solver_laeuft' older than this is dead — same threshold as the web
+// dashboard's LAUF_GEDULD_MINUTEN, after which it offers a forced rerun.
+const VERWAIST_MS = 10 * 60_000;
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -448,7 +457,7 @@ export async function handler(req: Request): Promise<Response> {
 
     const { data: zyklus, error: zErr } = await db
       .from("planungszyklen")
-      .select("id, betrieb_id, zeitraum_start, zeitraum_ende, status")
+      .select("id, betrieb_id, zeitraum_start, zeitraum_ende, status, solver_gestartet_am")
       .eq("id", planungszyklus_id)
       .single();
     if (zErr || !zyklus) return json({ error: "Planungszyklus nicht gefunden" }, 404);
@@ -472,13 +481,55 @@ export async function handler(req: Request): Promise<Response> {
       return json({ error: `Zyklus bereits bearbeitet (Status: ${zyklus.status})`, status: zyklus.status }, 409);
     }
 
-    // mark solver as running
-    await db.from("planungszyklen").update({
+    // A run in progress is never joined, not even with { force: true } — only a
+    // run that started so long ago it can't still be alive (the runtime killed it
+    // before the catch below could restore the status) may be taken over.
+    const laeuft = zyklus.status === "solver_laeuft";
+    const verwaist = laeuft && zyklus.solver_gestartet_am != null &&
+      Date.now() - new Date(zyklus.solver_gestartet_am).getTime() > VERWAIST_MS;
+    if (laeuft && !verwaist) {
+      return json({ error: "Für diesen Zeitraum läuft schon eine Planung", code: "laeuft" }, 409);
+    }
+
+    // Cooldown per BUSINESS, across all its cycles (operator decision 2026-09-11):
+    // measured from the latest start or end of any run of this business.
+    const { data: letzter } = await db
+      .from("planungszyklen")
+      .select("solver_gestartet_am, solver_beendet_am")
+      .eq("betrieb_id", zyklus.betrieb_id)
+      .not("solver_gestartet_am", "is", null)
+      .order("solver_gestartet_am", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const zuletzt = Math.max(
+      letzter?.solver_gestartet_am ? new Date(letzter.solver_gestartet_am).getTime() : 0,
+      letzter?.solver_beendet_am ? new Date(letzter.solver_beendet_am).getTime() : 0,
+    );
+    const warten = zuletzt + SPERRE_MS - Date.now();
+    if (warten > 0) {
+      const retry_after_s = Math.ceil(warten / 1000);
+      return json({ error: `Bitte ${retry_after_s} s warten, bevor erneut geplant wird`, code: "sperrzeit", retry_after_s }, 429);
+    }
+
+    // Claim the cycle atomically: the update only matches while status and start
+    // time are still what we read. Of two concurrent calls, the second matches no
+    // row and is refused — a read-then-write check would let both through.
+    let anspruch = db.from("planungszyklen").update({
       status: "solver_laeuft",
       solver_gestartet_am: new Date().toISOString(),
       solver_methode: "moderate",
       solver_fehler: null,
-    }).eq("id", zyklus.id);
+    }).eq("id", zyklus.id).eq("status", zyklus.status);
+    anspruch = zyklus.solver_gestartet_am == null
+      ? anspruch.is("solver_gestartet_am", null)
+      : anspruch.eq("solver_gestartet_am", zyklus.solver_gestartet_am);
+    const { data: beansprucht } = await anspruch.select("id").maybeSingle();
+    if (!beansprucht) {
+      return json({ error: "Für diesen Zeitraum läuft schon eine Planung", code: "laeuft" }, 409);
+    }
+    // On failure, restore the pre-run status — but never back to a stale
+    // 'solver_laeuft', which would lock the cycle again.
+    const vorherStatus = laeuft ? "offen" : zyklus.status;
 
     try {
       const instanzen = await materialisiereInstanzen(db, zyklus as Zyklus);
@@ -501,7 +552,7 @@ export async function handler(req: Request): Promise<Response> {
       });
     } catch (inner) {
       await db.from("planungszyklen").update({
-        status: zyklus.status, // restore the pre-run status on failure
+        status: vorherStatus, // restore the pre-run status on failure
         solver_fehler: String(inner),
         solver_beendet_am: new Date().toISOString(),
       }).eq("id", zyklus.id);

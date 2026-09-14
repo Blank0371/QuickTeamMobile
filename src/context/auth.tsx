@@ -1,8 +1,11 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Session } from "@supabase/supabase-js";
 import { router } from "expo-router";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { AccessBlock, accountDeleted, checkAccess } from "../lib/access";
+import { clearCache } from "../lib/cache";
+import { cancelShiftReminders, unregisterPush } from "../lib/notifications";
 import { supabase } from "../lib/supabase";
 
 type AuthContextType = {
@@ -110,6 +113,15 @@ async function signOutIfAccountDeleted(): Promise<boolean> {
   return true;
 }
 
+// What a signed-out user would otherwise leave on a shared device: the offline
+// roster, their reminder opt-outs ("notifPrefs", see notifications.tsx) and the
+// scheduled reminders for their shifts.
+function clearLocalUserData() {
+  clearCache();
+  AsyncStorage.removeItem("notifPrefs").catch(() => {});
+  cancelShiftReminders();
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Session["user"] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -137,9 +149,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.session) signOutIfAccountDeleted();
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       if (!session?.user) leavePosition(); // reset on sign-out
+      // Only on a real sign-out (any path: button, account deletion, dead
+      // refresh token) — not on a cold start without a session, and never while
+      // merely offline, where the cache is what the calendar shows.
+      if (event === "SIGNED_OUT") clearLocalUserData();
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -294,6 +310,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    await unregisterPush(); // needs the session, so before signOut()
     await supabase.auth.signOut();
   };
 
