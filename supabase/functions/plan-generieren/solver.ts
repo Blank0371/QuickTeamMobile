@@ -27,11 +27,12 @@
 // so the solver never proposes a row the DB would reject (priority #1):
 //   - HC-3: employee holds the required role AND the role is active.
 //   - HC-1: not on approved holiday (urlaub) covering that date.
-//   - HC-2: no overlapping shift — unioned across mitarbeiter that share an
-//     auth_id (the trigger treats them as one body for overlap/rest).
+//   - HC-2: no overlapping shift — checked per mitarbeiter_id only. Two
+//     mitarbeiter that share an auth_id are independent workers (the trigger
+//     does the same), so nothing is unioned across profiles.
 //   - HC-4: rest gap between any two shifts >= gesetzliche mindestruhezeit.
 //   - legal daily / weekly maxima (gesetzliche_parameter by betriebe.land).
-//   - HC-5: MONTHLY (cycle) hours must not exceed max_stunden_hart.
+//   - HC-5: CALENDAR-MONTH gross hours must not exceed max_stunden_hart.
 //   Pre-existing manuell/tausch assignments (vorbelegung / startSaldo) seed all
 //   of the above.
 //
@@ -75,12 +76,13 @@ export interface Bedarf {
 export interface Mitarbeiter {
   id: Uuid;
   // The account that controls this mitarbeiter. Two mitarbeiter that share an
-  // auth_id are STILL treated as two independent people for hours, preferences
-  // and fairness — the DB trigger only unions them for the overlap/rest checks
-  // (HC-2/HC-4), so we mirror exactly that and nothing more.
+  // auth_id are treated as two fully independent workers for EVERYTHING —
+  // overlap, rest, hours, preferences and fairness — exactly like the DB
+  // trigger, which checks every rule per mitarbeiter_id and never unions across
+  // profiles. Kept only for reference/logging; no longer used by the solver.
   auth_id?: string | null;
   soll_stunden: number | null;      // optimal MONTHLY hours = the per-cycle target
-  max_stunden_hart: number | null;  // hard MONTHLY (cycle) cap; null → no cap
+  max_stunden_hart: number | null;  // hard CALENDAR-MONTH gross cap; null → no cap
   // Historical overtime accrued up to the accounting cutoff (opening balance +
   // Σ over past full months of worked − soll). Optional; defaults to 0.
   ueberstunden?: number;
@@ -110,7 +112,8 @@ export interface SolverInput {
   // so the solver never proposes a row the trigger would reject.
   vorbelegung: Map<Uuid, Instanz[]>;
   // Hours the employee already has WITHIN this cycle (from vorbelegung that falls
-  // inside the cycle range). Seeds the monthly saldo used for HC-5 + fairness.
+  // inside the cycle range). Seeds the soft fairness/overtime saldo only; the hard
+  // HC-5 cap is summed directly from `vorbelegung` per calendar month.
   startSaldo: Map<Uuid, number>;
   // Legal limits for the business's country (gesetzliche_parameter by betriebe.land).
   // The daily/weekly maxima are measured against NET working time, so legally
@@ -247,7 +250,7 @@ function istImUrlaub(input: SolverInput, mitarbeiterId: Uuid, datum: IsoDate): b
 // ----------------------------------------------------------------------------
 interface EmpState {
   m: Mitarbeiter;
-  stunden: number;         // in-cycle hours (fairness + HC-5)
+  stunden: number;         // in-cycle gross hours (soft fairness/overtime only)
   belegt: Instanz[];       // every shift held (for the legal checks)
   gerne: number;           // gerne shifts granted so far
   ungerne: number;         // ungerne shifts forced so far
@@ -285,19 +288,8 @@ export function solve(input: SolverInput): SolverResult {
   const { mindestruhezeit, maxTagStunden, maxWocheStunden, pausen } = input.gesetzlich;
   const ruheMs = mindestruhezeit * 3600 * 1000;
 
-  // Auth peers: mitarbeiter ids sharing a non-null auth_id (incl. self). Only used
-  // to union the overlap/rest window, exactly like the DB trigger.
-  const byAuth = new Map<string, Uuid[]>();
-  for (const m of input.mitarbeiter) {
-    if (m.auth_id) {
-      if (!byAuth.has(m.auth_id)) byAuth.set(m.auth_id, []);
-      byAuth.get(m.auth_id)!.push(m.id);
-    }
-  }
-  const authPeers = (id: Uuid): Uuid[] => {
-    const m = stateById.get(id)!.m;
-    return m.auth_id ? byAuth.get(m.auth_id)! : [id];
-  };
+  // Each mitarbeiter profile is an independent worker — profiles that share an
+  // auth_id are NOT unioned for any check, matching the DB trigger exactly.
 
   // "fewer wishes weigh more" reference point (team average, guarded).
   const submitted = input.mitarbeiter.map((m) => m.n_submitted ?? 0);
@@ -373,16 +365,15 @@ export function solve(input: SolverInput): SolverResult {
     if (istImUrlaub(input, mId, inst.datum)) return false; // HC-1
     const { ns, ne, dauer, netto, wk } = rangeCache.get(inst.id)!;
 
-    // HC-2 (overlap) + HC-4 (rest), unioned over auth peers.
-    for (const peerId of authPeers(mId)) {
-      for (const h of stateById.get(peerId)!.belegt) {
-        if (ignore?.has(`${peerId}|${h.id}`)) continue;
-        if (h.id === inst.id) continue;
-        const [hs, he] = bereichMs(h.datum, h.start_zeit, h.end_zeit);
-        if (ns < he && hs < ne) return false;           // overlap
-        const luecke = ns >= he ? ns - he : hs - ne;     // gap between them
-        if (luecke < ruheMs) return false;               // too little rest
-      }
+    // HC-2 (overlap) + HC-4 (rest) — per mitarbeiter_id only. Profiles sharing an
+    // auth_id are independent workers here, exactly like the DB trigger.
+    for (const h of stateById.get(mId)!.belegt) {
+      if (ignore?.has(`${mId}|${h.id}`)) continue;
+      if (h.id === inst.id) continue;
+      const [hs, he] = bereichMs(h.datum, h.start_zeit, h.end_zeit);
+      if (ns < he && hs < ne) return false;           // overlap
+      const luecke = ns >= he ? ns - he : hs - ne;     // gap between them
+      if (luecke < ruheMs) return false;               // too little rest
     }
 
     // Legal daily / weekly max hours are per-mitarbeiter (not auth-unioned) and
@@ -402,12 +393,21 @@ export function solve(input: SolverInput): SolverResult {
     if (tagSumme + netto > maxTagStunden) return false;
     if (wocheSumme + netto > maxWocheStunden) return false;
 
-    // HC-5: MONTHLY (cycle) cap — max_stunden_hart, pro-rated for urlaub; null = no
-    // cap. Only ever <= the raw cap the DB trigger enforces, so still trigger-safe.
+    // HC-5: CALENDAR-MONTH cap on GROSS hours — max_stunden_hart, pro-rated for
+    // urlaub; null = no cap. Summed over the calendar month of the shift, matching
+    // the DB trigger. Pro-rating only ever shrinks the cap, so the solver stays
+    // <= the raw cap the trigger enforces and never proposes a rejected row.
     const cap = stateById.get(mId)!.capHart;
-    let saldo = stateById.get(mId)!.stunden;
-    if (ignore) for (const h of meine) if (ignore.has(`${mId}|${h.id}`)) saldo -= rangeCache.get(h.id)!.dauer;
-    if (saldo + dauer > cap) return false;
+    if (cap !== Infinity) {
+      const monat = inst.datum.slice(0, 7); // 'YYYY-MM'
+      let monatSumme = 0;
+      for (const h of meine) {
+        if (ignore?.has(`${mId}|${h.id}`) || h.id === inst.id) continue;
+        if (h.datum.slice(0, 7) !== monat) continue;
+        monatSumme += rangeCache.get(h.id)?.dauer ?? dauerStunden(h.start_zeit, h.end_zeit);
+      }
+      if (monatSumme + dauer > cap) return false;
+    }
     return true;
   }
 

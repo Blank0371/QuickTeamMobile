@@ -41,6 +41,9 @@ Thumbs.db
 # typescript
 *.tsbuildinfo
 
+# legal source drafts (not shipped in the app bundle)
+legals/
+
 example
 
 # generated native folders
