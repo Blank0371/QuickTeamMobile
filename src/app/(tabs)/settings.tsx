@@ -1,6 +1,7 @@
 // src/app/(tabs)/settings.tsx
 import { router } from "expo-router";
-import { AlertCircle, Copyright, FileText, Settings as Gear, Mail, Moon, Phone, ScrollText, Shield, Sun, Trash2, X } from "lucide-react-native";
+import * as WebBrowser from "expo-web-browser";
+import { AlertCircle, Copyright, FileLock, FileText, Settings as Gear, Mail, Moon, Phone, ScrollText, Shield, Sun, Trash2, X } from "lucide-react-native";
 import { useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
@@ -8,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { HoldButton } from "../../components/HoldButton";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
-import { APPLE_STANDARD_EULA_URL } from "../../lib/legal";
+import { APPLE_STANDARD_EULA_URL, legalWebsiteUrl } from "../../lib/legal";
 import { useTheme } from "../../theme/ThemeProvider";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { Flag } from "../../components/Flag";
@@ -29,6 +30,7 @@ const LANGS = [
 const LEGAL_DOCS = [
   { id: "privacy", Icon: Shield },
   { id: "terms", Icon: FileText },
+  { id: "avv", Icon: FileLock },
   { id: "eula", Icon: ScrollText },
   { id: "dmca", Icon: Copyright },
 ] as const;
@@ -324,7 +326,9 @@ export default function SettingsScreen() {
             onPress={() =>
               id === "eula"
                 ? Linking.openURL(APPLE_STANDARD_EULA_URL)
-                : router.push({ pathname: "/legal/[doc]", params: { doc: id } })
+                : id === "dmca"
+                  ? router.push({ pathname: "/legal/[doc]", params: { doc: id } })
+                  : WebBrowser.openBrowserAsync(legalWebsiteUrl(id, lang))
             }
           >
             <Icon color={theme.text} size={22} />

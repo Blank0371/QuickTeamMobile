@@ -77,14 +77,17 @@
   "legal": {
     "sectionTitle": "Legal",
     "consentTitle": "Privacy Policy & Terms",
-    "consentUpdated": "Our Privacy Policy and Terms & Conditions have changed. Please review and agree to both to continue.",
+    "consentUpdated": "Our Privacy Policy and Terms & Conditions have changed. Please read both and confirm that you have taken note of them to continue.",
     "scrollHint": "Scroll to the bottom to continue",
-    "agree": "I agree",
+    "agree": "I have taken note",
     "privacy": {
       "title": "Privacy Policy"
     },
     "terms": {
       "title": "Terms & Conditions"
+    },
+    "avv": {
+      "title": "Data Processing Agreement (DPA)"
     },
     "eula": {
       "title": "End User License Agreement"

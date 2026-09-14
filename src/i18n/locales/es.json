@@ -77,14 +77,17 @@
   "legal": {
     "sectionTitle": "Legal",
     "consentTitle": "Política de privacidad y términos",
-    "consentUpdated": "Nuestra Política de privacidad y los Términos y condiciones han cambiado. Revísalos y acepta ambos para continuar.",
+    "consentUpdated": "Nuestra Política de privacidad y los Términos y condiciones han cambiado. Léelos y confirma que has tomado nota de ambos para continuar.",
     "scrollHint": "Desplázate hasta el final para continuar",
-    "agree": "Acepto",
+    "agree": "He tomado nota",
     "privacy": {
       "title": "Política de privacidad"
     },
     "terms": {
       "title": "Términos y condiciones"
+    },
+    "avv": {
+      "title": "Acuerdo de tratamiento de datos (DPA)"
     },
     "eula": {
       "title": "Acuerdo de licencia de usuario final"

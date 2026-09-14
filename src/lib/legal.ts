@@ -8,8 +8,24 @@ import { LegalDocId } from "./legalDocs";
 import { PRIVACY_POLICY_VERSION } from "./privacyPolicy";
 import { TERMS_VERSION } from "./terms";
 
-// Order shown in Settings > Legal.
+// Documents the in-app viewer (/legal/[doc]) can show.
 export const LEGAL_DOC_IDS: LegalDocId[] = ["privacy", "terms", "eula", "dmca"];
+
+// Settings > Legal opens these on the website instead of the in-app viewer, so
+// users always see the published version. The pages are public (not behind
+// SOFT_LAUNCH). The site only has German and English: `?lang=` picks the
+// language for that page view (no cookie is set); every non-German app
+// language gets English.
+const LEGAL_WEBSITE_PATHS = {
+  privacy: "/datenschutz",
+  terms: "/agb",
+  avv: "/avv",
+} as const;
+
+export function legalWebsiteUrl(id: keyof typeof LEGAL_WEBSITE_PATHS, appLang: string): string {
+  const lang = appLang === "de" ? "de" : "en";
+  return `https://quickteam.at${LEGAL_WEBSITE_PATHS[id]}?lang=${lang}`;
+}
 
 // Apple's hosted "Licensed Application End User License Agreement" (the standard
 // EULA). The EULA row opens this instead of an in-app document; set the same

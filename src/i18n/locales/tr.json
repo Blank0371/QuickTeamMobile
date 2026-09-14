@@ -77,14 +77,17 @@
   "legal": {
     "sectionTitle": "Yasal",
     "consentTitle": "Gizlilik ve Koşullar",
-    "consentUpdated": "Gizlilik Politikamız ve Kullanım Koşullarımız değişti. Devam etmek için lütfen ikisini de okuyup kabul edin.",
+    "consentUpdated": "Gizlilik Politikamız ve Kullanım Koşullarımız değişti. Devam etmek için lütfen ikisini de okuyun ve bilgi edindiğinizi onaylayın.",
     "scrollHint": "Devam etmek için en alta kaydırın",
-    "agree": "Kabul ediyorum",
+    "agree": "Bilgi edindim",
     "privacy": {
       "title": "Gizlilik Politikası"
     },
     "terms": {
       "title": "Kullanım Koşulları"
+    },
+    "avv": {
+      "title": "Veri İşleme Sözleşmesi (DPA)"
     },
     "eula": {
       "title": "Son Kullanıcı Lisans Sözleşmesi"

@@ -77,14 +77,17 @@
   "legal": {
     "sectionTitle": "Note legali",
     "consentTitle": "Informativa sulla privacy e Termini",
-    "consentUpdated": "La nostra Informativa sulla privacy e i Termini e condizioni sono cambiati. Rivedi e accetta entrambi per continuare.",
+    "consentUpdated": "La nostra Informativa sulla privacy e i Termini e condizioni sono cambiati. Leggi entrambi e conferma di averne preso visione per continuare.",
     "scrollHint": "Scorri fino in fondo per continuare",
-    "agree": "Accetto",
+    "agree": "Ho preso visione",
     "privacy": {
       "title": "Informativa sulla privacy"
     },
     "terms": {
       "title": "Termini e condizioni"
+    },
+    "avv": {
+      "title": "Accordo sul trattamento dei dati (DPA)"
     },
     "eula": {
       "title": "Contratto di licenza con l'utente finale"

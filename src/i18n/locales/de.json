@@ -77,14 +77,17 @@
   "legal": {
     "sectionTitle": "Rechtliches",
     "consentTitle": "Datenschutz & AGB",
-    "consentUpdated": "Unsere Datenschutzerklärung und AGB haben sich geändert. Bitte lies beide und stimme zu, um fortzufahren.",
+    "consentUpdated": "Unsere Datenschutzerklärung und AGB haben sich geändert. Bitte lies beide und bestätige, dass du sie zur Kenntnis genommen hast, um fortzufahren.",
     "scrollHint": "Scrolle nach unten, um fortzufahren",
-    "agree": "Ich stimme zu",
+    "agree": "Zur Kenntnis genommen",
     "privacy": {
       "title": "Datenschutzerklärung"
     },
     "terms": {
       "title": "AGB"
+    },
+    "avv": {
+      "title": "Auftragsverarbeitungsvertrag (AVV)"
     },
     "eula": {
       "title": "Endbenutzer-Lizenzvertrag"

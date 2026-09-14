@@ -77,14 +77,17 @@
   "legal": {
     "sectionTitle": "Mentions légales",
     "consentTitle": "Confidentialité et Conditions",
-    "consentUpdated": "Notre politique de confidentialité et nos conditions générales ont changé. Veuillez lire et accepter les deux pour continuer.",
+    "consentUpdated": "Notre politique de confidentialité et nos conditions générales ont changé. Veuillez lire les deux et confirmer que vous en avez pris connaissance pour continuer.",
     "scrollHint": "Faites défiler jusqu'en bas pour continuer",
-    "agree": "J'accepte",
+    "agree": "J'en ai pris connaissance",
     "privacy": {
       "title": "Politique de confidentialité"
     },
     "terms": {
       "title": "Conditions générales"
+    },
+    "avv": {
+      "title": "Accord de traitement des données (DPA)"
     },
     "eula": {
       "title": "Contrat de licence utilisateur"

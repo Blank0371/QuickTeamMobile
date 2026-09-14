@@ -1,7 +1,8 @@
 // Blocking sign-up consent for the Privacy Policy AND Terms & Conditions.
 // Both are shown together and the user agrees to both at once, but each version
 // is tracked separately — changing either one re-prompts on next launch.
-// The "I agree" button unlocks only after scrolling to the bottom.
+// The button ("I have taken note" — matching the website, where the privacy
+// policy is acknowledged, not agreed to) unlocks only after scrolling to the bottom.
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import {
