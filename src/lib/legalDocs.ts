@@ -29,7 +29,7 @@ type DocBodies = Record<string, string> & { en: string };
 
 const PRIVACY_EN = `PRIVACY POLICY
 
-Last updated: 13 September 2026
+Last updated: 14 September 2026
 
 This Privacy Policy informs you, in accordance with Articles 13 and 14 of the General Data Protection Regulation (GDPR), how BlankTrading UG (haftungsbeschränkt) ("we" or "us") processes personal data when you
 
@@ -135,17 +135,21 @@ Unconfirmed registrations are deleted automatically. If the code is not entered 
 
 When registering, you accept the General Terms and Conditions and the Data Processing Agreement (DPA) on behalf of your business and take note of this Privacy Policy. If any of these documents changes, we ask managers to confirm again in the dashboard. As evidence, we store for each document: its name, version (date of the edition), time, the identifiers of your account and of the business and, where applicable, the language of the accepted version. These records cannot be changed afterwards.
 
+When the Terms and the DPA are accepted, we additionally make a copy at the time of acceptance that is kept even after the business is deleted: the name and country of the business, the first and last name and email address of the person accepting, the document, version, language, checksum of the accepted version and time. We keep this copy until the end of the third calendar year after the contract ends (standard limitation period, Sections 195 and 199 BGB) and then delete it automatically. Taking note of this Privacy Policy is not copied; its record is deleted together with the business.
+
 5.3 Purposes and legal bases
 
 - Creating and managing the customer account, concluding the contract: Art. 6(1)(b) GDPR where you are the contracting party yourself (for example as a sole trader). Where you act for a company, for example as its managing director, we base the processing of your data on Art. 6(1)(f) GDPR; our legitimate interest lies in performing the contract with the company you represent.
 - Confirming your email address: Art. 6(1)(f) GDPR (protection against accounts with third-party or incorrect addresses).
-- Record of acceptance: Art. 6(1)(f) GDPR (evidence of the conclusion of the contract and of the incorporation of the contractual terms).
+- Record of acceptance: Art. 6(1)(f) GDPR (evidence of the conclusion of the contract and of the incorporation of the contractual terms; after the contract ends, the defence of legal claims, Art. 17(3)(e) GDPR).
 
 6. Payment processing with Stripe
 
 After registering, you choose a plan. The subscription begins with a 14-day trial, even if you have not yet added a payment method. You can add a payment method immediately or at any time before the trial ends; if the trial ends without one, the subscription is paused (for the consequences for your data, see Section 15.3).
 
-- We transmit to Stripe: your email address, an internal identifier of your business and the chosen plan.
+- We collect billing details before a paid subscription begins. When you store a means of payment, we ask for the legal company name, street and house number, postal code, city and country. These details are required for a proper invoice (Section 14(4) of the German VAT Act); the legal basis is Art. 6(1)(b) and (c) GDPR. As long as you only use the free trial and store no means of payment, we do not ask for them.
+- We transmit to Stripe: your email address, the billing details listed above (company name, street and house number, postal code, city, country), an internal identifier of your business, the preferred language for invoices and the chosen plan. Stripe needs the address and country to calculate VAT and issue the invoice. If, as an Austrian business, you voluntarily provide your VAT identification number (UID), we transmit that as well; Stripe verifies it against the European Commission's VAT Information Exchange System (VIES) and uses it to decide whether the reverse-charge procedure applies.
+- The billing details are stored at Stripe, not in our database, which holds only your business's country. You can change them at any time via the customer portal (see below).
 - Payment details (such as card details or an IBAN for SEPA Direct Debit) are entered directly into Stripe's form, which is embedded on our page and loaded from Stripe's servers. This data goes straight to Stripe; we do not receive or store full card numbers or bank details.
 - We store: the Stripe customer ID, the subscription ID, the plan and the subscription status (such as trial, active, paused). Stripe notifies us of status changes automatically.
 - Customer portal: Via "Abo verwalten" (manage subscription) in the dashboard settings, managers reach Stripe's customer portal, where you can cancel the subscription, change the payment method and download invoices. The portal is operated by Stripe; for this we transmit only your Stripe customer ID and the address you return to afterwards.
@@ -325,8 +329,10 @@ We store personal data only for as long as necessary for the respective purpose 
 - Push token: until the account is deleted or another account signs in on the device (Section 10)
 - Profile within the business: until your Employer removes it or you delete your account (then pseudonymisation, Section 15.1), at the latest until the business is deleted
 - Scheduling and communication data, change log: as instructed by your Employer, at the latest until the business is deleted (Section 15.3)
-- Records of acceptance of the Terms, the DPA and the Privacy Policy: until the business is deleted
+- Records of acceptance of the Terms and the DPA: until the end of the third calendar year after the contract ends (Section 5.2)
+- Records of taking note of the Privacy Policy: until the business is deleted
 - Stripe identifiers, plan and subscription status: until the business is deleted
+- Billing details (company name, address, VAT ID if provided): at Stripe, for as long as the customer account exists there; in invoices additionally for the statutory retention periods
 - Invoices and accounting records: 8 years (Sec. 147 AO, Sec. 257 HGB)
 - Commercial and business letters, including by email: 6 years (Sec. 257 HGB, Sec. 147 AO)
 - Other emails to us: until the request has been dealt with
@@ -353,9 +359,9 @@ Managers can pseudonymise a person's profile within the business. This removes t
 
 15.3 End of the contract and expired trial
 
-- After the contract ends, we make the business's data available for export for 30 days (Section 6(4) of the Terms). We then delete all data of the business, including the employees' profiles, the scheduling and communication data, the change log and the records of acceptance, unless a statutory retention obligation applies.
+- After the contract ends, we make the business's data available for export for 30 days (Section 6(4) of the Terms). We then delete all data of the business, including the employees' profiles, the scheduling and communication data, the change log and the records of taking note of the Privacy Policy, unless a statutory retention obligation applies. We continue to keep the records of acceptance of the Terms and the DPA in accordance with Section 5.2.
 - If the trial ends without a payment method, the subscription is paused and management of the business is locked. If it is not resumed within 90 days by adding a payment method, we delete the business and its data in the same way as after the end of the contract.
-- Employees' login accounts remain, because they may be linked to other businesses; they are deleted when the respective person deletes their account.
+- Login accounts that are no longer linked to employment in any other business once the business is deleted are deleted together with the business, including sessions and push tokens. This applies to managers and employees alike. Accounts linked to other businesses remain.
 
 15.4 Backups
 
@@ -417,7 +423,7 @@ We update this Privacy Policy when the Service or the legal situation changes. T
 
 const TERMS_EN = `GENERAL TERMS AND CONDITIONS FOR THE USE OF QUICKTEAM
 
-Last updated: 13 September 2026
+Last updated: 13 September 2026 (revision r2)
 
 Section 1 — Provider, scope, contracting party, definitions
 
@@ -473,7 +479,7 @@ Section 5 — Prices, trial period and payment terms
 
 (2) Where the Provider offers a free trial period, it begins when the plan is chosen following registration; its duration results from the offer at that time. No fee is charged during the trial period. The end of the trial period and the amount of the first charge are shown to the Customer before it stores a means of payment.
 
-(3) If the Customer stores a means of payment during the trial period, the contract converts into the paid subscription of the selected plan when the trial period ends, without any further declaration. If it does not, the subscription is suspended free of charge when the trial period ends; the Provider is entitled to block the management functions of the Service for that time. The Customer may resume the subscription within ninety (90) days of the end of the trial period by storing a means of payment; the paid subscription then begins when the means of payment is stored. If this does not happen, the contract ends upon expiry of this period without the need for termination. By way of derogation from Section 6(4), the Customer's data is in this case deleted when the contract ends; the Customer may request the export (Section 6(4)) until then.
+(3) If the Customer stores a means of payment during the trial period, the contract converts into the paid subscription of the selected plan when the trial period ends, without any further declaration. If it does not, the subscription is suspended free of charge when the trial period ends; the Provider is entitled to block the management functions of the Service for that time. The Customer may resume the subscription within ninety (90) days of the end of the trial period by storing a means of payment; the paid subscription then begins when the means of payment is stored. If this does not happen, the contract ends upon expiry of this period without the need for termination. Section 6(4) applies to the export and deletion of the data in this case as well.
 
 (4) The subscription is billed monthly; the fee is due in advance for the respective billing month. The Provider may additionally offer billing periods of longer duration (e.g. annual billing); in that case the fee is due in advance for the selected period.
 
@@ -493,9 +499,9 @@ Section 6 — Term and termination
 
 (3) Each party's right to extraordinary termination for good cause remains unaffected. Good cause exists for the Provider in particular where the Customer materially breaches essential obligations under these Terms and fails to remedy the breach within a reasonable period despite a warning, or where a reversed payment (Section 5(6)) is not settled within fourteen (14) days despite a request to do so.
 
-(4) During the term of the contract and until thirty (30) days after it ends, the Customer may request that the Provider make its data available in a structured, commonly used and machine-readable format (e.g. CSV or JSON). The request must be sent to the Provider in text form; the Provider makes the data available within thirty (30) days of receipt. Where the Service offers an export function, the Provider may refer the Customer to it. The export is free of charge. After the period under sentence 1 has expired, the Provider deletes the Customer's data, unless statutory retention obligations prevent this; for suspended subscriptions, Section 5(3) applies. The processing of personal data on the Customer's behalf is additionally governed by the data-processing agreement (Section 7(3)).
+(4) During the term of the contract and until thirty (30) days after it ends, the Customer may retrieve its data at any time itself via the export function of the Service. For that purpose the export function remains reachable even where access to the Service is otherwise blocked under Section 5(3) or Section 5(6), or where the contract has ended. Within the same period the Customer may also request in text form that the Provider make its data available in a structured, commonly used and machine-readable format (e.g. CSV or JSON); the Provider makes the data available within thirty (30) days of receiving the request and may refer the Customer to the export function. In both cases the export is free of charge. After the period under sentence 1 has expired, the Provider deletes the Customer's data, unless statutory retention obligations prevent this. Where a request under sentence 3 is received in time, the Provider does not delete the data covered by it before it has made that data available and fourteen (14) days for retrieval have passed since it was made available; the Provider points out the start of this retrieval period when making the data available. The processing of personal data on the Customer's behalf is additionally governed by the data-processing agreement (Section 7(3)).
 
-(5) Exportable within the meaning of paragraph 4 is all data that the Customer and its Users have entered into the Service or that has been generated there for the Customer's business, in particular information on employees and roles, shift templates, planning cycles, shifts and assignments, vacation, availability and preference information, messages including polls and checklists, swap and emergency records, and the change log. Data that serves solely the internal operation and security of the Service is not exported, in particular password hashes, session and security data, push tokens and program code. On this basis, the Customer may request switching to another provider of data processing services, or the transfer of its data to its own systems, under Regulation (EU) 2023/2854 (Data Act); the Provider supports the Customer in doing so and charges no fee for it.
+(5) Exportable within the meaning of paragraph 4 is all data that the Customer and its Users have entered into the Service or that has been generated there for the Customer's business, in particular information on employees and roles, shift templates, planning cycles, shifts and assignments, vacation, availability and preference information, messages including polls and checklists, swap and emergency records, and the change log. Data that serves solely the internal operation and security of the Service is not exported, in particular password hashes, session and security data, push tokens and program code. The export contains a description of the contents of each section and a list of the data not included, with reasons. On this basis, the Customer may request switching to another provider of data processing services, or the transfer of its data to its own systems, under Regulation (EU) 2023/2854 (Data Act); the Provider supports the Customer in doing so to a reasonable extent and charges no fee for it.
 
 Section 7 — Customer's obligations and responsibility
 
@@ -617,7 +623,7 @@ In appropriate circumstances we may disable or terminate the accounts of users w
 
 const PRIVACY_DE = `DATENSCHUTZERKLÄRUNG
 
-Stand: 13. September 2026
+Stand: 14. September 2026
 
 Diese Datenschutzerklärung informiert Sie nach Art. 13 und 14 der Datenschutz-Grundverordnung (DSGVO) darüber, wie die BlankTrading UG (haftungsbeschränkt) (nachfolgend „wir“ oder „uns“) personenbezogene Daten verarbeitet, wenn Sie
 
@@ -723,17 +729,21 @@ Unbestätigte Registrierungen werden automatisch gelöscht. Wird der Code nicht 
 
 Bei der Registrierung bestätigen Sie die Allgemeinen Geschäftsbedingungen und den Auftragsverarbeitungsvertrag (AVV) für Ihren Betrieb und nehmen diese Datenschutzerklärung zur Kenntnis. Ändert sich eines dieser Dokumente, bitten wir Führungskräfte im Dashboard erneut um Bestätigung. Als Nachweis speichern wir je Dokument: Bezeichnung, Fassung (Datum des Stands), Zeitpunkt, Kennung Ihres Kontos und des Betriebs sowie gegebenenfalls die Sprache der bestätigten Fassung. Diese Einträge können nachträglich nicht geändert werden.
 
+Für die Bestätigung von AGB und AVV legen wir im Zeitpunkt der Bestätigung zusätzlich eine Kopie an, die auch nach der Löschung des Betriebs erhalten bleibt: Name und Land des Betriebs, Vor- und Nachname sowie E-Mail-Adresse der bestätigenden Person, Dokument, Fassung, Sprache, Prüfsumme der bestätigten Fassung und Zeitpunkt. Diese Kopie bewahren wir bis zum Ende des dritten Kalenderjahres nach Vertragsende auf (regelmäßige Verjährungsfrist, §§ 195, 199 BGB) und löschen sie dann automatisch. Die Kenntnisnahme dieser Datenschutzerklärung wird nicht kopiert; ihr Nachweis wird mit dem Betrieb gelöscht.
+
 5.3 Zwecke und Rechtsgrundlagen
 
 - Anlage und Verwaltung des Kundenkontos, Vertragsschluss: Art. 6 Abs. 1 lit. b DSGVO, soweit Sie selbst Vertragspartner sind (etwa als Einzelunternehmer). Handeln Sie für ein Unternehmen, etwa als Geschäftsführer, stützen wir die Verarbeitung Ihrer Daten auf Art. 6 Abs. 1 lit. f DSGVO; unser berechtigtes Interesse liegt in der Durchführung des Vertrags mit dem von Ihnen vertretenen Unternehmen.
 - Bestätigung der E-Mail-Adresse: Art. 6 Abs. 1 lit. f DSGVO (Schutz vor Konten mit fremden oder falschen Adressen).
-- Zustimmungsnachweis: Art. 6 Abs. 1 lit. f DSGVO (Nachweis des Vertragsschlusses und der Einbeziehung der Vertragsbedingungen).
+- Zustimmungsnachweis: Art. 6 Abs. 1 lit. f DSGVO (Nachweis des Vertragsschlusses und der Einbeziehung der Vertragsbedingungen; nach Vertragsende zur Abwehr von Ansprüchen, Art. 17 Abs. 3 lit. e DSGVO).
 
 6. Zahlungsabwicklung mit Stripe
 
 Nach der Registrierung wählen Sie einen Tarif. Das Abonnement beginnt mit einer 14-tägigen Testphase, auch wenn Sie noch kein Zahlungsmittel hinterlegen. Ein Zahlungsmittel können Sie sofort oder bis zum Ende der Testphase hinterlegen; läuft sie ohne Zahlungsmittel ab, wird das Abonnement pausiert (zu den Folgen für Ihre Daten siehe Ziffer 15.3).
 
-- An Stripe übermitteln wir: Ihre E-Mail-Adresse, eine interne Kennung Ihres Betriebs und den gewählten Tarif.
+- Rechnungsangaben erheben wir, bevor ein kostenpflichtiges Abonnement beginnt. Wenn Sie ein Zahlungsmittel hinterlegen, fragen wir den rechtlichen Unternehmensnamen, Straße und Hausnummer, Postleitzahl, Ort und Land ab. Diese Angaben sind für eine ordnungsgemäße Rechnung erforderlich (§ 14 Abs. 4 UStG); Rechtsgrundlage ist Art. 6 Abs. 1 lit. b und lit. c DSGVO. Solange Sie den Dienst nur kostenlos testen und kein Zahlungsmittel hinterlegen, fragen wir sie nicht ab.
+- An Stripe übermitteln wir: Ihre E-Mail-Adresse, die genannten Rechnungsangaben (Unternehmensname, Straße und Hausnummer, Postleitzahl, Ort, Land), eine interne Kennung Ihres Betriebs, die bevorzugte Sprache für Rechnungen und den gewählten Tarif. Anschrift und Land benötigt Stripe, um die Umsatzsteuer zu berechnen und die Rechnung auszustellen. Geben Sie als österreichischer Betrieb freiwillig Ihre Umsatzsteuer-Identifikationsnummer (UID) an, übermitteln wir auch diese; Stripe prüft sie gegen das Mehrwertsteuer-Informationsaustauschsystem (MIAS/VIES) der Europäischen Kommission und entscheidet daran über das Reverse-Charge-Verfahren.
+- Gespeichert werden die Rechnungsangaben bei Stripe, nicht in unserer Datenbank; dort steht nur das Land Ihres Betriebs. Ändern können Sie sie jederzeit über das Kundenportal (siehe unten).
 - Zahlungsdaten (etwa Kartendaten oder IBAN für SEPA-Lastschrift) geben Sie direkt in das Formular von Stripe ein, das auf unserer Seite eingebettet ist und von Servern der Stripe geladen wird. Diese Daten gehen unmittelbar an Stripe; vollständige Kartennummern oder Kontoverbindungen erhalten und speichern wir nicht.
 - Bei uns gespeichert werden: die Stripe-Kundenkennung, die Kennung des Abonnements, der Tarif und der Status des Abonnements (etwa Testphase, aktiv, pausiert). Stripe teilt uns Änderungen des Status automatisch mit.
 - Kundenportal: Über „Abo verwalten“ in den Einstellungen des Dashboards gelangen Führungskräfte zum Kundenportal von Stripe. Dort können Sie das Abonnement kündigen, das Zahlungsmittel ändern und Rechnungen abrufen. Das Portal wird von Stripe betrieben; wir übermitteln dafür nur Ihre Stripe-Kundenkennung und die Adresse, zu der Sie danach zurückkehren.
@@ -913,8 +923,10 @@ Wir speichern personenbezogene Daten nur so lange, wie es für den jeweiligen Zw
 - Push-Token: bis zur Kontolöschung oder bis sich ein anderes Konto auf dem Gerät anmeldet (Ziffer 10)
 - Profil im Betrieb: bis Ihr Arbeitgeber es entfernt oder Sie Ihr Konto löschen (dann Pseudonymisierung, Ziffer 15.1), spätestens bis zur Löschung des Betriebs
 - Planungs- und Kommunikationsdaten, Änderungsprotokoll: nach Weisung Ihres Arbeitgebers, spätestens bis zur Löschung des Betriebs (Ziffer 15.3)
-- Nachweise der Zustimmung zu AGB, AVV und Datenschutzerklärung: bis zur Löschung des Betriebs
+- Nachweise der Zustimmung zu AGB und AVV: bis zum Ende des dritten Kalenderjahres nach Vertragsende (Ziffer 5.2)
+- Nachweise der Kenntnisnahme der Datenschutzerklärung: bis zur Löschung des Betriebs
 - Stripe-Kennungen, Tarif und Status des Abonnements: bis zur Löschung des Betriebs
+- Rechnungsangaben (Unternehmensname, Anschrift, ggf. UID): bei Stripe, solange das Kundenkonto dort besteht; in Rechnungen zusätzlich nach den gesetzlichen Aufbewahrungsfristen
 - Rechnungen und Buchungsbelege: 8 Jahre (§ 147 AO, § 257 HGB)
 - Handels- und Geschäftsbriefe, auch per E-Mail: 6 Jahre (§ 257 HGB, § 147 AO)
 - Sonstige E-Mails an uns: bis zur Erledigung des Anliegens
@@ -941,9 +953,9 @@ Führungskräfte können das Profil einer Person im Betrieb pseudonymisieren. Da
 
 15.3 Ende des Vertrags und abgelaufene Testphase
 
-- Nach Vertragsende stellen wir die Daten des Betriebs 30 Tage lang zum Export bereit (§ 6 Abs. 4 AGB). Danach löschen wir alle Daten des Betriebs, einschließlich der Profile der Beschäftigten, der Planungs- und Kommunikationsdaten, des Änderungsprotokolls und der Zustimmungsnachweise, soweit keine gesetzliche Aufbewahrungspflicht entgegensteht.
+- Nach Vertragsende stellen wir die Daten des Betriebs 30 Tage lang zum Export bereit (§ 6 Abs. 4 AGB). Danach löschen wir alle Daten des Betriebs, einschließlich der Profile der Beschäftigten, der Planungs- und Kommunikationsdaten, des Änderungsprotokolls und der Nachweise über die Kenntnisnahme der Datenschutzerklärung, soweit keine gesetzliche Aufbewahrungspflicht entgegensteht. Die Nachweise der Zustimmung zu AGB und AVV bewahren wir nach Ziffer 5.2 weiter auf.
 - Läuft die Testphase ohne hinterlegtes Zahlungsmittel ab, wird das Abonnement pausiert und die Verwaltung des Betriebs gesperrt. Wird es nicht innerhalb von 90 Tagen durch Hinterlegen eines Zahlungsmittels fortgesetzt, löschen wir den Betrieb und seine Daten wie nach Vertragsende.
-- Anmeldekonten von Beschäftigten bleiben bestehen, weil sie weiteren Betrieben zugeordnet sein können; sie werden gelöscht, wenn die jeweilige Person ihr Konto löscht.
+- Anmeldekonten, denen nach der Löschung des Betriebs keine Anstellung in einem anderen Betrieb mehr zugeordnet ist, löschen wir zusammen mit dem Betrieb, samt Sitzungen und Push-Token. Das gilt für Führungskräfte wie für Beschäftigte. Konten, die weiteren Betrieben zugeordnet sind, bleiben bestehen.
 
 15.4 Datensicherungen
 
@@ -1005,7 +1017,7 @@ Wir passen diese Datenschutzerklärung an, wenn sich der Dienst oder die Rechtsl
 
 const TERMS_DE = `ALLGEMEINE GESCHÄFTSBEDINGUNGEN (AGB) FÜR DIE NUTZUNG VON QUICKTEAM
 
-Stand: 13. September 2026
+Stand: 13. September 2026 (Fassung r2)
 
 § 1 Anbieter, Geltungsbereich, Vertragspartner, Begriffe
 
@@ -1061,7 +1073,7 @@ Stand: 13. September 2026
 
 (2) Soweit der Anbieter eine kostenlose Testphase anbietet, beginnt sie mit der Wahl des Tarifs im Anschluss an die Registrierung; ihre Dauer ergibt sich aus dem Angebot zu diesem Zeitpunkt. Während der Testphase fällt kein Entgelt an. Das Ende der Testphase und der Betrag der ersten Abbuchung werden dem Kunden angezeigt, bevor er ein Zahlungsmittel hinterlegt.
 
-(3) Hinterlegt der Kunde während der Testphase ein Zahlungsmittel, geht der Vertrag mit Ablauf der Testphase ohne weitere Erklärung in das entgeltliche Abonnement des gewählten Tarifs über. Hinterlegt er keines, wird das Abonnement mit Ablauf der Testphase ohne Entgelt ruhend gestellt; der Anbieter ist berechtigt, die Verwaltungsfunktionen des Dienstes für diese Zeit zu sperren. Der Kunde kann das Abonnement innerhalb von neunzig (90) Tagen nach Ablauf der Testphase durch Hinterlegen eines Zahlungsmittels fortsetzen; das entgeltliche Abonnement beginnt dann mit dem Hinterlegen. Geschieht das nicht, endet der Vertrag mit Ablauf dieser Frist, ohne dass es einer Kündigung bedarf. Abweichend von § 6 Abs. 4 werden die Daten des Kunden in diesem Fall mit Vertragsende gelöscht; den Export (§ 6 Abs. 4) kann der Kunde bis dahin verlangen.
+(3) Hinterlegt der Kunde während der Testphase ein Zahlungsmittel, geht der Vertrag mit Ablauf der Testphase ohne weitere Erklärung in das entgeltliche Abonnement des gewählten Tarifs über. Hinterlegt er keines, wird das Abonnement mit Ablauf der Testphase ohne Entgelt ruhend gestellt; der Anbieter ist berechtigt, die Verwaltungsfunktionen des Dienstes für diese Zeit zu sperren. Der Kunde kann das Abonnement innerhalb von neunzig (90) Tagen nach Ablauf der Testphase durch Hinterlegen eines Zahlungsmittels fortsetzen; das entgeltliche Abonnement beginnt dann mit dem Hinterlegen. Geschieht das nicht, endet der Vertrag mit Ablauf dieser Frist, ohne dass es einer Kündigung bedarf. Für den Export und die Löschung der Daten gilt auch in diesem Fall § 6 Abs. 4.
 
 (4) Das Abonnement wird monatlich abgerechnet; das Entgelt ist im Voraus für den jeweiligen Abrechnungsmonat fällig. Der Anbieter kann zusätzlich Abrechnungszeiträume mit längerer Laufzeit (z. B. eine jährliche Abrechnung) anbieten; in diesem Fall ist das Entgelt im Voraus für den jeweils gewählten Zeitraum fällig.
 
@@ -1081,9 +1093,9 @@ Stand: 13. September 2026
 
 (3) Das Recht beider Parteien zur außerordentlichen Kündigung aus wichtigem Grund bleibt unberührt. Ein wichtiger Grund liegt für den Anbieter insbesondere vor, wenn der Kunde in erheblicher Weise gegen wesentliche Pflichten aus diesen AGB verstößt und den Verstoß trotz Abmahnung nicht innerhalb einer angemessenen Frist abstellt, oder wenn eine zurückgebuchte Zahlung (§ 5 Abs. 6) trotz Aufforderung nicht innerhalb von vierzehn (14) Tagen ausgeglichen wird.
 
-(4) Der Kunde kann während der Vertragslaufzeit und bis dreißig (30) Tage nach Vertragsende verlangen, dass der Anbieter ihm seine Daten in einem strukturierten, gängigen und maschinenlesbaren Format (etwa CSV oder JSON) bereitstellt. Das Verlangen ist in Textform an den Anbieter zu richten; der Anbieter stellt die Daten innerhalb von dreißig (30) Tagen nach Zugang bereit. Bietet der Dienst eine Exportfunktion, kann der Anbieter auf diese verweisen. Der Export ist kostenlos. Nach Ablauf der Frist nach Satz 1 löscht der Anbieter die Daten des Kunden, soweit keine gesetzlichen Aufbewahrungspflichten entgegenstehen; für ruhend gestellte Abonnements gilt § 5 Abs. 3. Für die Auftragsverarbeitung personenbezogener Daten gelten ergänzend die Regelungen des Auftragsverarbeitungsvertrags (§ 7 Abs. 3).
+(4) Der Kunde kann seine Daten während der Vertragslaufzeit und bis dreißig (30) Tage nach Vertragsende jederzeit selbst über die Exportfunktion des Dienstes abrufen. Die Exportfunktion bleibt dafür auch dann erreichbar, wenn der Zugang zum Dienst im Übrigen nach § 5 Abs. 3 oder § 5 Abs. 6 gesperrt oder der Vertrag beendet ist. Daneben kann der Kunde innerhalb derselben Frist in Textform verlangen, dass der Anbieter ihm seine Daten in einem strukturierten, gängigen und maschinenlesbaren Format (etwa CSV oder JSON) bereitstellt; der Anbieter stellt sie innerhalb von dreißig (30) Tagen nach Zugang des Verlangens bereit und kann dabei auf die Exportfunktion verweisen. Der Export ist in beiden Fällen kostenlos. Nach Ablauf der Frist nach Satz 1 löscht der Anbieter die Daten des Kunden, soweit keine gesetzlichen Aufbewahrungspflichten entgegenstehen. Geht ein Verlangen nach Satz 3 rechtzeitig ein, löscht der Anbieter die davon erfassten Daten nicht, bevor er sie bereitgestellt hat und seit der Bereitstellung vierzehn (14) Tage zum Abruf vergangen sind; auf den Beginn dieser Abruffrist weist er bei der Bereitstellung hin. Für die Auftragsverarbeitung personenbezogener Daten gelten ergänzend die Regelungen des Auftragsverarbeitungsvertrags (§ 7 Abs. 3).
 
-(5) Exportierbar im Sinne von Abs. 4 sind alle Daten, die der Kunde und seine Nutzer im Dienst eingegeben haben oder die dort für den Betrieb des Kunden erzeugt wurden, insbesondere Angaben zu Mitarbeitern und Rollen, Schichtvorlagen, Planungszeiträume, Schichten und Zuweisungen, Urlaubs-, Verfügbarkeits- und Präferenzangaben, Mitteilungen samt Umfragen und Checklisten, Tausch- und Notfallvorgänge sowie das Änderungsprotokoll. Nicht exportiert werden Daten, die allein dem internen Betrieb und der Sicherheit des Dienstes dienen, insbesondere Passwort-Hashes, Sitzungs- und Sicherheitsdaten, Push-Tokens und der Programmcode. Der Kunde kann auf dieser Grundlage den Wechsel zu einem anderen Anbieter von Datenverarbeitungsdiensten oder die Übertragung seiner Daten auf eigene Systeme nach der Verordnung (EU) 2023/2854 (Datenverordnung) verlangen; der Anbieter unterstützt ihn dabei und erhebt dafür kein Entgelt.
+(5) Exportierbar im Sinne von Abs. 4 sind alle Daten, die der Kunde und seine Nutzer im Dienst eingegeben haben oder die dort für den Betrieb des Kunden erzeugt wurden, insbesondere Angaben zu Mitarbeitern und Rollen, Schichtvorlagen, Planungszeiträume, Schichten und Zuweisungen, Urlaubs-, Verfügbarkeits- und Präferenzangaben, Mitteilungen samt Umfragen und Checklisten, Tausch- und Notfallvorgänge sowie das Änderungsprotokoll. Nicht exportiert werden Daten, die allein dem internen Betrieb und der Sicherheit des Dienstes dienen, insbesondere Passwort-Hashes, Sitzungs- und Sicherheitsdaten, Push-Tokens und der Programmcode. Der Export enthält zu jedem Abschnitt eine Beschreibung seines Inhalts sowie eine Aufstellung der nicht enthaltenen Daten mit Begründung. Der Kunde kann auf dieser Grundlage den Wechsel zu einem anderen Anbieter von Datenverarbeitungsdiensten oder die Übertragung seiner Daten auf eigene Systeme nach der Verordnung (EU) 2023/2854 (Datenverordnung) verlangen; der Anbieter unterstützt ihn dabei in zumutbarem Umfang und erhebt dafür kein Entgelt.
 
 § 7 Pflichten und Verantwortlichkeit des Kunden
 

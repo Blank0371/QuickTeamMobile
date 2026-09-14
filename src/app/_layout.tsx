@@ -7,7 +7,7 @@ import { I18nProvider } from "../i18n/I18nProvider";
 import { ThemeProvider } from "../theme/ThemeProvider";
 
 function RootNav() {
-  const { user, loading, entered } = useAuth();
+  const { user, loading, entered, block } = useAuth();
 
   if (loading) {
     return (
@@ -28,7 +28,12 @@ function RootNav() {
           <Stack.Screen name="select" />
         </Stack.Protected>
 
-        <Stack.Protected guard={!!user && entered}>
+        {/* Contract ended, or a manager's trial is paused: nothing else is reachable. */}
+        <Stack.Protected guard={!!user && entered && !!block}>
+          <Stack.Screen name="locked" />
+        </Stack.Protected>
+
+        <Stack.Protected guard={!!user && entered && !block}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="bug-report" />

@@ -77,7 +77,7 @@
   "legal": {
     "sectionTitle": "Note legali",
     "consentTitle": "Informativa sulla privacy e Termini",
-    "consentUpdated": "La nostra Informativa sulla privacy e i Termini e condizioni sono cambiati. Leggi entrambi e conferma di averne preso visione per continuare.",
+    "consentIntro": "Leggi la nostra Informativa sulla privacy e i Termini e condizioni e conferma di averne preso visione per continuare.",
     "scrollHint": "Scorri fino in fondo per continuare",
     "agree": "Ho preso visione",
     "privacy": {

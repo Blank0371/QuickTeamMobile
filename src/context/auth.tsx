@@ -1,6 +1,8 @@
 import { Session } from "@supabase/supabase-js";
 import { router } from "expo-router";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
+import { AccessBlock, accountDeleted, checkAccess } from "../lib/access";
 import { supabase } from "../lib/supabase";
 
 type AuthContextType = {
@@ -79,8 +81,19 @@ type AuthContextType = {
    * still actively manages a team (must be handed over first).
    */
   deleteAccount: (password?: string) => Promise<void>;
-  /** Enter the app as a specific mitarbeiter position (from the select screen). */
-  enterApp: (m: { id: string; betrieb_id: string; rolle_typ: string }) => void;
+  /**
+   * Why the entered position may not use the app (contract ended, or a
+   * manager's trial is paused); null when it may. See src/lib/access.ts.
+   */
+  block: AccessBlock | null;
+  /**
+   * Enter the app as a specific mitarbeiter position (from the select screen).
+   * Runs the access check first; resolves "gone" when the position no longer
+   * exists (the caller should reload its list).
+   */
+  enterApp: (m: { id: string; betrieb_id: string; rolle_typ: string }) => Promise<"entered" | "gone">;
+  /** Re-run the access check for the entered position (also runs on app foreground). */
+  recheckAccess: () => Promise<void>;
   /** Return to the business-selection screen (manage connections / switch). */
   exitToSelection: () => void;
   signOut: () => Promise<void>;
@@ -89,25 +102,67 @@ type AuthContextType = {
 const Ctx = createContext<AuthContextType>({} as AuthContextType);
 export const useAuth = () => useContext(Ctx);
 
+async function signOutIfAccountDeleted(): Promise<boolean> {
+  if (!(await accountDeleted())) return false;
+  // Local only: there is no server session left to end. Emits SIGNED_OUT,
+  // which resets the position and lands on the sign-in screen.
+  await supabase.auth.signOut({ scope: "local" });
+  return true;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Session["user"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [entered, setEntered] = useState(false);
   const [activeMitarbeiter, setActiveMitarbeiter] =
     useState<{ id: string; betrieb_id: string; rolle_typ: string } | null>(null);
+  const [block, setBlock] = useState<AccessBlock | null>(null);
+  // The entered position as of now, so a check that resolves after the user
+  // switched or left doesn't apply a stale result.
+  const enteredIdRef = useRef<string | null>(null);
+
+  const leavePosition = () => {
+    enteredIdRef.current = null;
+    setEntered(false);
+    setActiveMitarbeiter(null);
+    setBlock(null);
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
       setLoading(false);
+      // A stored session can outlive its account (deleted with its business);
+      // drop it instead of showing an empty app until the token expires.
+      if (data.session) signOutIfAccountDeleted();
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
-      if (!session?.user) { setEntered(false); setActiveMitarbeiter(null); } // reset on sign-out
+      if (!session?.user) leavePosition(); // reset on sign-out
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  const recheckAccess = useCallback(async () => {
+    if (!user) return;
+    if (await signOutIfAccountDeleted()) return;
+    const m = activeMitarbeiter;
+    if (!entered || !m) return;
+    const result = await checkAccess(m, user.id);
+    if (enteredIdRef.current !== m.id) return;
+    if (result.status === "gone") leavePosition();
+    else setBlock(result.status === "blocked" ? result.block : null);
+  }, [user, entered, activeMitarbeiter]);
+
+  // Contracts end and businesses are deleted while the app sits in the
+  // background; check again whenever it comes back.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") recheckAccess();
+    });
+    return () => sub.remove();
+  }, [recheckAccess]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -218,15 +273,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
-  const enterApp = (m: { id: string; betrieb_id: string; rolle_typ: string }) => {
+  const enterApp = async (m: { id: string; betrieb_id: string; rolle_typ: string }) => {
+    const result = user ? await checkAccess(m, user.id) : ({ status: "ok" } as const);
+    if (result.status === "gone") return "gone";
+    enteredIdRef.current = m.id;
     setActiveMitarbeiter(m);
+    setBlock(result.status === "blocked" ? result.block : null);
     setEntered(true);
     // Land on Home. The (tabs) group anchors on "index", but flipping the
     // `entered` guard doesn't always re-target the group's initial route, so
-    // redirect explicitly once the tabs mount on the next tick.
-    setTimeout(() => router.replace("/"), 0);
+    // redirect explicitly once the tabs mount on the next tick. A blocked
+    // position has a single screen (`locked`), which the guard picks itself.
+    if (result.status !== "blocked") setTimeout(() => router.replace("/"), 0);
+    return "entered";
   };
-  const exitToSelection = () => setEntered(false);
+  const exitToSelection = () => {
+    enteredIdRef.current = null;
+    setEntered(false);
+    setBlock(null);
+  };
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -253,7 +318,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sendPasswordReset,
         confirmPasswordReset,
         deleteAccount,
+        block,
         enterApp,
+        recheckAccess,
         exitToSelection,
         signOut,
       }}

@@ -23,8 +23,13 @@ const LEGAL_WEBSITE_PATHS = {
 } as const;
 
 export function legalWebsiteUrl(id: keyof typeof LEGAL_WEBSITE_PATHS, appLang: string): string {
+  return websiteUrl(LEGAL_WEBSITE_PATHS[id], appLang);
+}
+
+// A page on quickteam.at in the app's language (de, or en for everything else).
+export function websiteUrl(path: string, appLang: string): string {
   const lang = appLang === "de" ? "de" : "en";
-  return `https://quickteam.at${LEGAL_WEBSITE_PATHS[id]}?lang=${lang}`;
+  return `https://quickteam.at${path}?lang=${lang}`;
 }
 
 // Apple's hosted "Licensed Application End User License Agreement" (the standard
@@ -38,7 +43,8 @@ export const APPLE_STANDARD_EULA_URL =
 export const CONSENT_DOC_IDS = ["privacy", "terms"] as const;
 export type ConsentDocId = (typeof CONSENT_DOC_IDS)[number];
 
-// Current version of each consent document. Bump one to re-prompt everyone.
+// Current version of each consent document. Bump one to show everyone who
+// noted an older version the update notice.
 export const CONSENT_VERSIONS: Record<ConsentDocId, string> = {
   privacy: PRIVACY_POLICY_VERSION,
   terms: TERMS_VERSION,

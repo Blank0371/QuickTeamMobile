@@ -49,6 +49,23 @@
       "mitarbeiter": "Mitarbeiter"
     }
   },
+  "locked": {
+    "ended": {
+      "title": "Dieser Betrieb nutzt QuickTeam nicht mehr",
+      "text": "Sein Abonnement ist beendet. Dienstplan, Mitteilungen, Urlaub und Tausch sind deshalb nicht mehr erreichbar.",
+      "deletion": "Die Daten des Betriebs werden nach Ablauf der vertraglichen Frist gelöscht. Brauchst du etwas daraus, wende dich an deinen Arbeitgeber.",
+      "deletionManager": "Die Daten des Betriebs werden nach Ablauf der vertraglichen Frist gelöscht. Um ein neues Abonnement abzuschließen oder deine Daten zu exportieren, melde dich mit deinem Chef-Konto auf quickteam.at an.",
+      "others": "Du gehörst noch zu weiteren Betrieben — wechsle zu einem davon, um weiterzuarbeiten."
+    },
+    "paused": {
+      "title": "Die Testphase ist abgelaufen",
+      "text": "Es wurde kein Zahlungsmittel hinterlegt, deshalb ist die Verwaltung dieses Betriebs pausiert. Deine Mitarbeiter sehen ihre Dienstpläne weiterhin.",
+      "more": "Um weiterzumachen, hinterlege auf quickteam.at ein Zahlungsmittel; dort kannst du auch deine Daten exportieren. Wird das Abonnement nicht innerhalb von 90 Tagen nach Ende der Testphase fortgesetzt, endet der Vertrag, und die Daten des Betriebs werden nach Ablauf der vertraglichen Frist gelöscht.",
+      "others": "Du hast weitere Verbindungen — wechsle zu einer davon, um weiterzuarbeiten."
+    },
+    "openWebsite": "quickteam.at öffnen",
+    "switch": "Zu deinen Verbindungen"
+  },
   "home": {
     "greeting": "Hallo",
     "noShift": "Keine anstehenden Schichten",
@@ -77,7 +94,10 @@
   "legal": {
     "sectionTitle": "Rechtliches",
     "consentTitle": "Datenschutz & AGB",
-    "consentUpdated": "Unsere Datenschutzerklärung und AGB haben sich geändert. Bitte lies beide und bestätige, dass du sie zur Kenntnis genommen hast, um fortzufahren.",
+    "consentIntro": "Bitte lies unsere Datenschutzerklärung und AGB und bestätige, dass du sie zur Kenntnis genommen hast, um fortzufahren.",
+    "noticeTitle": "Rechtstexte aktualisiert",
+    "noticeBody": "Wir haben folgende Dokumente aktualisiert. Die neue Fassung kannst du auf quickteam.at nachlesen.",
+    "noticeDismiss": "OK",
     "scrollHint": "Scrolle nach unten, um fortzufahren",
     "agree": "Zur Kenntnis genommen",
     "privacy": {

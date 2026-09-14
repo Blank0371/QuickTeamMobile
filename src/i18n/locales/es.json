@@ -77,7 +77,7 @@
   "legal": {
     "sectionTitle": "Legal",
     "consentTitle": "Política de privacidad y términos",
-    "consentUpdated": "Nuestra Política de privacidad y los Términos y condiciones han cambiado. Léelos y confirma que has tomado nota de ambos para continuar.",
+    "consentIntro": "Lee nuestra Política de privacidad y los Términos y condiciones y confirma que has tomado nota de ambos para continuar.",
     "scrollHint": "Desplázate hasta el final para continuar",
     "agree": "He tomado nota",
     "privacy": {

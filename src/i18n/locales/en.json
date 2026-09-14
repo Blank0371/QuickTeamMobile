@@ -49,6 +49,23 @@
       "mitarbeiter": "Employee"
     }
   },
+  "locked": {
+    "ended": {
+      "title": "This business no longer uses QuickTeam",
+      "text": "Its subscription has ended, so the schedule, messages, vacation and swaps are no longer available.",
+      "deletion": "The business's data will be deleted once the contractual period has passed. If you need anything from it, please ask your employer.",
+      "deletionManager": "The business's data will be deleted once the contractual period has passed. To subscribe again or to export your data, sign in on quickteam.at with your manager account.",
+      "others": "You also belong to other businesses — switch to one of them to keep working."
+    },
+    "paused": {
+      "title": "The trial has ended",
+      "text": "No payment method was added, so managing this business is paused. Your employees can still see their schedules.",
+      "more": "To continue, add a payment method on quickteam.at; you can also export your data there. If the subscription isn't continued within 90 days of the end of the trial, the contract ends and the business's data is deleted once the contractual period has passed.",
+      "others": "You have other connections — switch to one of them to keep working."
+    },
+    "openWebsite": "Open quickteam.at",
+    "switch": "Go to your connections"
+  },
   "home": {
     "greeting": "Hello",
     "noShift": "No upcoming shifts",
@@ -77,7 +94,10 @@
   "legal": {
     "sectionTitle": "Legal",
     "consentTitle": "Privacy Policy & Terms",
-    "consentUpdated": "Our Privacy Policy and Terms & Conditions have changed. Please read both and confirm that you have taken note of them to continue.",
+    "consentIntro": "Please read our Privacy Policy and Terms & Conditions and confirm that you have taken note of them to continue.",
+    "noticeTitle": "Legal texts updated",
+    "noticeBody": "We have updated the following documents. You can read the new version on quickteam.at.",
+    "noticeDismiss": "OK",
     "scrollHint": "Scroll to the bottom to continue",
     "agree": "I have taken note",
     "privacy": {

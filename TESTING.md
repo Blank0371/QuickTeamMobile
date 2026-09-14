@@ -71,6 +71,12 @@ Legend: run each as the indicated actor; ✅ = expected pass, ⛔ = expected rej
 - [ ] `registriere_betrieb(name,land,vorname,nachname)` → creates business + chef row (roll back).
 - [ ] `einladung_annehmen(mitarbeiter_id)`, `meine_einladungen()`.
 - [ ] `konto_merge_start()` / `konto_merge_confirm(token)` — account merge (auth.tsx).
+- [ ] `betrieb_vertrag_beendet(betrieb)` (access gate, `src/lib/access.ts`) → `false` for a
+  member of a business that is `trial`/`aktiv`/`pausiert`; `true` only for a member AND
+  `gekuendigt`; ⛔ always `false` for a business the caller isn't a member of (no leak).
+  Chef-only read of `betrieb_abonnements.status` (`abonnement_select_chef`) → 1 row as chef,
+  0 rows as employee. _2026-09-14: own business → false, foreign → false, chef sees 1 row
+  (no `gekuendigt`/`pausiert` business exists in the live DB, so `true` is untested)._
 
 ### 2.2 Messaging (`benachrichtigungen` envelope + satellites)
 - [ ] `ankuendigung_erstellen` type `allgemein` / `aenderungswunsch` / `umfrage` (any member) ✅.
@@ -190,7 +196,15 @@ The deployed edge function may lag local code — test **local** code directly w
 - [ ] `npx expo lint`.
 - [ ] Boot web: `.claude/launch.json` profile `expo-web` (port 8081) → browser.
   - [ ] Sign-in screen renders (email/password, "Use phone number instead", Sign up).
-  - [ ] Legal consent gate appears; scroll-to-agree works.
+  - [ ] Legal consent gate: on a fresh device (no `legal:accepted:*` in storage) it blocks;
+    scroll-to-agree works. With an **older** stored version it shows only the
+    "Legal texts updated" notice, listing just the changed document(s) with a link to
+    quickteam.at; one tap on OK stores the current versions. _2026-09-14 ✅ (web)._
+  - [ ] **Deleted account:** a stored session whose refresh token the server rejects
+    (simulate: expired `expires_at` + unknown `refresh_token` in
+    `sb-jqpfuotwsgnqihspsmmf-auth-token`) lands on the sign-in screen, no loop, no error.
+    _2026-09-14 ✅ (web)._ A still-valid access token of a deleted user is dropped via
+    `getUser()` → `user_not_found` on launch / foreground (`accountDeleted()`), not exercised live.
   - [ ] **0 console errors** on load.
 
 **Getting an authenticated session (Claude can't type a password):** ask the user to sign
@@ -225,6 +239,21 @@ Authenticated UI checklist (both role surfaces — the tab bar differs by role):
   reminders) needs a real device/simulator + an **EAS dev-client** build (`expo-notifications`
   is not in Expo Go). A handled Supabase RPC rejection shows as a `400` in the console —
   that's the DB constraint working, not a UI bug.
+- [ ] **Access gate (`locked` screen)** — runs on entering a position and whenever the app
+  returns to the foreground; every read error/timeout (8 s) lets the user through.
+  - [ ] Business `gekuendigt` → every role gets "This business no longer uses QuickTeam"
+    with the business name; manager also gets "Open quickteam.at"; "Go to your connections"
+    only if the login has an active position in **another** business; sign out works.
+  - [ ] Business `pausiert` → **manager only** gets "The trial has ended"; employees of the
+    same business enter normally; "Go to your connections" if the login has any other
+    active position (including an employee position in that business).
+  - [ ] Paying on the website (in-app browser) and closing it → check re-runs and the app
+    opens once the webhook has written `aktiv`.
+  - [ ] Position gone (business deleted, or position deactivated/anonymised) while inside →
+    back to the connection picker on next foreground; tapping a stale entry in the picker
+    reloads the list instead of entering.
+  - Needs a business in `gekuendigt`/`pausiert` — none exists live; set one up in a Supabase
+    branch, never in Testbetrieb 12.
 - [ ] Content check: Privacy Policy / Terms must be **real** text, not placeholders
   (`src/lib/privacyPolicy.ts`, `terms.ts`, `legalDocs.ts`).
 

@@ -40,6 +40,7 @@ export default function SelectBusinessScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
+  const [entering, setEntering] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -92,6 +93,15 @@ export default function SelectBusinessScreen() {
     setAccepting(null);
   };
 
+  const enter = async (m: Membership) => {
+    setEntering(m.id);
+    const result = await enterApp({ id: m.id, betrieb_id: m.betrieb_id, rolle_typ: m.rolle_typ });
+    // The position disappeared since the list loaded (business deleted,
+    // position deactivated): drop it from the list.
+    if (result === "gone") await load();
+    setEntering(null);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.screen, styles.center, { backgroundColor: theme.bg }]}>
@@ -128,7 +138,8 @@ export default function SelectBusinessScreen() {
           {joined.map((m) => (
             <Pressable
               key={m.id}
-              onPress={() => enterApp({ id: m.id, betrieb_id: m.betrieb_id, rolle_typ: m.rolle_typ })}
+              onPress={() => enter(m)}
+              disabled={entering != null}
               style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
             >
               <View style={{ flex: 1 }}>
@@ -137,7 +148,9 @@ export default function SelectBusinessScreen() {
                   {t(`select.role.${m.rolle_typ}`)}{m.name ? ` · ${m.name}` : ""}
                 </Text>
               </View>
-              <Text style={[styles.chevron, { color: theme.muted }]}>›</Text>
+              {entering === m.id
+                ? <ActivityIndicator size="small" color={theme.accent} />
+                : <Text style={[styles.chevron, { color: theme.muted }]}>›</Text>}
             </Pressable>
           ))}
 
