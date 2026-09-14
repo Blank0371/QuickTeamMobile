@@ -52,3 +52,7 @@ export const CONSENT_VERSIONS: Record<ConsentDocId, string> = {
 
 // Per-document storage key for the version the user last accepted.
 export const consentStorageKey = (id: ConsentDocId) => `legal:accepted:${id}`;
+
+// Language ("de" | "en") of the texts shown when they were last noted — goes
+// into the server-side record (consentRecord.ts).
+export const NOTED_LANG_KEY = "legal:acceptedLang";

@@ -96,8 +96,7 @@
     "consentTitle": "Privacy Policy & Terms",
     "consentIntro": "Please read our Privacy Policy and Terms & Conditions and confirm that you have taken note of them to continue.",
     "noticeTitle": "Legal texts updated",
-    "noticeBody": "We have updated the following documents. You can read the new version on quickteam.at.",
-    "noticeDismiss": "OK",
+    "noticeBody": "We have updated the following documents. Please read the new version and confirm that you have taken note of it to keep using the app.",
     "scrollHint": "Scroll to the bottom to continue",
     "agree": "I have taken note",
     "privacy": {

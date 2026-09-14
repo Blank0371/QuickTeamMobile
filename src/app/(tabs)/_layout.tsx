@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useTheme } from "../../theme/ThemeProvider";
+import { recordPrivacyNoted } from "../../lib/consentRecord";
 import { registerForPush } from "../../lib/notifications";
 
 export const unstable_settings = {
@@ -15,7 +16,7 @@ export const unstable_settings = {
 export default function TabsLayout() {
   const { theme } = useTheme();
   const { t, lang } = useI18n();
-  const { activeMitarbeiter } = useAuth();
+  const { activeMitarbeiter, user } = useAuth();
 
   // Role of the position the user entered as -> chef sees the Manager tab.
   const isChef = activeMitarbeiter?.rolle_typ === "chef";
@@ -25,6 +26,14 @@ export default function TabsLayout() {
   useEffect(() => {
     registerForPush(activeMitarbeiter?.id ?? null, lang);
   }, [activeMitarbeiter?.id, lang]);
+
+  // Record the privacy-policy acknowledgement for this business server-side
+  // (idempotent; a failed write retries on the next entry).
+  const betriebId = activeMitarbeiter?.betrieb_id;
+  const authId = user?.id;
+  useEffect(() => {
+    if (betriebId && authId) recordPrivacyNoted(betriebId, authId, lang);
+  }, [betriebId, authId, lang]);
 
   // Tapping a push (or a scheduled reminder) deep-links to the relevant screen.
   useEffect(() => {

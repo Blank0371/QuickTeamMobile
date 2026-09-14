@@ -2,9 +2,10 @@
 //
 // Kept separate from the Privacy Policy so the two can be corrected and updated
 // individually. Both are shown together in the first-launch consent gate;
-// bumping either version shows users who noted an older one a non-blocking
-// notice on next launch (see LegalConsentGate). Keep it equal to the website's
-// version (rechtstexte.ts).
+// bumping either version blocks users who noted an older one until they take
+// note of the new text (see LegalConsentGate). Keep it equal to the website's
+// version (rechtstexte.ts). Taking note here is not the business's acceptance
+// of the terms — a chef accepts those on the website.
 //
 // TO UPDATE THE TERMS
 //   1. Edit the "terms" body in src/lib/legalDocs.ts.
