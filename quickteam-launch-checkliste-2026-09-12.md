@@ -19,10 +19,12 @@ bei Betriebstrennung, anonymen Umfragen, Zahlungen und Wiederherstellung braucht
 
 Bewusst zurückgestellt am 2026-09-12, keine Eile:
 
-- [ ] Supabase Management-API-Token erstellen (gescopt, nur dieses Projekt, nur Auth +
+- [x] Supabase Management-API-Token erstellen (gescopt, nur dieses Projekt, nur Auth +
       Edge Functions) und als `SUPABASE_MANAGEMENT_TOKEN` exportieren. Erst danach
       können die zwei letzten A-Punkte fertig werden (Edge Function endgültig löschen,
       `plan-generieren` serverseitig absichern).
+      **Erledigt am 2026-09-15 auf anderem Weg:** statt eines eigenen Tokens per
+      `supabase login` (CLI) angemeldet; beide A-Punkte damit abgeschlossen.
 - [x] Klären, warum der Sandbox-Testklick drei Zeilen in `rechtliche_zustimmungen`
       erzeugt hat, statt nur einer — relevant für Abschnitt B, muss aber nicht vor
       dessen Start geklärt sein.
@@ -48,9 +50,8 @@ Bewusst zurückgestellt am 2026-09-12, keine Eile:
 
 ## A. Sicherheit und Berechtigungen — vor echten Kundendaten zwingend
 
-**Status: Weitgehend abgeschlossen. Neun der zehn Punkte geschlossen und live
-gegengeprüft. Zwei Teilpunkte hängen am fehlenden Supabase-Management-API-Token,
-sonst fertig spezifiziert.**
+**Status: Abgeschlossen (2026-09-15). Alle zehn Punkte geschlossen; die zwei
+Teilpunkte, die am Management-Zugang hingen, sind erledigt (Punkte 7 und 10).**
 
 - [x] **1. Anonyme Umfragen wirklich anonym zugänglich machen.**
   Geschlossen. Einzelstimmen mit Mitarbeiter-ID nicht mehr für Betriebsmitglieder
@@ -77,13 +78,12 @@ sonst fertig spezifiziert.**
 - [x] **6. Schutz des letzten aktiven Chefs tatsächlich aktivieren.**
   Geschlossen. Trigger war programmiert, aber an keine Tabelle gebunden — jetzt
   gebunden, mit Ausnahme für die gewollte Betriebsschließung per Kaskade.
-- [~] **7. Einladungseinlösung gegen gleichzeitige Aufrufe absichern.**
-  Teilweise. Die tatsächlich genutzte Funktion `einladung_annehmen()` ist jetzt
+- [x] **7. Einladungseinlösung gegen gleichzeitige Aufrufe absichern.**
+  Geschlossen. Die tatsächlich genutzte Funktion `einladung_annehmen()` ist jetzt
   atomar (Race Condition geschlossen). Die separate, verwaiste Edge Function
   `einladung-einloesen` hatte denselben Fehler im eigenen Code, wurde aber nie von
-  App oder Website aufgerufen — bestätigt tot. Sie ist per Tombstone (HTTP 410,
-  mintet keine Session mehr) bereits unschädlich gemacht; die endgültige Löschung
-  fehlt noch, blockiert am Management-API-Token.
+  App oder Website aufgerufen — bestätigt tot. Erst per Tombstone (HTTP 410)
+  stillgelegt, **am 2026-09-15 endgültig gelöscht** (Version 1.1.22).
 - [x] **8. Sämtliche privilegierten Funktionen einzeln prüfen.**
   Geprüft. 51 erreichbare SECURITY DEFINER-Funktionen dokumentiert, keine eskaliert
   unbeabsichtigt. Unnötige Ausführungsrechte (`urlaub_benachrichtigen` u. a.)
@@ -92,8 +92,8 @@ sonst fertig spezifiziert.**
   Geprüft, bestätigt sicher. Rollen werden live gegen `auth.uid()` geprüft, keine im
   Token zwischengespeicherten Rechte — Entzug wirkt sofort, auch bei bestehender
   Sitzung.
-- [~] **10. Missbrauchsschutz und Geheimnisse kontrollieren.**
-  Teilweise, bewusst offen gelassen.
+- [x] **10. Missbrauchsschutz und Geheimnisse kontrollieren.**
+  Geschlossen am 2026-09-15 (serverseitige Solver-Sperre live, siehe unten).
   - `disable_signup` war wiederholt offen. Ursache identifiziert: einmaliger
     Vorfall vom 2026-09-09, nie zurückgedreht — keine neue Verletzung. **Entscheidung:
     Öffentliche Registrierung bleibt dauerhaft offen.** Zugriffskontrolle liegt
@@ -103,14 +103,16 @@ sonst fertig spezifiziert.**
     Registrierung, Passwort-Reset ausreichend geschützt (~30 Versuche/Fenster/IP).
     Einzige echte Lücke: `plan-generieren` (Planungslauf) hatte keinerlei Drosselung.
     Client-seitiger Komfort-Cooldown (5 s, verhindert versehentliche Doppelklicks) ist
-    gebaut und verifiziert. Der eigentliche serverseitige Schutz (30 s pro Betrieb +
-    Sperre gegen gleichzeitige Läufe) ist fertig spezifiziert, aber noch nicht
-    deployed — ebenfalls blockiert am Management-API-Token.
+    gebaut und verifiziert. Der eigentliche serverseitige Schutz (30 s pro Betrieb →
+    429, atomarer Anspruch gegen gleichzeitige Läufe auf einem Zyklus → 409) ist
+    **am 2026-09-15 als `plan-generieren` Version 13 deployed** (Version 1.1.18).
+    Rauchtest bestanden; Sperrzeit und Anspruch selbst sind live noch nicht mit
+    einem Chef-Token durchgespielt.
 
-**Offen, sobald der Token gesetzt ist:**
-- Edge Function `einladung-einloesen` endgültig löschen
-- `plan-generieren` serverseitig absichern (Spezifikation in
-  `docs/audit-a/app-entwickler-handover.md` §5)
+**Erledigt am 2026-09-15** (vorher „offen, sobald der Token gesetzt ist"):
+- ~~Edge Function `einladung-einloesen` endgültig löschen~~ — gelöscht
+- ~~`plan-generieren` serverseitig absichern~~ — deployed (Spezifikation in
+  `QuickTeamFront/docs/audit-a/app-entwickler-handover.md` §5)
 
 **Hinweis für die Weiterarbeit an Abschnitt B:** Beim Testen des Cooldowns musste ein
 Sandbox-Konto real durch das Zustimmungs-Gate klicken, um die Planungsseite zu
