@@ -139,6 +139,7 @@ export default function ManagerScreen() {
   const [roles, setRoles] = useState<Rolle[]>([]);
   const [zyklen, setZyklen] = useState<Planungszyklus[]>([]); // in-flight / awaiting-review planning cycles
   const [openSlots, setOpenSlots] = useState<Record<string, number>>({}); // planungszyklus_id -> unfilled role-slots
+  const [plannedShifts, setPlannedShifts] = useState<Record<string, number>>({}); // planungszyklus_id -> draft (geplant) shifts
 
   const fmtDate = (d: string) =>
     new Date(d + "T00:00:00").toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" });
@@ -161,7 +162,7 @@ export default function ManagerScreen() {
         .eq("betrieb_id", betrieb).single(),
       supabase.from("schicht_zuweisungen").select("id, mitarbeiter_id, schicht_instanz_id, rolle_id, attendet").eq("betrieb_id", betrieb),
       // All instances (not just this year) so overtime can span every worked month up to the cutoff.
-      supabase.from("schicht_instanzen").select("id, start_zeit, end_zeit, datum, schicht_vorlage_id").eq("betrieb_id", betrieb),
+      supabase.from("schicht_instanzen").select("id, start_zeit, end_zeit, datum, schicht_vorlage_id, planungszyklus_id, status").eq("betrieb_id", betrieb),
       supabase.from("notfaelle").select("id, status, melder_id, schicht_instanz_id, rolle_id, erstellt_am")
         .eq("betrieb_id", betrieb).in("status", ["gemeldet", "vertretung_gesucht"]).order("erstellt_am", { ascending: true }),
       // The free-text reason may be health data, so it gets its own table with
@@ -173,9 +174,12 @@ export default function ManagerScreen() {
         .eq("betrieb_id", betrieb).eq("status", "wartet_auf_chef").order("erstellt_am", { ascending: true }),
       supabase.from("schicht_vorlage_mindestbesetzung").select("schicht_vorlage_id, rolle_id, mindestanzahl").eq("betrieb_id", betrieb),
       // Planning cycles that are still in flight or awaiting review (for the Shifts section banners).
+      // Failed generations (solver_fehler set, cleared again by any new run) stay in the DB but are
+      // hidden — otherwise they'd hang as "being generated" forever.
       supabase.from("planungszyklen").select("id, status, zeitraum_start, zeitraum_ende")
         .eq("betrieb_id", betrieb)
         .in("status", ["offen", "deadline_erreicht", "solver_laeuft", "vorschlag_bereit"])
+        .is("solver_fehler", null)
         .order("zeitraum_start", { ascending: true }),
     ]);
 
@@ -287,6 +291,11 @@ export default function ManagerScreen() {
     });
     setTemplateReqs(reqs);
     setZyklen((zyklenRes.data ?? []) as Planungszyklus[]);
+    const planned: Record<string, number> = {};
+    (instanzen.data ?? []).forEach((i: any) => {
+      if (i.status === "geplant" && i.planungszyklus_id) planned[i.planungszyklus_id] = (planned[i.planungszyklus_id] ?? 0) + 1;
+    });
+    setPlannedShifts(planned);
 
     // Unfilled role-slots per proposal-ready cycle (derived server-side).
     const { data: slots } = await supabase.rpc("offene_stellen_pro_zyklus", { p_betrieb_id: betrieb });
@@ -343,7 +352,8 @@ export default function ManagerScreen() {
         ) : (
           <ShiftsSection
             theme={theme} t={t} lang={lang} betrieb={betrieb!}
-            templates={templates} templateReqs={templateReqs} roles={roles} zyklen={zyklen} openSlots={openSlots} reload={load}
+            templates={templates} templateReqs={templateReqs} roles={roles} zyklen={zyklen} openSlots={openSlots}
+            plannedShifts={plannedShifts} reload={load}
           />
         )}
       </RefreshScrollView>
@@ -1096,8 +1106,12 @@ const weekdayName = (wd: number, lang: string) => {
   return d.toLocaleDateString(lang, { weekday: "long" });
 };
 
-function ShiftsSection({ theme, t, lang, betrieb, templates, templateReqs, roles, zyklen, openSlots, reload }: any) {
+function ShiftsSection({ theme, t, lang, betrieb, templates, templateReqs, roles, zyklen, openSlots, plannedShifts, reload }: any) {
   const [editor, setEditor] = useState<Vorlage | "new" | null>(null);
+  // "Check generated shifts" dropdown, and the confirm popup for publishing/discarding one cycle.
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [review, setReview] = useState<{ zyklus: Planungszyklus; action: "publish" | "discard" } | null>(null);
+  const [reviewBusy, setReviewBusy] = useState(false);
 
   const roleName = (id: string) => roles.find((r: Rolle) => r.id === id)?.name ?? "";
 
@@ -1114,6 +1128,41 @@ function ShiftsSection({ theme, t, lang, betrieb, templates, templateReqs, roles
   };
   const cyclesLabel = (list: Planungszyklus[]) =>
     list.length === 1 ? fmtRange(list[0].zeitraum_start, list[0].zeitraum_ende) : `${list.length} ${t("manager.csCyclesMany")}`;
+  const fmtRangeLong = (von: string, bis: string) => {
+    const f = (d: string) => new Date(d + "T00:00:00").toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" });
+    return `${f(von)} – ${f(bis)}`;
+  };
+
+  // Publish or discard the draft shifts of ONE cycle. The geplante_schichten_* RPCs act on
+  // the whole business, so the same writes are scoped to planungszyklus_id here (chef RLS).
+  // Shifts first, then the cycle — if the second step fails, repeating the action finishes it.
+  const runReview = async () => {
+    if (!review) return;
+    const { zyklus, action } = review;
+    setReviewBusy(true);
+    let error: { message: string } | null = null;
+    if (action === "publish") {
+      ({ error } = await supabase.from("schicht_instanzen").update({ status: "veroeffentlicht" })
+        .eq("betrieb_id", betrieb).eq("planungszyklus_id", zyklus.id).eq("status", "geplant"));
+      if (!error) ({ error } = await supabase.from("planungszyklen")
+        .update({ status: "veroeffentlicht", veroeffentlicht_am: new Date().toISOString() })
+        .eq("id", zyklus.id).eq("status", "vorschlag_bereit"));
+    } else {
+      // Deleting a shift cascades to its assignments, notes and staffing overrides.
+      ({ error } = await supabase.from("schicht_instanzen").delete()
+        .eq("betrieb_id", betrieb).eq("planungszyklus_id", zyklus.id).eq("status", "geplant"));
+      if (!error) ({ error } = await supabase.from("planungszyklen").delete()
+        .eq("id", zyklus.id).eq("status", "vorschlag_bereit"));
+    }
+    setReviewBusy(false);
+    setReview(null);
+    if (error) {
+      console.warn(`[review:${action}]`, error.message);
+      notify(t("auth.genericError"));
+    }
+    reload?.();
+  };
+  const reviewCount = review ? ((plannedShifts ?? {})[review.zyklus.id] ?? 0) : 0;
 
   const byDay = useMemo(() => {
     const m = new Map<number, Vorlage[]>();
@@ -1127,26 +1176,96 @@ function ShiftsSection({ theme, t, lang, betrieb, templates, templateReqs, roles
 
   return (
     <>
-      {/* Awaiting review — the solver produced a proposal the chef should check. */}
+      {/* Awaiting review — dropdown of the generated cycles; each is confirmed or discarded as a whole. */}
       {readyCycles.length > 0 && (
-        <Pressable
-          style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.accent, marginTop: 6, flexDirection: "row", alignItems: "center", gap: 12 }]}
-          onPress={() => router.push("/calendar")}
-        >
-          <CalendarCheck2 color={theme.accent} size={22} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 15 }}>{t("manager.csCheckReady")}</Text>
-            <Text style={{ color: theme.muted, fontSize: 13 }}>{cyclesLabel(readyCycles)}</Text>
-          </View>
-          {readyOpenSlots > 0 ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <TriangleAlert color={AMBER} size={16} />
-              <Text style={{ color: AMBER, fontWeight: "800", fontSize: 13 }}>{t("manager.csOpenSlots", { count: readyOpenSlots })}</Text>
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.accent, marginTop: 6 }]}>
+          <Pressable style={{ flexDirection: "row", alignItems: "center", gap: 12 }} onPress={() => setReviewOpen((o) => !o)}>
+            <CalendarCheck2 color={theme.accent} size={22} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontWeight: "800", fontSize: 15 }}>{t("manager.csCheckReady")}</Text>
+              <Text style={{ color: theme.muted, fontSize: 13 }}>{cyclesLabel(readyCycles)}</Text>
             </View>
-          ) : null}
-          <ChevronRight color={theme.muted} size={22} />
-        </Pressable>
+            {readyOpenSlots > 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <TriangleAlert color={AMBER} size={16} />
+                <Text style={{ color: AMBER, fontWeight: "800", fontSize: 13 }}>{t("manager.csOpenSlots", { count: readyOpenSlots })}</Text>
+              </View>
+            ) : null}
+            {reviewOpen ? <ChevronDown color={theme.muted} size={22} /> : <ChevronRight color={theme.muted} size={22} />}
+          </Pressable>
+
+          {reviewOpen && readyCycles.map((z) => {
+            const open = (openSlots ?? {})[z.id] ?? 0;
+            return (
+              <View key={z.id} style={[styles.reviewRow, { borderColor: theme.border }]}>
+                <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15 }}>{fmtRangeLong(z.zeitraum_start, z.zeitraum_ende)}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <Text style={{ color: theme.muted, fontSize: 13 }}>{t("manager.csShiftCount", { count: (plannedShifts ?? {})[z.id] ?? 0 })}</Text>
+                  {open > 0 && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <TriangleAlert color={AMBER} size={14} />
+                      <Text style={{ color: AMBER, fontWeight: "700", fontSize: 13 }}>{t("manager.csOpenSlots", { count: open })}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.btnRow}>
+                  <Pressable style={[styles.smallBtn, { backgroundColor: theme.accent, borderColor: theme.accent }]} onPress={() => setReview({ zyklus: z, action: "publish" })}>
+                    <Check color={theme.accentText} size={16} />
+                    <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 14 }}>{t("manager.csConfirmAll")}</Text>
+                  </Pressable>
+                  <Pressable style={[styles.smallBtn, { borderColor: RED }]} onPress={() => setReview({ zyklus: z, action: "discard" })}>
+                    <Trash2 color={RED} size={16} />
+                    <Text style={{ color: RED, fontWeight: "700", fontSize: 14 }}>{t("manager.csDiscardAll")}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+
+          {reviewOpen && (
+            <Pressable style={styles.reviewCalLink} onPress={() => router.push("/calendar")}>
+              <Text style={{ color: theme.accent, fontWeight: "700", fontSize: 14 }}>{t("manager.csViewCalendar")}</Text>
+              <ChevronRight color={theme.accent} size={16} />
+            </Pressable>
+          )}
+        </View>
       )}
+
+      {/* Confirm popup for publishing / discarding one cycle — texts shared with the calendar's buttons. */}
+      <Modal visible={!!review} transparent animationType="fade" onRequestClose={() => setReview(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setReview(null)}>
+          <Pressable style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHead}>
+              <Text style={[styles.sheetTitle, { color: theme.text, flex: 1 }]}>
+                {t(review?.action === "discard" ? "calendar.deletePlannedTitle" : "calendar.confirmPlannedTitle")}
+              </Text>
+              <Pressable onPress={() => setReview(null)} hitSlop={10}><X color={theme.muted} size={22} /></Pressable>
+            </View>
+            <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15, marginBottom: 6 }}>
+              {review ? fmtRangeLong(review.zyklus.zeitraum_start, review.zyklus.zeitraum_ende) : ""}
+            </Text>
+            <Text style={{ color: theme.muted, fontSize: 14, lineHeight: 20, marginBottom: 16 }}>
+              {t(review?.action === "discard" ? "calendar.deletePlannedBody" : "calendar.confirmPlannedBody", { count: reviewCount })}
+            </Text>
+            <View style={styles.btnRow}>
+              <Pressable style={[styles.smallBtn, { borderColor: theme.border }]} onPress={() => setReview(null)} disabled={reviewBusy}>
+                <Text style={{ color: theme.text, fontWeight: "700", fontSize: 14 }}>{t("manager.cancel")}</Text>
+              </Pressable>
+              {review?.action === "discard" ? (
+                <Pressable style={[styles.smallBtn, { backgroundColor: RED, borderColor: RED }]} onPress={runReview} disabled={reviewBusy}>
+                  <Trash2 color="#fff" size={16} />
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{reviewBusy ? "…" : t("calendar.deletePlannedGo")}</Text>
+                </Pressable>
+              ) : (
+                <Pressable style={[styles.smallBtn, { backgroundColor: theme.accent, borderColor: theme.accent }]} onPress={runReview} disabled={reviewBusy}>
+                  <Check color={theme.accentText} size={16} />
+                  <Text style={{ color: theme.accentText, fontWeight: "700", fontSize: 14 }}>{reviewBusy ? "…" : t("calendar.confirmPlannedGo")}</Text>
+                </Pressable>
+              )}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Still generating — a cycle exists but no proposal is ready yet. */}
       {generatingCycles.length > 0 && (
@@ -1445,6 +1564,9 @@ const notify = (message: string) => {
   else Alert.alert(message);
 };
 
+// Minimum gap between two solver runs of one business — mirrors SPERRE_MS in plan-generieren.
+const SOLVER_COOLDOWN_MS = 30_000;
+
 // "Generate shifts" — creates a real planning cycle (planungszyklen). The solver run
 // that turns the cycle into concrete shifts is triggered separately.
 function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }: any) {
@@ -1467,13 +1589,15 @@ function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }
   const isoRe = /^\d{4}-\d{2}-\d{2}$/;
 
   // On open: find where the last cycle ended and seed the range from there.
+  // Failed generations are hidden, so they don't claim the range either.
   useEffect(() => {
     if (!visible || !betrieb) return;
     let alive = true;
     setLoading(true);
     (async () => {
       const { data } = await supabase.from("planungszyklen").select("zeitraum_ende")
-        .eq("betrieb_id", betrieb).order("zeitraum_ende", { ascending: false }).limit(1);
+        .eq("betrieb_id", betrieb).is("solver_fehler", null)
+        .order("zeitraum_ende", { ascending: false }).limit(1);
       if (!alive) return;
       const lastEnde = data?.[0]?.zeitraum_ende as string | undefined;
       const start = lastEnde ? addDays(lastEnde, 1) : isoDay(now);
@@ -1525,24 +1649,62 @@ function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }
   // separately, e.g. after the preferences deadline).
   const doGenerate = async () => {
     setSending(true);
+
+    // Check the solver's cooldown before creating anything, so a too-quick request
+    // doesn't leave a cycle behind. Same measure as the function: latest start or end
+    // of any run of this business. A wait longer than the cooldown means the device
+    // clock is off — then let the server decide.
+    const { data: letzter } = await supabase.from("planungszyklen")
+      .select("solver_gestartet_am, solver_beendet_am")
+      .eq("betrieb_id", betrieb).not("solver_gestartet_am", "is", null)
+      .order("solver_gestartet_am", { ascending: false }).limit(1).maybeSingle();
+    const zuletzt = Math.max(
+      letzter?.solver_gestartet_am ? new Date(letzter.solver_gestartet_am).getTime() : 0,
+      letzter?.solver_beendet_am ? new Date(letzter.solver_beendet_am).getTime() : 0,
+    );
+    const warten = zuletzt + SOLVER_COOLDOWN_MS - Date.now();
+    if (warten > 0 && warten <= SOLVER_COOLDOWN_MS) {
+      setSending(false);
+      setConfirmOpen(false);
+      notify(t("manager.solverCooldown", { seconds: Math.ceil(warten / 1000) }));
+      return;
+    }
+
     const { data, error } = await supabase.rpc("planungszyklus_erstellen", {
       p_betrieb_id: betrieb,
       p_start: von,
       p_ende: bis,
       p_deadline: deadlineDate ? deadlineDate.toISOString() : null,
     });
+    if (error) {
+      console.warn("[planungszyklus_erstellen]", error.message);
+      setSending(false);
+      setConfirmOpen(false);
+      notify(t("manager.csGenerateFailed"));
+      return;
+    }
 
     // For the 'quick' method we kick off the solver right away; otherwise the cycle
     // just waits (moderate/optimal run separately, e.g. after the preferences deadline).
     const zyklusId = (data as any)?.id as string | undefined;
     const methode = (data as any)?.solver_methode as string | undefined;
-    if (!error && methode === "quick" && zyklusId) {
+    if (methode === "quick" && zyklusId) {
       // The function throttles server-side (429: another run of this business
       // within 30 s; 409: already running) — say so instead of failing silently.
       const { error: solverErr } = await supabase.functions.invoke("plan-generieren", { body: { planungszyklus_id: zyklusId } });
       if (solverErr) {
         console.warn("[plan-generieren]", solverErr.message);
-        notify(t("manager.solverNotStarted"));
+        // An HTTP error carries the unread Response, e.g. 429 { code: "sperrzeit", retry_after_s }.
+        const res = (solverErr as any).context;
+        const body = res && typeof res.json === "function" ? await res.json().catch(() => null) : null;
+        // Mark the cycle failed so it's hidden instead of hanging as "being generated".
+        // Only while no run has claimed it: one that failed after claiming wrote
+        // solver_fehler itself, and one still running must not be touched.
+        await supabase.from("planungszyklen").update({ solver_fehler: body?.error ?? solverErr.message })
+          .eq("id", zyklusId).eq("status", "offen").is("solver_gestartet_am", null);
+        notify(body?.code === "sperrzeit"
+          ? t("manager.solverCooldown", { seconds: body.retry_after_s ?? Math.ceil(SOLVER_COOLDOWN_MS / 1000) })
+          : t("manager.solverNotStarted"));
       }
     }
 
@@ -1717,6 +1879,8 @@ const styles = StyleSheet.create({
   // Shifts section
   bigCreate: { position: "absolute", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   bigCreateText: { fontSize: 19, fontWeight: "800" },
+  reviewRow: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 8 },
+  reviewCalLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingTop: 2 },
   tplHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
   addTplBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1.5, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
   dayLabel: { fontSize: 14, fontWeight: "800", marginTop: 6 },
