@@ -28,6 +28,9 @@
   },
   "submit": {
     "production": {
+      "ios": {
+        "appleId": "leo.solomon@web.de"
+      },
       "android": {
         "serviceAccountKeyPath": "./play-service-account.json",
         "track": "internal"

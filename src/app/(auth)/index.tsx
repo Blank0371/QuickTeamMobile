@@ -22,6 +22,77 @@ const emailValid = (e: string) => /\S+@\S+\.\S+/.test(e.trim());
 const phoneValid = (p: string) => /^\+[1-9]\d{6,14}$/.test(p.replace(/[\s()-]/g, ""));
 const normalizePhone = (p: string) => p.replace(/[\s()-]/g, "");
 
+// Map a Supabase auth failure to a specific i18n message key. supabase-js errors
+// carry a machine `code` (preferred) and an HTTP `status`; we fall back to string
+// matching for older/edge cases, and to a generic message when nothing fits.
+// `context` is the calling action, used to read an ambiguous failure (e.g. an
+// "invalid" error during a code check means a wrong code, not a bad password).
+function authErrorKey(context: string, e: unknown): string {
+  const err = (e ?? {}) as { code?: string; status?: number; message?: string; name?: string };
+  const code = err.code ?? "";
+  const status = err.status;
+  const msg = (err.message ?? "").toLowerCase();
+  const isVerify =
+    context === "verifySignUp" || context === "verifyPhone" || context === "confirmPasswordReset";
+  const isEmailField =
+    context === "signUp" || context === "signIn" || context === "sendPasswordReset";
+
+  // Never reached the server (offline, DNS, timeout): supabase-js wraps these as
+  // AuthRetryableFetchError with no HTTP status.
+  if (
+    err.name === "AuthRetryableFetchError" ||
+    (status == null && (msg.includes("network") || msg.includes("fetch") || msg.includes("timeout")))
+  ) {
+    return "auth.errNetwork";
+  }
+  // Too many requests (429, or the explicit send/request rate-limit codes).
+  if (status === 429 || code.includes("rate_limit") || msg.includes("rate limit") || msg.includes("too many")) {
+    return "auth.errRateLimited";
+  }
+  // Email already belongs to a confirmed account (when sign-up throws instead of
+  // returning the enumeration-protected shape).
+  if (
+    code === "user_already_exists" ||
+    code === "email_exists" ||
+    msg.includes("already registered") ||
+    msg.includes("already been registered")
+  ) {
+    return "auth.alreadyRegistered";
+  }
+  // Wrong or expired one-time code.
+  if (
+    code === "otp_expired" ||
+    code === "otp_disabled" ||
+    msg.includes("token has expired") ||
+    msg.includes("otp") ||
+    (isVerify && (status === 401 || status === 403 || msg.includes("invalid")))
+  ) {
+    return "auth.errWrongCode";
+  }
+  // Password rejected as too weak (sign-up / reset).
+  if (code === "weak_password" || msg.includes("password should") || msg.includes("weak password")) {
+    return "auth.errWeakPassword";
+  }
+  // Malformed email address.
+  if (
+    code === "email_address_invalid" ||
+    msg.includes("invalid email") ||
+    msg.includes("unable to validate email") ||
+    (isEmailField && code === "validation_failed")
+  ) {
+    return "auth.errEmailInvalid";
+  }
+  // Wrong email/password on sign-in.
+  if (code === "invalid_credentials" || msg.includes("invalid login credentials")) {
+    return "auth.errInvalidCredentials";
+  }
+  // Account exists but email hasn't been confirmed yet.
+  if (code === "email_not_confirmed" || msg.includes("email not confirmed")) {
+    return "auth.errEmailNotConfirmed";
+  }
+  return "auth.genericError";
+}
+
 const LANGS = [
   { code: "en" as const, flag: "🇬🇧", label: "English" },
   { code: "de" as const, flag: "🇩🇪", label: "Deutsch" },
@@ -93,6 +164,7 @@ export default function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
 
   const T = 250;
   const inputStyle = [styles.input, { color: theme.text, borderColor: theme.border }];
@@ -111,16 +183,18 @@ export default function AuthScreen() {
     setView(next);
     setError(null);
     setNotice(null);
+    setOkMsg(null);
     if (next === "signIn" || next === "signUp" || next === "forgot") {
       setPassword(""); setConfirm("");
     }
     if (next !== "verify" && next !== "reset") setCode("");
   };
 
-  // Surface a friendly message to the user; log the real error for developers.
+  // Surface a specific, translated message to the user; log the real error for
+  // developers. authErrorKey turns the Supabase failure into a precise reason.
   const fail = (context: string, e: unknown) => {
     console.error(`[auth] ${context}`, e);
-    setError(t("auth.genericError"));
+    setError(t(authErrorKey(context, e)));
   };
 
   const doSignIn = async () => {
@@ -149,9 +223,12 @@ export default function AuthScreen() {
   };
 
   const doVerify = async () => {
-    setBusy(true); setError(null); setNotice(null);
+    setBusy(true); setError(null); setNotice(null); setOkMsg(null);
     try {
       await verifySignUp(email.trim(), code.trim());
+      // A correct code opens a session; the auth state change routes onward. Flag
+      // success first so the screen confirms the code was right before it unmounts.
+      setOkMsg(t("auth.codeCorrect"));
     } catch (e) {
       fail("verifySignUp", e);
     } finally { setBusy(false); }
@@ -419,6 +496,7 @@ export default function AuthScreen() {
           />
 
           {error && <Text style={styles.error}>{error}</Text>}
+          {okMsg && <Text style={styles.success}>{okMsg}</Text>}
           {notice && <Text style={[styles.notice, { color: theme.muted }]}>{notice}</Text>}
 
           {enterBtn(t("auth.verify"), doVerify, code.length === CODE_LENGTH)}
@@ -553,6 +631,7 @@ const styles = StyleSheet.create({
   enterText: { fontSize: 16, fontWeight: "600" },
   link: { textAlign: "center", marginTop: 16, fontSize: 15, fontWeight: "600" },
   error: { color: "#C1442D", textAlign: "center" },
+  success: { color: OK, textAlign: "center", fontWeight: "600" },
   notice: { textAlign: "center" },
 
   switchRow: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 8 },
