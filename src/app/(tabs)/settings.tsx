@@ -8,23 +8,11 @@ import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated"
 import { SafeAreaView } from "react-native-safe-area-context";
 import { HoldButton } from "../../components/HoldButton";
 import { useAuth } from "../../context/auth";
-import { useI18n } from "../../i18n/I18nProvider";
+import { LANGS, useI18n } from "../../i18n/I18nProvider";
 import { APPLE_STANDARD_EULA_URL, legalWebsiteUrl } from "../../lib/legal";
 import { useTheme } from "../../theme/ThemeProvider";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { Flag } from "../../components/Flag";
-
-const LANGS = [
-  { code: "en" as const, flag: "🇬🇧", label: "English" },
-  { code: "de" as const, flag: "🇩🇪", label: "Deutsch" },
-  { code: "ru" as const, flag: "🇷🇺", label: "Русский" },
-  { code: "es" as const, flag: "🇪🇸", label: "Español" },
-  { code: "tr" as const, flag: "🇹🇷", label: "Türkçe" },
-  { code: "uk" as const, flag: "🇺🇦", label: "Українська" },
-  { code: "pt" as const, flag: "🇵🇹", label: "Português" },
-  { code: "it" as const, flag: "🇮🇹", label: "Italiano" },
-  { code: "fr" as const, flag: "🇫🇷", label: "Français" },
-];
 
 // Legal documents listed in the Settings > Legal section, in display order.
 const LEGAL_DOCS = [

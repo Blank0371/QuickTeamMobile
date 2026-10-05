@@ -4,13 +4,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet,
+  ActivityIndicator, Pressable, ScrollView, StyleSheet,
   Text, TextInput,
   View
 } from "react-native";
 import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { DateTimeField } from "../../components/DateTimeField";
+import { Modal } from "../../components/DismissKeyboard";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";

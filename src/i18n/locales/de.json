@@ -495,6 +495,7 @@
     "specialDatesHint": "Wähle eine Schicht und ein bestimmtes Datum.",
     "noSpecialDates": "Noch keine speziellen Tage.",
     "vacationDaysLeft": "Verbleibende Urlaubstage",
+    "vacationVorab": "inkl. {{count}} Tage vor QuickTeam genommen",
     "notEnoughDays": "Nicht genügend Urlaubstage für diesen Zeitraum übrig.",
     "errVacationDate": "Ungültiger Zeitraum. Bitte wähle Tage ab heute.",
     "errVacationShifts": "In diesem Zeitraum bist du bereits für Schichten eingeteilt.",
@@ -554,7 +555,8 @@
       "es": "Spanisch",
       "tr": "Türkisch",
       "uk": "Ukrainisch",
-      "fr": "Französisch"
+      "fr": "Französisch",
+      "sq": "Albanisch"
     },
     "bugReport": {
       "title": "Ein Problem melden",

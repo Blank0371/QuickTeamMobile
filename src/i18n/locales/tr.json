@@ -478,6 +478,7 @@
     "specialDatesHint": "Bir vardiya ve belirli bir tarih seç.",
     "noSpecialDates": "Henüz özel gün yok.",
     "vacationDaysLeft": "Kalan izin günü",
+    "vacationVorab": "QuickTeam öncesi kullanılan {{count}} gün dahil",
     "notEnoughDays": "Bu aralık için yeterli izin günü kalmadı.",
     "errVacationDate": "Geçersiz aralık. Lütfen bugünden itibaren gün seç.",
     "errVacationShifts": "Bu aralıkta zaten vardiyalara atanmışsın.",
@@ -537,7 +538,8 @@
       "es": "İspanyolca",
       "tr": "Türkçe",
       "uk": "Ukraynaca",
-      "fr": "Fransızca"
+      "fr": "Fransızca",
+      "sq": "Arnavutça"
     },
     "bugReport": {
       "title": "Bir sorun bildir",

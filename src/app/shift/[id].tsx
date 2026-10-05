@@ -6,12 +6,13 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { ChevronLeft, Pencil, Plus, Repeat, Search, StickyNote, Trash2, TriangleAlert, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
+import { Modal } from "../../components/DismissKeyboard";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { DateTimeField } from "../../components/DateTimeField";
 import { HoldButton } from "../../components/HoldButton";

@@ -21,6 +21,21 @@ This file is the changelog / feature ledger for QuickTeam. Every change to the a
 
 _Changes made after the `1.1.0` build land here. Add a `### 1.2.X` entry per change._
 
+### 1.2.0
+- **Urlaub vor QuickTeam (`urlaub_vorab`) in der App eingerechnet.** Die vom Chef im Web-Dashboard eingetragenen Urlaubstage, die eine Person im laufenden Jahr schon vor QuickTeam genommen hat, zählen jetzt auch in der App wie genehmigter Urlaub — gleiche Regel wie im RPC `urlaub_beantragen` (nur die Zeile mit `jahr` = aktuelles Jahr zählt). Mitarbeiter: der Resturlaub im Planungs-Tab (Urlaub) zieht die Vorab-Tage ab und zeigt bei > 0 den Hinweis „inkl. X Tage vor QuickTeam genommen" (9 Sprachen, Key `scheduling.vacationVorab`). Chef: „Genommene Urlaubstage" im Mitarbeiter-Detail und die Kontingent-Prüfung beim Genehmigen eines Antrags enthalten die Vorab-Tage. Eingabe/Bearbeitung bleibt im Web-Dashboard. — `src/app/(tabs)/scheduling.tsx`, `src/app/(tabs)/manager.tsx`, `src/i18n/locales/*.json`
+
+### 1.2.1
+- **Tastatur schließt sich beim Tippen außerhalb des Textfelds.** Bisher blieb die Tastatur offen, bis etwas eingegeben wurde. Jetzt schließt ein Tippen irgendwo auf den Bildschirm (außerhalb des aktiven Textfelds) die Tastatur — app-weit über einen Wrapper im Root-Layout und in allen Modals mit Eingabefeldern. Scrollen schließt sie nicht; Tippen in ein anderes Textfeld wechselt nur den Fokus. — `src/components/DismissKeyboard.tsx` (neu), `src/app/_layout.tsx`, `src/app/(tabs)/{calendar,manager,messages,scheduling}.tsx`, `src/app/compose.tsx`, `src/app/shift/[id].tsx`
+
+### 1.2.2
+- **Albanisch (Shqip) als App-Sprache hinzugefügt + Sprachauswahl auf der Anmeldeseite repariert.** Neue Übersetzung `sq.json` (alle Keys, informelle „ti"-Anrede); Albanisch erscheint in beiden Sprachauswahlen (🇦🇱 Shqip) und wird bei albanischer Gerätesprache automatisch gewählt. Bugfix: Das Dropdown auf der Anmelde-/Registrierungsseite zeigte nur 7 der 9 Sprachen (Português und Italiano fehlten), obwohl die App sie unterstützt. Die Sprachliste existiert jetzt nur noch einmal (`LANGS` in `I18nProvider.tsx`) und wird von Anmeldeseite und Einstellungen gemeinsam genutzt, damit sie nicht wieder auseinanderlaufen. Das Anmelde-Dropdown ist nun scrollbar (max. 360 pt), damit 10 Einträge auch auf kleinen Geräten passen. Push-Texte für Systemereignisse gibt es weiterhin nur auf DE/EN (andere Sprachen → DE, wie bisher). — `src/i18n/I18nProvider.tsx`, `src/i18n/locales/sq.json` (neu), `src/i18n/locales/*.json` (`settings.lang.sq`), `src/app/(auth)/index.tsx`, `src/app/(tabs)/settings.tsx`
+
+### 1.2.3
+- **Fix: Web-Version stürzte beim Tippen ab** (`TextInput.State.currentlyFocusedInput is not a function`). Der Tastatur-schließen-Wrapper aus 1.2.1 nutzt eine API, die react-native-web nicht hat. Auf Web ist er jetzt deaktiviert (Browser entfernen den Fokus beim Tippen daneben ohnehin selbst); iOS/Android unverändert. — `src/components/DismissKeyboard.tsx`
+
+### 1.2.4
+- **Sprachmenü auf der Anmelde-/Registrierungsseite schließt sich beim Tippen daneben.** Bisher ließ es sich nur über die Flaggen-Taste selbst wieder schließen. Das geöffnete Menü liegt jetzt in einem transparenten Overlay mit bildschirmfüllendem Hintergrund — ein Tippen irgendwo außerhalb schließt es (Android: auch die Zurück-Taste). Position direkt unter der Flaggen-Taste wie bisher. — `src/app/(auth)/index.tsx`
+
 ---
 
 ## 1.1.0 — BUILT (EAS iOS production build, 2026-09-22)

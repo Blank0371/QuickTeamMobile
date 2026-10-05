@@ -478,6 +478,7 @@
     "specialDatesHint": "Choisissez un créneau et une date précise.",
     "noSpecialDates": "Aucune date spéciale pour l'instant.",
     "vacationDaysLeft": "Jours de congé restants",
+    "vacationVorab": "dont {{count}} jours pris avant QuickTeam",
     "notEnoughDays": "Pas assez de jours de congé pour cette période.",
     "errVacationDate": "Période invalide. Choisis des jours à partir d'aujourd'hui.",
     "errVacationShifts": "Tu es déjà affecté à des services sur cette période.",
@@ -537,7 +538,8 @@
       "es": "Espagnol",
       "tr": "Turc",
       "uk": "Ukrainien",
-      "fr": "Français"
+      "fr": "Français",
+      "sq": "Albanais"
     },
     "bugReport": {
       "title": "Signaler un problème",

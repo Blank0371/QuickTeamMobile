@@ -478,6 +478,7 @@
     "specialDatesHint": "Elige un turno y una fecha concreta.",
     "noSpecialDates": "Aún no hay fechas especiales.",
     "vacationDaysLeft": "Días de vacaciones restantes",
+    "vacationVorab": "incl. {{count}} días tomados antes de QuickTeam",
     "notEnoughDays": "No quedan suficientes días de vacaciones para este período.",
     "errVacationDate": "Período no válido. Elige días a partir de hoy.",
     "errVacationShifts": "Ya tienes turnos asignados en este período.",
@@ -537,7 +538,8 @@
       "es": "Español",
       "tr": "Turco",
       "uk": "Ucraniano",
-      "fr": "Francés"
+      "fr": "Francés",
+      "sq": "Albanés"
     },
     "bugReport": {
       "title": "Informar de un problema",

@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { ChevronDown, Plus, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet,
+    ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet,
     Switch, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,6 +11,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import { useAuth } from "../context/auth";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../theme/ThemeProvider";
+import { Modal } from "../components/DismissKeyboard";
 import { ScreenGradient } from "../components/ScreenGradient";
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);

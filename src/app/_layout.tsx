@@ -1,6 +1,7 @@
 // src/app/_layout.tsx
 import { Stack } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
+import { DismissKeyboardView } from "../components/DismissKeyboard";
 import { LegalConsentGate } from "../components/LegalConsentGate";
 import { AuthProvider, useAuth } from "../context/auth";
 import { I18nProvider } from "../i18n/I18nProvider";
@@ -18,7 +19,8 @@ function RootNav() {
   }
 
   return (
-    <>
+    // Tapping anywhere outside the focused text field closes the keyboard.
+    <DismissKeyboardView>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={!user}>
           <Stack.Screen name="(auth)" />
@@ -46,7 +48,7 @@ function RootNav() {
 
       {/* Blocking consent for Privacy Policy + Terms, shown whenever either changes. */}
       <LegalConsentGate />
-    </>
+    </DismissKeyboardView>
   );
 }
 

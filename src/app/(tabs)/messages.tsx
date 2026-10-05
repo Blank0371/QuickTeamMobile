@@ -3,7 +3,7 @@ import { router, useFocusEffect } from "expo-router";
 import { CalendarPlus, Check, ChevronDown, FileText, Plus, Repeat, TriangleAlert, X } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator, Alert, Modal, Pressable, ScrollView,
+    ActivityIndicator, Alert, Pressable, ScrollView,
     StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,6 +11,7 @@ import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
+import { Modal } from "../../components/DismissKeyboard";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { RefreshScrollView } from "../../components/RefreshScrollView";
 import { HoldButton } from "../../components/HoldButton";

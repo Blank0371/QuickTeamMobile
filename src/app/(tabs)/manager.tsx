@@ -13,12 +13,13 @@ import {
 } from "lucide-react-native";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
+import { Modal } from "../../components/DismissKeyboard";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { RefreshScrollView } from "../../components/RefreshScrollView";
 import { DateTimeField } from "../../components/DateTimeField";
@@ -125,6 +126,7 @@ export default function ManagerScreen() {
 
   const [team, setTeam] = useState<Mitarbeiter[]>([]);
   const [vacations, setVacations] = useState<Urlaub[]>([]);
+  const [vorab, setVorab] = useState<Record<string, number>>({}); // mitarbeiter_id -> days taken before QuickTeam (this year)
   const [roleNames, setRoleNames] = useState<Record<string, string[]>>({}); // mitarbeiter_id -> role names
   const [roleIds, setRoleIds] = useState<Record<string, string[]>>({}); // mitarbeiter_id -> role ids
   const [hoursWorked, setHoursWorked] = useState<Record<string, number>>({}); // this year
@@ -149,7 +151,7 @@ export default function ManagerScreen() {
     setLoading(true);
     const yearStart = `${new Date().getFullYear()}-01-01`;
 
-    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, gruendeRes, vorlagen, swapReq, mindest, zyklenRes] = await Promise.all([
+    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, gruendeRes, vorlagen, swapReq, mindest, zyklenRes, vorabRes] = await Promise.all([
       supabase.from("mitarbeiter")
         .select("id, vorname, nachname, email, telefon, rolle_typ, vertrag_typ, soll_stunden, ueberstunden_saldo, status, urlaubsanspruch_tage")
         .eq("betrieb_id", betrieb).order("nachname"),
@@ -181,10 +183,15 @@ export default function ManagerScreen() {
         .in("status", ["offen", "deadline_erreicht", "solver_laeuft", "vorschlag_bereit"])
         .is("solver_fehler", null)
         .order("zeitraum_start", { ascending: true }),
+      // Vacation days taken before joining QuickTeam (set by the chef on the web dashboard).
+      // Only the current year's row counts — same rule as urlaub_beantragen.
+      supabase.from("urlaub_vorab").select("mitarbeiter_id, tage")
+        .eq("betrieb_id", betrieb).eq("jahr", new Date().getFullYear()),
     ]);
 
     setTeam((mitarb.data ?? []) as Mitarbeiter[]);
     setVacations((urlaub.data ?? []) as Urlaub[]);
+    setVorab(Object.fromEntries((vorabRes.data ?? []).map((r: any) => [r.mitarbeiter_id, r.tage])));
 
     const roleById = new Map((roles.data ?? []).map((r: any) => [r.id, r.name]));
     const rn: Record<string, string[]> = {};
@@ -338,7 +345,7 @@ export default function ManagerScreen() {
           <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />
         ) : section === "employees" ? (
           <EmployeesSection
-            theme={theme} t={t} lang={lang} team={team} vacations={vacations} roleNames={roleNames} roleIds={roleIds}
+            theme={theme} t={t} lang={lang} team={team} vacations={vacations} vorab={vorab} roleNames={roleNames} roleIds={roleIds}
             betrieb={betrieb!} roles={roles}
             hoursWorked={hoursWorked} shiftsWorked={shiftsWorked} emergencies={emergencies} swapApprovals={swapApprovals}
             monthlyHours={monthlyHours} overtime={overtime} abrechnungBis={einstellungen?.abrechnung_bis ?? null}
@@ -377,7 +384,7 @@ export default function ManagerScreen() {
 // =====================================================================
 // Employees
 // =====================================================================
-function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds, betrieb, roles, hoursWorked, shiftsWorked, emergencies, swapApprovals, monthlyHours, overtime, abrechnungBis, reload, fmtDate }: any) {
+function EmployeesSection({ theme, t, lang, team, vacations, vorab, roleNames, roleIds, betrieb, roles, hoursWorked, shiftsWorked, emergencies, swapApprovals, monthlyHours, overtime, abrechnungBis, reload, fmtDate }: any) {
   const [showDecided, setShowDecided] = useState(false);
   const [denyFor, setDenyFor] = useState<string | null>(null); // urlaub id in deny mode
   const [denyReason, setDenyReason] = useState("");
@@ -397,7 +404,7 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds,
       const v = vacations.find((x: Urlaub) => x.id === id);
       if (v) {
         const allowance = allowanceOf(team, v.mitarbeiter_id);
-        const already = approvedDays(vacations, v.mitarbeiter_id, id); // excludes this request
+        const already = approvedDays(vacations, v.mitarbeiter_id, id) + (vorab[v.mitarbeiter_id] ?? 0); // excludes this request
         const requested = dayDiff(v.von, v.bis);
         if (already + requested > allowance) {
           const remaining = Math.max(0, allowance - already);
@@ -627,7 +634,7 @@ function EmployeesSection({ theme, t, lang, team, vacations, roleNames, roleIds,
                       cutoff={abrechnungBis} />
                     <DetailRow theme={theme} label={t("manager.shiftsWorked")} value={String(shiftsWorked[detail.id] ?? 0)} />
                     <DetailRow theme={theme} label={t("manager.vacationTaken")}
-                      value={`${vacationTaken(vacations, detail.id)} / ${detail.urlaubsanspruch_tage} ${t("manager.days")}`} />
+                      value={`${vacationTaken(vacations, vorab, detail.id)} / ${detail.urlaubsanspruch_tage} ${t("manager.days")}`} />
                     <DetailRow theme={theme} label={t("manager.status")} value={detail.status} last />
                   </>
                 )}
@@ -899,8 +906,9 @@ function SwapApprovals({ theme, t, lang, swapApprovals, reload }: any) {
   );
 }
 
-function vacationTaken(vacations: Urlaub[], mitarbeiterId: string) {
-  return approvedDays(vacations, mitarbeiterId);
+// Approved days this year plus days taken before joining QuickTeam (urlaub_vorab).
+function vacationTaken(vacations: Urlaub[], vorab: Record<string, number>, mitarbeiterId: string) {
+  return approvedDays(vacations, mitarbeiterId) + (vorab[mitarbeiterId] ?? 0);
 }
 
 // Sum of approved vacation days for this employee in the current year,

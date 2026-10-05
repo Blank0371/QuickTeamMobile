@@ -8,12 +8,29 @@ import fr from "./locales/fr.json";
 import it from "./locales/it.json";
 import pt from "./locales/pt.json";
 import ru from "./locales/ru.json";
+import sq from "./locales/sq.json";
 import tr from "./locales/tr.json";
 import uk from "./locales/uk.json";
 
-const resources: Record<string, any> = { en, de, ru, es, fr, pt, it, tr, uk };
-type Lang = "en" | "de" | "ru" | "es" | "fr" | "pt" | "it" | "tr" | "uk";
-const SUPPORTED: Lang[] = ["en", "de", "ru", "es", "fr", "pt", "it", "tr", "uk"];
+const resources: Record<string, any> = { en, de, ru, es, fr, pt, it, tr, uk, sq };
+
+// Every language the app offers, in picker order. The sign-in and Settings
+// language pickers both render this list, so adding a language here is enough.
+export const LANGS = [
+  { code: "en", flag: "🇬🇧", label: "English" },
+  { code: "de", flag: "🇩🇪", label: "Deutsch" },
+  { code: "ru", flag: "🇷🇺", label: "Русский" },
+  { code: "es", flag: "🇪🇸", label: "Español" },
+  { code: "tr", flag: "🇹🇷", label: "Türkçe" },
+  { code: "uk", flag: "🇺🇦", label: "Українська" },
+  { code: "pt", flag: "🇵🇹", label: "Português" },
+  { code: "it", flag: "🇮🇹", label: "Italiano" },
+  { code: "fr", flag: "🇫🇷", label: "Français" },
+  { code: "sq", flag: "🇦🇱", label: "Shqip" },
+] as const;
+
+export type Lang = (typeof LANGS)[number]["code"];
+const SUPPORTED: readonly string[] = LANGS.map((l) => l.code);
 
 type I18nContextType = {
   lang: Lang;

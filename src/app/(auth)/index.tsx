@@ -1,12 +1,12 @@
 // src/app/(auth)/index.tsx
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-    ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View,
+    ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
-import { useI18n } from "../../i18n/I18nProvider";
+import { LANGS, useI18n } from "../../i18n/I18nProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { Flag } from "../../components/Flag";
@@ -93,47 +93,55 @@ function authErrorKey(context: string, e: unknown): string {
   return "auth.genericError";
 }
 
-const LANGS = [
-  { code: "en" as const, flag: "🇬🇧", label: "English" },
-  { code: "de" as const, flag: "🇩🇪", label: "Deutsch" },
-  { code: "ru" as const, flag: "🇷🇺", label: "Русский" },
-  { code: "es" as const, flag: "🇪🇸", label: "Español" },
-  { code: "tr" as const, flag: "🇹🇷", label: "Türkçe" },
-  { code: "uk" as const, flag: "🇺🇦", label: "Українська" },
-  { code: "fr" as const, flag: "🇫🇷", label: "Français" },
-];
-
+// The open menu lives in a transparent Modal so a tap anywhere else on the
+// screen (the full-screen backdrop) closes it. It's placed under the button
+// using the button's on-screen position.
 function LangSwitcher() {
   const { lang, setLang } = useI18n();
   const { theme } = useTheme();
-  const [open, setOpen] = useState(false);
+  const { width } = useWindowDimensions();
+  const btnRef = useRef<View>(null);
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
   const current = LANGS.find((l) => l.code === lang) ?? LANGS[0];
+
+  const openMenu = () => {
+    btnRef.current?.measureInWindow((x, y, w, h) => {
+      setAnchor({ top: y + h + 6, right: width - (x + w) });
+    });
+  };
+  const close = () => setAnchor(null);
 
   return (
     <View style={styles.langWrap}>
       <Pressable
+        ref={btnRef}
         style={[styles.langBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
-        onPress={() => setOpen((o) => !o)}
+        onPress={openMenu}
         hitSlop={8}
       >
         <Flag emoji={current.flag} size={22} style={styles.langFlag} />
         <Text style={[styles.langChevron, { color: theme.muted }]}>▾</Text>
       </Pressable>
 
-      {open && (
-        <View style={[styles.langMenu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          {LANGS.map((l) => (
-            <Pressable
-              key={l.code}
-              style={styles.langItem}
-              onPress={() => { setLang(l.code); setOpen(false); }}
-            >
-              <Flag emoji={l.flag} size={22} style={styles.langFlag} />
-              <Text style={[styles.langLabel, { color: theme.text }]}>{l.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      <Modal visible={!!anchor} transparent animationType="fade" statusBarTranslucent onRequestClose={close}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+        {anchor && (
+          <ScrollView
+            style={[styles.langMenu, anchor, { backgroundColor: theme.surface, borderColor: theme.border }]}
+          >
+            {LANGS.map((l) => (
+              <Pressable
+                key={l.code}
+                style={styles.langItem}
+                onPress={() => { setLang(l.code); close(); }}
+              >
+                <Flag emoji={l.flag} size={22} style={styles.langFlag} />
+                <Text style={[styles.langLabel, { color: theme.text }]}>{l.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+      </Modal>
     </View>
   );
 }
@@ -604,7 +612,7 @@ const styles = StyleSheet.create({
   langFlag: { fontSize: 22 },
   langChevron: { fontSize: 12, fontWeight: "700" },
   langMenu: {
-    position: "absolute", top: 48, right: 0, minWidth: 160,
+    position: "absolute", minWidth: 160, maxHeight: 360,
     borderWidth: 1.5, borderRadius: 12, paddingVertical: 4, overflow: "hidden",
   },
   langItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 14 },

@@ -10,12 +10,13 @@ import {
   ChevronRight, Trash2, TreePalm, TriangleAlert, X,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
+import { Modal } from "../../components/DismissKeyboard";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { RefreshScrollView } from "../../components/RefreshScrollView";
 import { HoldButton } from "../../components/HoldButton";
@@ -52,6 +53,7 @@ export default function SchedulingScreen() {
   const [datePrefs, setDatePrefs] = useState<DatePref[]>([]);
   const [vacations, setVacations] = useState<Urlaub[]>([]);
   const [anspruch, setAnspruch] = useState(0);
+  const [vorab, setVorab] = useState(0); // days taken before joining QuickTeam (this year)
 
   const fmtDate = (d: string) =>
     new Date(d + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" });
@@ -61,7 +63,7 @@ export default function SchedulingScreen() {
     if (!me || !betrieb) return;
     setLoading(true);
 
-    const [myRoles, mindest, tpl, recur, dprefs, urlaub, mitarb] = await Promise.all([
+    const [myRoles, mindest, tpl, recur, dprefs, urlaub, mitarb, vorabRes] = await Promise.all([
       supabase.from("mitarbeiter_rollen").select("rolle_id").eq("mitarbeiter_id", me),
       supabase.from("schicht_vorlage_mindestbesetzung").select("schicht_vorlage_id, rolle_id").eq("betrieb_id", betrieb),
       supabase.from("schicht_vorlagen").select("id, bezeichnung, wochentag, start_zeit, end_zeit").eq("betrieb_id", betrieb).eq("aktiv", true),
@@ -69,6 +71,8 @@ export default function SchedulingScreen() {
       supabase.from("mitarbeiter_schicht_tagesvorlieben").select("schicht_vorlage_id, datum, praeferenz").eq("mitarbeiter_id", me).is("geloescht_am", null),
       supabase.from("urlaub").select("id, von, bis, status, kommentar, begruendung").eq("mitarbeiter_id", me).order("von", { ascending: false }),
       supabase.from("mitarbeiter").select("urlaubsanspruch_tage").eq("id", me).single(),
+      // Vacation already taken before QuickTeam, entered by the chef. Counts only in its own year.
+      supabase.from("urlaub_vorab").select("tage").eq("mitarbeiter_id", me).eq("jahr", new Date().getFullYear()).maybeSingle(),
     ]);
 
     const roleIds = new Set((myRoles.data ?? []).map((r: any) => r.rolle_id));
@@ -84,6 +88,7 @@ export default function SchedulingScreen() {
     setDatePrefs((dprefs.data ?? []) as DatePref[]);
     setVacations((urlaub.data ?? []) as Urlaub[]);
     setAnspruch(mitarb.data?.urlaubsanspruch_tage ?? 0);
+    setVorab(vorabRes.data?.tage ?? 0);
     setLoading(false);
   }, [me, betrieb]);
 
@@ -125,7 +130,7 @@ export default function SchedulingScreen() {
         ) : (
           <VacationSection
             theme={theme} t={t} lang={lang} me={me!} betrieb={betrieb!}
-            vacations={vacations} anspruch={anspruch} reload={load} fmtDate={fmtDate}
+            vacations={vacations} anspruch={anspruch} vorab={vorab} reload={load} fmtDate={fmtDate}
           />
         )}
       </RefreshScrollView>
@@ -569,7 +574,7 @@ function SpecialDates({ theme, t, lang, me, betrieb, vorlagen, datePrefs, reload
 // =====================================================================
 // Vacation
 // =====================================================================
-function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, reload, fmtDate }: any) {
+function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, vorab, reload, fmtDate }: any) {
   const now = new Date();
   const firstMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastMonth = new Date(now.getFullYear(), now.getMonth() + MONTHS_AHEAD, 1);
@@ -598,7 +603,8 @@ function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, rel
       const d = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
       return sum + Math.max(0, d);
     }, 0), [vacations, yr]);
-  const daysLeft = anspruch - usedDays;
+  // Days taken before QuickTeam count like approved vacation (mirrors urlaub_beantragen).
+  const daysLeft = anspruch - usedDays - vorab;
 
   const today = isoDay(now);
   const onPick = (iso: string) => {
@@ -657,6 +663,9 @@ function VacationSection({ theme, t, lang, me, betrieb, vacations, anspruch, rel
         <View style={{ flex: 1 }}>
           <Text style={[styles.balanceNum, { color: theme.text }]}>{daysLeft} / {anspruch}</Text>
           <Text style={{ color: theme.muted, fontSize: 13 }}>{t("scheduling.vacationDaysLeft")}</Text>
+          {vorab > 0 && (
+            <Text style={{ color: theme.muted, fontSize: 12, marginTop: 2 }}>{t("scheduling.vacationVorab", { count: vorab })}</Text>
+          )}
         </View>
       </View>
 
