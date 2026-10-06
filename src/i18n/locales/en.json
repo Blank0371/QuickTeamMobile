@@ -35,12 +35,7 @@
     "errEmailInvalid": "That email address doesn't look valid.",
     "errInvalidCredentials": "Wrong email or password.",
     "errEmailNotConfirmed": "Please confirm your email address first.",
-    "codeCorrect": "Code correct — signing you in…",
-    "phoneTitle": "Sign in with phone",
-    "phoneSubtitle": "We'll text you a verification code.",
-    "phonePlaceholder": "+1 555 123 4567",
-    "usePhoneInstead": "Use phone number instead",
-    "useEmailInstead": "Use email instead"
+    "codeCorrect": "Code correct — signing you in…"
   },
   "select": {
     "title": "Your Connections",
@@ -568,21 +563,6 @@
       "success": "Thanks! Your report has been sent.",
       "error": "Could not send your report. Please try again."
     },
-    "link": {
-      "addPhoneTitle": "Add your phone number",
-      "addPhoneBody": "Link a phone number to this account so you can also sign in by SMS.",
-      "addEmailTitle": "Add your email address",
-      "addEmailBody": "Link an email address to this account so you can also sign in by email.",
-      "add": "Add",
-      "sendCode": "Send code",
-      "confirm": "Confirm",
-      "cancel": "Cancel",
-      "code": "Code",
-      "codeSent": "Code sent to",
-      "phonePlaceholder": "+1 555 123 4567",
-      "emailPlaceholder": "you@example.com",
-      "error": "Something went wrong. Please try again."
-    },
     "deleteAccount": "Delete account"
   },
   "calendar": {
@@ -669,8 +649,6 @@
     "cancel": "Cancel",
     "confirmPassword": "Enter your password to confirm you want to permanently delete your account.",
     "passwordPlaceholder": "Your password",
-    "confirmPhrase": "Type {{word}} to confirm you want to permanently delete your account.",
-    "confirmWord": "DELETE",
     "holdToDelete": "Hold to delete account",
     "wrongPassword": "Incorrect password. Please try again.",
     "chefBlocked": "You still manage a team. Hand over or remove your business before deleting your account.",

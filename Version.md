@@ -17,9 +17,21 @@ This file is the changelog / feature ledger for QuickTeam. Every change to the a
 
 ---
 
-## 1.2.X — (in development, next build)
+## 1.3.X — (in development, next build)
 
-_Changes made after the `1.1.0` build land here. Add a `### 1.2.X` entry per change._
+_Changes made after the `1.2.0` build land here. Add a `### 1.3.X` entry per change._
+
+### 1.3.0
+- **Anmeldung per Telefonnummer entfernt.** Die Option „Stattdessen Telefonnummer verwenden" auf der Anmeldeseite (SMS-Code-Login, legte bei Erstnutzung auch ein Konto an) ist weg — jeder unangemeldete SMS-Versand war ein Kosten-/SMS-Pumping-Risiko. Anmeldung/Registrierung nur noch per E-Mail + Passwort. Eine Telefonnummer kann weiterhin in den Einstellungen zum bestehenden Konto hinzugefügt werden (6-stelliger SMS-Code, `phone_change`). `signInWithPhone`/`verifyPhone` aus dem Auth-Context entfernt, ungenutzte Übersetzungs-Keys (`auth.phoneTitle`, `phoneSubtitle`, `phonePlaceholder`, `usePhoneInstead`, `useEmailInstead`) aus allen 10 Sprachen gelöscht. Hinweis: Das sperrt den Endpunkt nicht serverseitig — siehe Supabase-Konfiguration. — `src/app/(auth)/index.tsx`, `src/context/auth.tsx`, `src/i18n/locales/*.json`, `DOCUMENTATION.md`
+
+### 1.3.1
+- **Alles rund um Telefonnummer-Login/-Verifizierung entfernt.** Das Banner „Telefonnummer hinzufügen" (SMS-Code, `phone_change`) in den Einstellungen ist weg, ebenso sein „E-Mail hinzufügen"-Zweig (gab es nur für reine Telefon-Konten; laut DB existieren keine — 16 Konten, alle mit E-Mail, keins mit Telefonnummer). Aus dem Auth-Context entfernt: `addPhone`, `addEmail`, `verifyChannelChange`, `startAccountMerge`, `confirmAccountMerge` (Konten-Zusammenführung, nirgends in der UI genutzt). Konto löschen verlangt jetzt immer das Passwort — der „LÖSCHEN eintippen"-Weg für passwortlose Telefon-Konten ist weg. Übersetzungen `settings.link.*`, `deleteAccount.confirmWord`, `deleteAccount.confirmPhrase` aus allen 10 Sprachen entfernt. **Bleibt:** die Spalte `mitarbeiter.telefon` (vom Chef eingetragen, im Mitarbeiter-Detail angezeigt, bei Kontolöschung/Pseudonymisierung entfernt) und alle Rechtstexte zur optionalen Telefonnummer. **DB (Migration `remove_phone_auth_and_account_merge`, angewendet 2026-10-06):** Einladungsabgleich in `meine_einladungen`, `einladung_annehmen` und Trigger `schuetze_mitarbeiter_spalten` nur noch per E-Mail (kein Abgleich JWT-Telefon ↔ `mitarbeiter.telefon` mehr); Merge-Zweig im Trigger entfernt; `konto_merge_start`, `konto_merge_confirm` und Tabelle `konto_merge_token` gelöscht. **Supabase-Dashboard:** Phone-Provider aus, kein SMS-Anbieter hinterlegt. — `src/app/(tabs)/settings.tsx`, `src/context/auth.tsx`, `src/app/delete-account.tsx`, `src/i18n/locales/*.json`, `DOCUMENTATION.md`, `TESTING.md`
+
+---
+
+## 1.2.0 — BUILT (EAS iOS production build, 2026-10-05)
+
+_This build bundles all `1.2.X` changes below. App version `1.2.0`; iOS build number auto-incremented remotely by EAS (`appVersionSource: remote`, `autoIncrement`). Built via `eas build --platform ios --profile production`._
 
 ### 1.2.0
 - **Urlaub vor QuickTeam (`urlaub_vorab`) in der App eingerechnet.** Die vom Chef im Web-Dashboard eingetragenen Urlaubstage, die eine Person im laufenden Jahr schon vor QuickTeam genommen hat, zählen jetzt auch in der App wie genehmigter Urlaub — gleiche Regel wie im RPC `urlaub_beantragen` (nur die Zeile mit `jahr` = aktuelles Jahr zählt). Mitarbeiter: der Resturlaub im Planungs-Tab (Urlaub) zieht die Vorab-Tage ab und zeigt bei > 0 den Hinweis „inkl. X Tage vor QuickTeam genommen" (9 Sprachen, Key `scheduling.vacationVorab`). Chef: „Genommene Urlaubstage" im Mitarbeiter-Detail und die Kontingent-Prüfung beim Genehmigen eines Antrags enthalten die Vorab-Tage. Eingabe/Bearbeitung bleibt im Web-Dashboard. — `src/app/(tabs)/scheduling.tsx`, `src/app/(tabs)/manager.tsx`, `src/i18n/locales/*.json`
@@ -35,6 +47,9 @@ _Changes made after the `1.1.0` build land here. Add a `### 1.2.X` entry per cha
 
 ### 1.2.4
 - **Sprachmenü auf der Anmelde-/Registrierungsseite schließt sich beim Tippen daneben.** Bisher ließ es sich nur über die Flaggen-Taste selbst wieder schließen. Das geöffnete Menü liegt jetzt in einem transparenten Overlay mit bildschirmfüllendem Hintergrund — ein Tippen irgendwo außerhalb schließt es (Android: auch die Zurück-Taste). Position direkt unter der Flaggen-Taste wie bisher. — `src/app/(auth)/index.tsx`
+
+### 1.2.5
+- **Neues App-Icon.** Goldener Kalender auf dunkelgrünem Hintergrund ersetzt das bisherige Icon. Daraus erzeugt: `icon.png` (1024², ohne Transparenz für iOS), `playstore-icon-512.png`, `favicon.png`, `splash-icon.png` sowie die Android-Adaptive-Icon-Ebenen (Vordergrund im 66-dp-Sicherheitsbereich, Verlaufs-Hintergrund, Monochrom-Silhouette für Themed Icons). Adaptive-Icon- und Splash-Hintergrundfarbe auf `#0E1E16` (vorher Weiß bzw. Blau `#208AEF`). Originalgrafik liegt als `assets/images/source-icon.jpg` bei. Wirkt erst mit dem nächsten EAS-Build. — `assets/images/*`, `app.json`
 
 ---
 

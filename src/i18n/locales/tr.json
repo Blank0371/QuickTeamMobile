@@ -35,12 +35,7 @@
     "errEmailInvalid": "Bu e-posta adresi geçersiz görünüyor.",
     "errInvalidCredentials": "E-posta veya şifre yanlış.",
     "errEmailNotConfirmed": "Lütfen önce e-posta adresinizi doğrulayın.",
-    "codeCorrect": "Kod doğru — giriş yapılıyor…",
-    "phoneTitle": "Telefonla giriş yap",
-    "phoneSubtitle": "Sana SMS ile bir doğrulama kodu göndereceğiz.",
-    "phonePlaceholder": "+90 555 123 45 67",
-    "usePhoneInstead": "Bunun yerine telefon numarası kullan",
-    "useEmailInstead": "Bunun yerine e-posta kullan"
+    "codeCorrect": "Kod doğru — giriş yapılıyor…"
   },
   "select": {
     "title": "Bağlantılarınız",
@@ -549,21 +544,6 @@
       "success": "Teşekkürler! Bildiriminiz gönderildi.",
       "error": "Bildiriminiz gönderilemedi. Lütfen tekrar deneyin."
     },
-    "link": {
-      "addPhoneTitle": "Telefon numaranı ekle",
-      "addPhoneBody": "SMS ile de giriş yapabilmek için bu hesaba bir telefon numarası bağla.",
-      "addEmailTitle": "E-posta adresini ekle",
-      "addEmailBody": "E-posta ile de giriş yapabilmek için bu hesaba bir e-posta adresi bağla.",
-      "add": "Ekle",
-      "sendCode": "Kod gönder",
-      "confirm": "Onayla",
-      "cancel": "İptal",
-      "code": "Kod",
-      "codeSent": "Kod gönderildi:",
-      "phonePlaceholder": "+90 555 123 45 67",
-      "emailPlaceholder": "sen@ornek.com",
-      "error": "Bir şeyler ters gitti. Lütfen tekrar dene."
-    },
     "deleteAccount": "Hesabı sil"
   },
   "calendar": {
@@ -650,8 +630,6 @@
     "cancel": "İptal",
     "confirmPassword": "Hesabını kalıcı olarak silmek istediğini onaylamak için şifreni gir.",
     "passwordPlaceholder": "Şifren",
-    "confirmPhrase": "Hesabını kalıcı olarak silmek istediğini onaylamak için {{word}} yaz.",
-    "confirmWord": "SİL",
     "holdToDelete": "Silmek için basılı tut",
     "wrongPassword": "Yanlış şifre. Lütfen tekrar dene.",
     "chefBlocked": "Hâlâ bir ekibi yönetiyorsun. Hesabını silmeden önce işletmeni devret veya kaldır.",

@@ -1,8 +1,7 @@
 // src/app/delete-account.tsx — self-service account deletion.
 // Deliberately multi-step and hard to trigger by accident: a warning screen with
 // an explicit "Continue", then a confirm screen that requires re-entering the
-// password (or typing a confirmation word for password-less phone accounts) AND
-// a 3-second press-and-hold before anything is deleted. Satisfies Apple Guideline
+// password AND a 3-second press-and-hold before anything is deleted. Satisfies Apple Guideline
 // 5.1.1(v) and the GDPR right to erasure.
 import { router } from "expo-router";
 import { ChevronLeft, TriangleAlert } from "lucide-react-native";
@@ -20,22 +19,14 @@ import { useTheme } from "../theme/ThemeProvider";
 export default function DeleteAccountScreen() {
   const { theme } = useTheme();
   const { t } = useI18n();
-  const { user, deleteAccount } = useAuth();
-
-  // Email accounts re-authenticate with their password; password-less phone
-  // accounts confirm by typing the word shown on screen instead.
-  const hasPassword = !!user?.email;
-  const confirmWord = t("deleteAccount.confirmWord");
+  const { deleteAccount } = useAuth();
 
   const [step, setStep] = useState<"warn" | "confirm">("warn");
   const [password, setPassword] = useState("");
-  const [phrase, setPhrase] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canConfirm = !busy && (hasPassword
-    ? password.length > 0
-    : phrase.trim().toLowerCase() === confirmWord.trim().toLowerCase());
+  const canConfirm = !busy && password.length > 0;
 
   const bullets = [
     t("deleteAccount.bullet1"),
@@ -47,7 +38,7 @@ export default function DeleteAccountScreen() {
   const runDelete = async () => {
     setBusy(true); setError(null);
     try {
-      await deleteAccount(hasPassword ? password : undefined);
+      await deleteAccount(password);
       // Success: deleteAccount() signs out, so the root navigator swaps to the
       // auth stack automatically and this screen unmounts. Nothing to route.
     } catch (e: any) {
@@ -105,37 +96,21 @@ export default function DeleteAccountScreen() {
         ) : (
           <>
             <Text style={[styles.lead, { color: theme.text }]}>
-              {hasPassword
-                ? t("deleteAccount.confirmPassword")
-                : t("deleteAccount.confirmPhrase", { word: confirmWord })}
+              {t("deleteAccount.confirmPassword")}
             </Text>
 
-            {hasPassword ? (
-              <TextInput
-                style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }]}
-                placeholder={t("deleteAccount.passwordPlaceholder")}
-                placeholderTextColor={theme.muted}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus
-                value={password}
-                onChangeText={(v) => { setPassword(v); setError(null); }}
-                editable={!busy}
-              />
-            ) : (
-              <TextInput
-                style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }]}
-                placeholder={confirmWord}
-                placeholderTextColor={theme.muted}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                autoFocus
-                value={phrase}
-                onChangeText={(v) => { setPhrase(v); setError(null); }}
-                editable={!busy}
-              />
-            )}
+            <TextInput
+              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }]}
+              placeholder={t("deleteAccount.passwordPlaceholder")}
+              placeholderTextColor={theme.muted}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+              value={password}
+              onChangeText={(v) => { setPassword(v); setError(null); }}
+              editable={!busy}
+            />
 
             {error && <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>}
 

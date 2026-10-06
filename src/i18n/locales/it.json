@@ -35,12 +35,7 @@
     "errEmailInvalid": "Questo indirizzo email non sembra valido.",
     "errInvalidCredentials": "Email o password errate.",
     "errEmailNotConfirmed": "Conferma prima il tuo indirizzo email.",
-    "codeCorrect": "Codice corretto: accesso in corso…",
-    "phoneTitle": "Accedi con il telefono",
-    "phoneSubtitle": "Ti invieremo un codice di verifica via SMS.",
-    "phonePlaceholder": "+39 312 345 6789",
-    "usePhoneInstead": "Usa il numero di telefono",
-    "useEmailInstead": "Usa l'email"
+    "codeCorrect": "Codice corretto: accesso in corso…"
   },
   "select": {
     "title": "I tuoi collegamenti",
@@ -551,21 +546,6 @@
       "success": "Grazie! La tua segnalazione è stata inviata.",
       "error": "Impossibile inviare la tua segnalazione. Riprova."
     },
-    "link": {
-      "addPhoneTitle": "Aggiungi il tuo numero di telefono",
-      "addPhoneBody": "Collega un numero di telefono a questo account per poter accedere anche via SMS.",
-      "addEmailTitle": "Aggiungi il tuo indirizzo email",
-      "addEmailBody": "Collega un indirizzo email a questo account per poter accedere anche via email.",
-      "add": "Aggiungi",
-      "sendCode": "Invia codice",
-      "confirm": "Conferma",
-      "cancel": "Annulla",
-      "code": "Codice",
-      "codeSent": "Codice inviato a",
-      "phonePlaceholder": "+39 312 345 6789",
-      "emailPlaceholder": "tu@esempio.com",
-      "error": "Qualcosa è andato storto. Riprova."
-    },
     "deleteAccount": "Elimina account"
   },
   "calendar": {
@@ -652,8 +632,6 @@
     "cancel": "Annulla",
     "confirmPassword": "Inserisci la tua password per confermare che vuoi eliminare definitivamente il tuo account.",
     "passwordPlaceholder": "La tua password",
-    "confirmPhrase": "Scrivi {{word}} per confermare che vuoi eliminare definitivamente il tuo account.",
-    "confirmWord": "ELIMINA",
     "holdToDelete": "Tieni premuto per eliminare l'account",
     "wrongPassword": "Password errata. Riprova.",
     "chefBlocked": "Gestisci ancora un team. Trasferisci o rimuovi la tua azienda prima di eliminare l'account.",

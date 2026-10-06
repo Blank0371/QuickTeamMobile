@@ -89,7 +89,7 @@ The backend (Supabase project **QuickTeam**, `jqpfuotwsgnqihspsmmf`, eu-west-1) 
   - **`schichttausch_anfragen`** — shift-swap requests (bidirectional swap flow).
   - **`notfaelle`** — emergency call-outs needing coverage.
   - **`schicht_ausschreibung_bedarf`** — open-posting demand for custom/ad-hoc shifts.
-- **Misc:** `bug_reports`, `konto_merge_token` (account-merge), `plan_aenderungen` (change log).
+- **Misc:** `bug_reports`, `plan_aenderungen` (change log).
 
 ---
 
@@ -99,9 +99,7 @@ Managed by `src/context/auth.tsx` (`AuthProvider` / `useAuth`). Supabase Auth ba
 
 Supported flows:
 - **Email + password** sign-up (8-digit email code confirmation), sign-in, resend code, and **password reset** (8-digit recovery code → set new password). Enumeration-protected: an already-registered email is detected and the user is steered to sign-in.
-- **Phone / SMS OTP** — `signInWithPhone` sends a 6-digit SMS code; the same call creates the account on first use (no separate phone sign-up). `verifyPhone` opens the session.
-- **Add a channel** to an existing account — `addPhone` / `addEmail` + `verifyChannelChange` (for phone-first or email-first users to link the other).
-- **Account merge** (rare fallback) — `konto_merge_start` on the duplicate account mints a token; `konto_merge_confirm` on the keeper account re-points all positions.
+- **No phone / SMS auth at all** — phone sign-in removed in 1.3.0, add-phone-to-account and the account merge in 1.3.1 (SMS cost / toll-fraud risk). Login accounts are email-only; invitations match by email only (`meine_einladungen`, `einladung_annehmen`). The Supabase Phone provider must stay disabled with no SMS provider configured. `mitarbeiter.telefon` remains as a plain, employer-entered contact field.
 
 > Auth email templates (signup code, password-reset code) live in `supabase/email-templates/`. The signup template needs `{{ .Token }}` to deliver the OTP.
 
@@ -151,7 +149,7 @@ Month view rendering real `schicht_instanzen` via `kalender_schichten` / `schich
 Modal showing one shift's details, coworkers, and the actions available (swap offer, emergency call-out). Also hosts the **shift-notes** card (`schicht_notizen_holen` / `_notiz_schreiben` / `_bearbeiten` / `_loeschen`): anyone on the shift (or the chef) can add a note; edit/delete controls appear only on the caller's own notes. A `notiz_anzahl` count (returned by `kalender_schichten`) drives a sticky-note marker on the calendar.
 
 #### Settings (`settings.tsx`)
-Theme (light/dark/system), language picker, **manage connections** (switch business / add phone or email), **notifications** screen, **legal** documents list, and **bug report**.
+Theme (light/dark/system), language picker, **manage connections** (switch business), **notifications** screen, **legal** documents list, and **bug report**.
 
 ---
 

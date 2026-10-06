@@ -35,12 +35,7 @@
     "errEmailInvalid": "Diese E-Mail-Adresse scheint ungültig zu sein.",
     "errInvalidCredentials": "Falsche E-Mail oder falsches Passwort.",
     "errEmailNotConfirmed": "Bitte bestätige zuerst deine E-Mail-Adresse.",
-    "codeCorrect": "Code korrekt – du wirst angemeldet…",
-    "phoneTitle": "Mit Telefon anmelden",
-    "phoneSubtitle": "Wir senden dir einen Bestätigungscode per SMS.",
-    "phonePlaceholder": "+49 170 1234567",
-    "usePhoneInstead": "Stattdessen Telefonnummer verwenden",
-    "useEmailInstead": "Stattdessen E-Mail verwenden"
+    "codeCorrect": "Code korrekt – du wirst angemeldet…"
   },
   "select": {
     "title": "Deine Verbindungen",
@@ -566,21 +561,6 @@
       "success": "Danke! Deine Meldung wurde gesendet.",
       "error": "Meldung konnte nicht gesendet werden. Bitte versuche es erneut."
     },
-    "link": {
-      "addPhoneTitle": "Telefonnummer hinzufügen",
-      "addPhoneBody": "Verknüpfe eine Telefonnummer mit diesem Konto, um dich auch per SMS anzumelden.",
-      "addEmailTitle": "E-Mail-Adresse hinzufügen",
-      "addEmailBody": "Verknüpfe eine E-Mail-Adresse mit diesem Konto, um dich auch per E-Mail anzumelden.",
-      "add": "Hinzufügen",
-      "sendCode": "Code senden",
-      "confirm": "Bestätigen",
-      "cancel": "Abbrechen",
-      "code": "Code",
-      "codeSent": "Code gesendet an",
-      "phonePlaceholder": "+49 170 1234567",
-      "emailPlaceholder": "du@beispiel.de",
-      "error": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
-    },
     "deleteAccount": "Konto löschen"
   },
   "calendar": {
@@ -667,8 +647,6 @@
     "cancel": "Abbrechen",
     "confirmPassword": "Gib dein Passwort ein, um zu bestätigen, dass du dein Konto dauerhaft löschen möchtest.",
     "passwordPlaceholder": "Dein Passwort",
-    "confirmPhrase": "Gib {{word}} ein, um zu bestätigen, dass du dein Konto dauerhaft löschen möchtest.",
-    "confirmWord": "LÖSCHEN",
     "holdToDelete": "Zum Löschen gedrückt halten",
     "wrongPassword": "Falsches Passwort. Bitte versuche es erneut.",
     "chefBlocked": "Du verwaltest noch ein Team. Übergib oder entferne deinen Betrieb, bevor du dein Konto löschst.",

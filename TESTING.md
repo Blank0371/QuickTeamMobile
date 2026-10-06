@@ -70,7 +70,6 @@ Legend: run each as the indicated actor; ✅ = expected pass, ⛔ = expected rej
 - [ ] `meine_mitarbeiter_id(betrieb)`, `meine_einladungen()`.
 - [ ] `registriere_betrieb(name,land,vorname,nachname)` → creates business + chef row (roll back).
 - [ ] `einladung_annehmen(mitarbeiter_id)`, `meine_einladungen()`.
-- [ ] `konto_merge_start()` / `konto_merge_confirm(token)` — account merge (auth.tsx).
 - [ ] `betrieb_vertrag_beendet(betrieb)` (access gate, `src/lib/access.ts`) → `false` for a
   member of a business that is `trial`/`aktiv`/`pausiert`; `true` only for a member AND
   `gekuendigt`; ⛔ always `false` for a business the caller isn't a member of (no leak).
@@ -195,7 +194,7 @@ The deployed edge function may lag local code — test **local** code directly w
 - [ ] `npx tsc --noEmit` → clean.
 - [ ] `npx expo lint`.
 - [ ] Boot web: `.claude/launch.json` profile `expo-web` (port 8081) → browser.
-  - [ ] Sign-in screen renders (email/password, "Use phone number instead", Sign up).
+  - [ ] Sign-in screen renders (email/password, Forgot password, Sign up — no phone option).
   - [ ] Legal consent gate: on a fresh device (no `legal:accepted:*` in storage) it blocks;
     scroll-to-agree works. With an **older** stored version it shows only the
     "Legal texts updated" notice, listing just the changed document(s) with a link to
@@ -222,7 +221,7 @@ Authenticated UI checklist (both role surfaces — the tab bar differs by role):
   - [ ] Manager: Employees / Shifts / Business sub-tabs, vacation requests, editable roles, team roster with roles.
   - [ ] Calendar: week grid with real shifts + names, Week/Month toggle, "Confirm planned shifts / Delete planned" banner when a cycle is unpublished.
   - [ ] Shift detail (chef edit): editable date/time/comment, team chips (removable), Add-person list. Assigning someone with an overlap must show **"They already have an overlapping shift"** (HC-2 surfaced from a 400 — expected, not a bug).
-  - [ ] Settings: phone linking, connections, theme, language, notifications, bug report, Legal.
+  - [ ] Settings: connections, theme, language, notifications, bug report, Legal.
 - [ ] **Employee** role → tabs Messages / Scheduling / Home / Calendar / Settings.
   - [ ] Home: hours-worked meter, upcoming shifts, new messages.
   - [ ] Shift detail (employee, read-only): coworkers (names via `mitarbeiter_namen`),
@@ -262,7 +261,7 @@ Authenticated UI checklist (both role surfaces — the tab bar differs by role):
 ## 5. Security / advisors
 - [ ] `get_advisors(security)` — expected baseline: the `SECURITY DEFINER` warnings are
   by-design (RPCs are the sanctioned API). Real open item: **leaked-password protection**
-  (enable in Auth settings). `konto_merge_token` RLS-no-policy is intentional (definer-only).
+  (enable in Auth settings).
 - [ ] `get_advisors(performance)` after any schema/index change.
 - [ ] See `security-posture` memory for the full audit baseline.
 

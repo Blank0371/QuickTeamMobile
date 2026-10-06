@@ -35,12 +35,7 @@
     "errEmailInvalid": "Cette adresse e-mail semble invalide.",
     "errInvalidCredentials": "E-mail ou mot de passe incorrect.",
     "errEmailNotConfirmed": "Veuillez d'abord confirmer votre adresse e-mail.",
-    "codeCorrect": "Code correct — connexion en cours…",
-    "phoneTitle": "Se connecter avec le téléphone",
-    "phoneSubtitle": "Nous vous enverrons un code de vérification par SMS.",
-    "phonePlaceholder": "+33 6 12 34 56 78",
-    "usePhoneInstead": "Utiliser un numéro de téléphone",
-    "useEmailInstead": "Utiliser l'e-mail à la place"
+    "codeCorrect": "Code correct — connexion en cours…"
   },
   "select": {
     "title": "Vos connexions",
@@ -549,21 +544,6 @@
       "success": "Merci ! Votre signalement a été envoyé.",
       "error": "Impossible d'envoyer votre signalement. Veuillez réessayer."
     },
-    "link": {
-      "addPhoneTitle": "Ajoutez votre numéro de téléphone",
-      "addPhoneBody": "Associez un numéro de téléphone à ce compte pour vous connecter aussi par SMS.",
-      "addEmailTitle": "Ajoutez votre adresse e-mail",
-      "addEmailBody": "Associez une adresse e-mail à ce compte pour vous connecter aussi par e-mail.",
-      "add": "Ajouter",
-      "sendCode": "Envoyer le code",
-      "confirm": "Confirmer",
-      "cancel": "Annuler",
-      "code": "Code",
-      "codeSent": "Code envoyé à",
-      "phonePlaceholder": "+33 6 12 34 56 78",
-      "emailPlaceholder": "vous@exemple.com",
-      "error": "Une erreur s'est produite. Veuillez réessayer."
-    },
     "deleteAccount": "Supprimer le compte"
   },
   "calendar": {
@@ -650,8 +630,6 @@
     "cancel": "Annuler",
     "confirmPassword": "Saisissez votre mot de passe pour confirmer la suppression définitive de votre compte.",
     "passwordPlaceholder": "Votre mot de passe",
-    "confirmPhrase": "Saisissez {{word}} pour confirmer la suppression définitive de votre compte.",
-    "confirmWord": "SUPPRIMER",
     "holdToDelete": "Maintenez pour supprimer le compte",
     "wrongPassword": "Mot de passe incorrect. Veuillez réessayer.",
     "chefBlocked": "Vous gérez encore une équipe. Transférez ou supprimez votre établissement avant de supprimer votre compte.",

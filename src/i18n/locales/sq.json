@@ -35,12 +35,7 @@
     "errEmailInvalid": "Kjo adresë email-i nuk duket e vlefshme.",
     "errInvalidCredentials": "Email ose fjalëkalim i gabuar.",
     "errEmailNotConfirmed": "Të lutem konfirmo fillimisht adresën e email-it.",
-    "codeCorrect": "Kodi është i saktë — po hyn…",
-    "phoneTitle": "Hyr me telefon",
-    "phoneSubtitle": "Do të të dërgojmë një kod verifikimi me SMS.",
-    "phonePlaceholder": "+355 69 123 4567",
-    "usePhoneInstead": "Përdor numrin e telefonit",
-    "useEmailInstead": "Përdor email-in"
+    "codeCorrect": "Kodi është i saktë — po hyn…"
   },
   "select": {
     "title": "Lidhjet e tua",
@@ -568,21 +563,6 @@
       "success": "Faleminderit! Raporti yt u dërgua.",
       "error": "Raporti nuk mund të dërgohej. Të lutem provo përsëri."
     },
-    "link": {
-      "addPhoneTitle": "Shto numrin e telefonit",
-      "addPhoneBody": "Lidh një numër telefoni me këtë llogari që të mund të hysh edhe me SMS.",
-      "addEmailTitle": "Shto adresën e email-it",
-      "addEmailBody": "Lidh një adresë email-i me këtë llogari që të mund të hysh edhe me email.",
-      "add": "Shto",
-      "sendCode": "Dërgo kodin",
-      "confirm": "Konfirmo",
-      "cancel": "Anulo",
-      "code": "Kodi",
-      "codeSent": "Kodi u dërgua te",
-      "phonePlaceholder": "+355 69 123 4567",
-      "emailPlaceholder": "ti@shembull.com",
-      "error": "Diçka shkoi keq. Të lutem provo përsëri."
-    },
     "deleteAccount": "Fshi llogarinë"
   },
   "calendar": {
@@ -669,8 +649,6 @@
     "cancel": "Anulo",
     "confirmPassword": "Shkruaj fjalëkalimin për të konfirmuar që dëshiron ta fshish përgjithmonë llogarinë.",
     "passwordPlaceholder": "Fjalëkalimi yt",
-    "confirmPhrase": "Shkruaj {{word}} për të konfirmuar që dëshiron ta fshish përgjithmonë llogarinë.",
-    "confirmWord": "FSHI",
     "holdToDelete": "Mbaj shtypur për të fshirë llogarinë",
     "wrongPassword": "Fjalëkalim i pasaktë. Të lutem provo përsëri.",
     "chefBlocked": "Menaxhon ende një ekip. Dorëzoje ose hiqe biznesin para se të fshish llogarinë.",

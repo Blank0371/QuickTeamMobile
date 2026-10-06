@@ -35,12 +35,7 @@
     "errEmailInvalid": "Esa dirección de correo no parece válida.",
     "errInvalidCredentials": "Correo o contraseña incorrectos.",
     "errEmailNotConfirmed": "Primero confirma tu dirección de correo.",
-    "codeCorrect": "Código correcto: iniciando sesión…",
-    "phoneTitle": "Iniciar sesión con teléfono",
-    "phoneSubtitle": "Te enviaremos un código de verificación por SMS.",
-    "phonePlaceholder": "+34 612 345 678",
-    "usePhoneInstead": "Usar número de teléfono",
-    "useEmailInstead": "Usar correo electrónico"
+    "codeCorrect": "Código correcto: iniciando sesión…"
   },
   "select": {
     "title": "Tus conexiones",
@@ -549,21 +544,6 @@
       "success": "¡Gracias! Tu informe se ha enviado.",
       "error": "No se pudo enviar tu informe. Inténtalo de nuevo."
     },
-    "link": {
-      "addPhoneTitle": "Añade tu número de teléfono",
-      "addPhoneBody": "Vincula un número de teléfono a esta cuenta para iniciar sesión también por SMS.",
-      "addEmailTitle": "Añade tu correo electrónico",
-      "addEmailBody": "Vincula un correo electrónico a esta cuenta para iniciar sesión también por correo.",
-      "add": "Añadir",
-      "sendCode": "Enviar código",
-      "confirm": "Confirmar",
-      "cancel": "Cancelar",
-      "code": "Código",
-      "codeSent": "Código enviado a",
-      "phonePlaceholder": "+34 612 345 678",
-      "emailPlaceholder": "tu@ejemplo.com",
-      "error": "Algo salió mal. Inténtalo de nuevo."
-    },
     "deleteAccount": "Eliminar cuenta"
   },
   "calendar": {
@@ -650,8 +630,6 @@
     "cancel": "Cancelar",
     "confirmPassword": "Introduce tu contraseña para confirmar que quieres eliminar tu cuenta de forma permanente.",
     "passwordPlaceholder": "Tu contraseña",
-    "confirmPhrase": "Escribe {{word}} para confirmar que quieres eliminar tu cuenta de forma permanente.",
-    "confirmWord": "ELIMINAR",
     "holdToDelete": "Mantén pulsado para eliminar la cuenta",
     "wrongPassword": "Contraseña incorrecta. Inténtalo de nuevo.",
     "chefBlocked": "Todavía gestionas un equipo. Transfiere o elimina tu empresa antes de borrar tu cuenta.",

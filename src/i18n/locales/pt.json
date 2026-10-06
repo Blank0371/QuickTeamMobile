@@ -35,12 +35,7 @@
     "errEmailInvalid": "Esse endereço de email não parece válido.",
     "errInvalidCredentials": "Email ou palavra-passe incorretos.",
     "errEmailNotConfirmed": "Confirme primeiro o seu endereço de email.",
-    "codeCorrect": "Código correto — a iniciar sessão…",
-    "phoneTitle": "Iniciar sessão com telemóvel",
-    "phoneSubtitle": "Enviamos-lhe um código de verificação por SMS.",
-    "phonePlaceholder": "+351 912 345 678",
-    "usePhoneInstead": "Usar número de telemóvel",
-    "useEmailInstead": "Usar email"
+    "codeCorrect": "Código correto — a iniciar sessão…"
   },
   "select": {
     "title": "As suas ligações",
@@ -551,21 +546,6 @@
       "success": "Obrigado! O seu relatório foi enviado.",
       "error": "Não foi possível enviar o seu relatório. Tente novamente."
     },
-    "link": {
-      "addPhoneTitle": "Adicionar o seu número de telemóvel",
-      "addPhoneBody": "Associe um número de telemóvel a esta conta para poder também iniciar sessão por SMS.",
-      "addEmailTitle": "Adicionar o seu endereço de email",
-      "addEmailBody": "Associe um endereço de email a esta conta para poder também iniciar sessão por email.",
-      "add": "Adicionar",
-      "sendCode": "Enviar código",
-      "confirm": "Confirmar",
-      "cancel": "Cancelar",
-      "code": "Código",
-      "codeSent": "Código enviado para",
-      "phonePlaceholder": "+351 912 345 678",
-      "emailPlaceholder": "voce@exemplo.com",
-      "error": "Algo correu mal. Tente novamente."
-    },
     "deleteAccount": "Eliminar conta"
   },
   "calendar": {
@@ -652,8 +632,6 @@
     "cancel": "Cancelar",
     "confirmPassword": "Introduza a sua palavra-passe para confirmar que quer eliminar permanentemente a sua conta.",
     "passwordPlaceholder": "A sua palavra-passe",
-    "confirmPhrase": "Escreva {{word}} para confirmar que quer eliminar permanentemente a sua conta.",
-    "confirmWord": "ELIMINAR",
     "holdToDelete": "Mantenha premido para eliminar a conta",
     "wrongPassword": "Palavra-passe incorreta. Tente novamente.",
     "chefBlocked": "Ainda gere uma equipa. Transfira ou remova a sua empresa antes de eliminar a conta.",
