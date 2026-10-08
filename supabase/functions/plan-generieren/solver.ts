@@ -33,8 +33,7 @@
 //   - HC-4: rest gap between any two shifts >= gesetzliche mindestruhezeit.
 //   - legal daily / weekly maxima (gesetzliche_parameter by betriebe.land).
 //   - HC-5: CALENDAR-MONTH gross hours must not exceed max_stunden_hart.
-//   Pre-existing manuell/tausch assignments (vorbelegung / startSaldo) seed all
-//   of the above.
+//   Pre-existing manuell/tausch assignments (vorbelegung) seed all of the above.
 //
 // GLOBAL OBJECTIVE (a single scalar, lower = better) — priority preference >
 // überstunden > fairness. Because phase B compares whole rosters, the objective
@@ -46,8 +45,11 @@
 //     more than a heavy-preferrer's many).
 //   - Überstunden: employees over their toleranz_ueberstunden are taxed per hour
 //     assigned, so banked overtime pushes them down the pick order.
-//   - Fairness: quadratic distance of monthly hours from soll_stunden — pulls
-//     everyone toward their target from both sides.
+//   - Fairness: quadratic distance from the month-to-date share of soll_stunden,
+//     per calendar month the cycle touches — pulls everyone toward their target
+//     from both sides, whatever the cycle length (see MonatState).
+//   Preference tallies and the month-to-date target include shifts held earlier
+//   in the same month, so a series of weekly cycles behaves like one month.
 //
 // DELIBERATELY OUT OF SCOPE (would belong in an "optimal" ILP/CP method):
 //   - Proven optimality / exhaustive backtracking. Local search finds a good
@@ -81,7 +83,7 @@ export interface Mitarbeiter {
   // trigger, which checks every rule per mitarbeiter_id and never unions across
   // profiles. Kept only for reference/logging; no longer used by the solver.
   auth_id?: string | null;
-  soll_stunden: number | null;      // optimal MONTHLY hours = the per-cycle target
+  soll_stunden: number | null;      // optimal MONTHLY hours (pro-rated per cycle, see MonatState)
   max_stunden_hart: number | null;  // hard CALENDAR-MONTH gross cap; null → no cap
   // Historical overtime accrued up to the accounting cutoff (opening balance +
   // Σ over past full months of worked − soll). Optional; defaults to 0.
@@ -108,13 +110,23 @@ export interface SolverInput {
   // per-date preference override: `${mitarbeiter_id}|${vorlage_id}|${datum}` -> 'gerne' | 'ungerne'
   tagesvorliebe: Map<string, "gerne" | "ungerne">;
   // Shifts the employee ALREADY holds (manuell / tausch assignments, other cycles),
-  // loaded for the cycle window ± a rest-buffer. Seeds overlap/rest/day/week checks
-  // so the solver never proposes a row the trigger would reject.
+  // loaded for every calendar month the cycle touches, the full Monday-based weeks
+  // at both ends and a rest-buffer. Seeds overlap/rest/day/week/month checks so the
+  // solver never proposes a row the trigger would reject, and — for dates before
+  // the cycle start — the month-to-date hours and preference tallies.
   vorbelegung: Map<Uuid, Instanz[]>;
-  // Hours the employee already has WITHIN this cycle (from vorbelegung that falls
-  // inside the cycle range). Seeds the soft fairness/overtime saldo only; the hard
-  // HC-5 cap is summed directly from `vorbelegung` per calendar month.
-  startSaldo: Map<Uuid, number>;
+  // `${mitarbeiter_id}|${schicht_instanz_id}` of held shifts that block the legal
+  // checks but do NOT count as worked hours/preferences (called out while the
+  // business does not count emergency shifts). Optional.
+  nichtGezaehlt?: Set<string>;
+  // The cycle's own date range. Defaults to the first/last instance date.
+  zeitraum?: { start: IsoDate; ende: IsoDate };
+  // Would-be working days OUTSIDE the cycle but inside the calendar months it
+  // touches, per employee (from the weekly templates). The value says whether the
+  // day lies before the cycle start AND was already planned (shift instances
+  // exist) — only then was the employee expected to have worked their share of
+  // it. Optional; without it every month is treated as covered by the cycle alone.
+  arbeitstageAusserhalb?: Map<Uuid, Map<IsoDate, boolean>>;
   // Legal limits for the business's country (gesetzliche_parameter by betriebe.land).
   // The daily/weekly maxima are measured against NET working time, so legally
   // required breaks (pausen) are deducted before comparing to the caps.
@@ -248,38 +260,54 @@ function istImUrlaub(input: SolverInput, mitarbeiterId: Uuid, datum: IsoDate): b
 // ----------------------------------------------------------------------------
 // Per-employee mutable state, shared by both phases.
 // ----------------------------------------------------------------------------
+// The fairness/overtime terms live PER CALENDAR MONTH, because soll_stunden and
+// max_stunden_hart are monthly figures. A cycle may be one week, one month, or
+// span two months — each month it touches gets its own target and cap.
+interface MonatState {
+  // Gross hours counted against this month's target: in-cycle held + assigned.
+  // Hours held before the cycle start are already netted out of `target`.
+  stunden: number;
+  // What the employee should still get in this cycle for this month:
+  //   soll × (available would-be working days from the month start through the
+  //   cycle end, counting only days that were planned) ÷ (would-be working days
+  //   in the whole month)  −  hours already held earlier in the month.
+  // Holiday removes days from the numerator only, so a cycle half covered by
+  // someone's holiday halves their share for it. May go negative (already over).
+  target: number;
+  scale: number;           // normalizer: the full holiday-adjusted monthly target
+  capHart: number;         // max_stunden_hart, PRO-RATED for the month's urlaub (Infinity = no cap)
+}
+
 interface EmpState {
   m: Mitarbeiter;
-  stunden: number;         // in-cycle gross hours (soft fairness/overtime only)
   belegt: Instanz[];       // every shift held (for the legal checks)
-  gerne: number;           // gerne shifts granted so far
-  ungerne: number;         // ungerne shifts forced so far
-  target: number;          // soll_stunden, PRO-RATED for in-cycle urlaub (0 = unset)
-  scale: number;           // normalizer for the fairness/overtime terms
+  gerne: number;           // gerne shifts granted so far (incl. earlier in the month)
+  ungerne: number;         // ungerne shifts forced so far (incl. earlier in the month)
   gSub: number;            // "fewer wishes weigh more" multiplier
   otPen: number;           // overtime beyond tolerance (>= 0)
-  capHart: number;         // max_stunden_hart, PRO-RATED for in-cycle urlaub (Infinity = no cap)
+  monate: Map<string, MonatState>; // 'YYYY-MM' -> per-month tallies, one per month the cycle touches
 }
 
 // The concave/convex per-employee objective, defined purely on the tallies so it
-// is order-independent and phase B can diff it.
-function empCost(s: EmpState): number {
-  const pref =
-    -W_PREF * s.gSub * Math.sqrt(s.gerne) + // concave reward: each gerne worth less
-    W_PREF * s.gSub * 0.5 * s.ungerne * s.ungerne; // convex penalty: each ungerne worse
-  const fair = W_FAIR * ((s.stunden - s.target) / s.scale) ** 2; // pull toward soll
-  const ot = W_OT * (s.otPen / s.scale) * (s.stunden / s.scale); // tax overtime carriers
-  return pref + fair + ot;
+// is order-independent and phase B can diff it. Scores a hypothetical (gerne,
+// ungerne) and up to two months with changed hours (monatA→hA, monatB→hB) without
+// mutating state; every other month keeps its current hours.
+function kosten(
+  s: EmpState, gerne: number, ungerne: number,
+  monatA: string | null, hA: number, monatB: string | null, hB: number,
+): number {
+  let k =
+    -W_PREF * s.gSub * Math.sqrt(gerne) + // concave reward: each gerne worth less
+    W_PREF * s.gSub * 0.5 * ungerne * ungerne; // convex penalty: each ungerne worse
+  for (const [monat, ms] of s.monate) {
+    const h = monat === monatA ? hA : monat === monatB ? hB : ms.stunden;
+    k += W_FAIR * ((h - ms.target) / ms.scale) ** 2; // pull toward soll
+    k += W_OT * (s.otPen / ms.scale) * (h / ms.scale); // tax overtime carriers
+  }
+  return k;
 }
 
-// Objective contribution of an employee given a hypothetical (gerne, ungerne,
-// stunden) — used to score a candidate/move without mutating state.
-function empCostAt(s: EmpState, gerne: number, ungerne: number, stunden: number): number {
-  const pref = -W_PREF * s.gSub * Math.sqrt(gerne) + W_PREF * s.gSub * 0.5 * ungerne * ungerne;
-  const fair = W_FAIR * ((stunden - s.target) / s.scale) ** 2;
-  const ot = W_OT * (s.otPen / s.scale) * (stunden / s.scale);
-  return pref + fair + ot;
-}
+const empCost = (s: EmpState) => kosten(s, s.gerne, s.ungerne, null, 0, null, 0);
 
 // ----------------------------------------------------------------------------
 // THE SOLVER — pure function. This is the part to scrutinize.
@@ -299,49 +327,97 @@ export function solve(input: SolverInput): SolverResult {
     return Math.min(2, Math.max(0.5, avgSubmitted / Math.max(m.n_submitted ?? 0, 1)));
   };
 
-  // Pro-rate each employee's MONTHLY targets by the share of their would-be
-  // working days that approved urlaub removes. A "would-be working day" is a date
-  // in the cycle carrying at least one shift instance whose required role the
-  // employee holds — i.e. a day they could realistically be scheduled. Without
-  // this, someone on two weeks' holiday keeps their full monthly soll_stunden as
-  // the fairness target, so the solver tries to jam a whole month of hours into
-  // the remaining days (and their hard max_stunden_hart cap stays untouched too).
-  // Scaling both by the availability factor removes that bias. The factor only
-  // ever shrinks the targets, so the solver stays at least as conservative as the
-  // DB trigger (which enforces the un-prorated max_stunden_hart).
-  const verfuegbarkeitsFaktor = new Map<Uuid, number>();
+  const daten = input.instanzen.map((i) => i.datum).sort();
+  const zeitraum = input.zeitraum ?? { start: daten[0] ?? "", ende: daten[daten.length - 1] ?? "" };
+  const monatVon = (d: IsoDate) => d.slice(0, 7);
+  const zykMonate = new Set(input.instanzen.map((i) => monatVon(i.datum)));
+  const gezaehlt = (mId: Uuid, instId: Uuid) => !input.nichtGezaehlt?.has(`${mId}|${instId}`);
+
+  // Initialize per-employee state, one MonatState per calendar month the cycle
+  // touches. Monthly targets and caps are PRO-RATED by approved urlaub, measured
+  // in "would-be working days": dates carrying at least one shift whose required
+  // role the employee holds — days they could realistically be scheduled. Inside
+  // the cycle those come from the real instances; elsewhere in the month from the
+  // weekly templates (`arbeitstageAusserhalb`).
+  //
+  // Example, soll 160h, a 4-week month with 5 working days a week (20):
+  //   · monthly cycle, no holiday      → target 160h (unchanged behaviour)
+  //   · weekly cycle, week 1           → 160 × 5/20 = 40h
+  //   · weekly cycle, week 2, half of it on holiday, 40h held from week 1
+  //                                    → 160 × (5 + 2.5)/20 − 40 = 20h
+  //   · weekly cycle, week 3, only 30h held so far → 160 × 15/20 − 30 = 90h
+  //     (the shortfall is caught up instead of forgotten)
+  // The pro-rated cap only ever shrinks, so the solver stays at least as
+  // conservative as the DB trigger (which enforces the raw max_stunden_hart).
+  const stateById = new Map<Uuid, EmpState>();
   for (const m of input.mitarbeiter) {
     const rollen = input.rollenProMitarbeiter.get(m.id) ?? new Set<Uuid>();
-    const arbeitstage = new Set<IsoDate>();
-    const urlaubstage = new Set<IsoDate>();
+
+    // date -> does it count toward the month-to-date target (through cycle end)?
+    const tage = new Map<IsoDate, boolean>();
     for (const inst of input.instanzen) {
       const bedarf = input.bedarfProInstanz.get(inst.id) ?? [];
       if (!bedarf.some((b) => rollen.has(b.rolle_id))) continue; // can't fill this shift
-      arbeitstage.add(inst.datum);
-      if (istImUrlaub(input, m.id, inst.datum)) urlaubstage.add(inst.datum);
+      tage.set(inst.datum, true);
     }
-    const faktor =
-      arbeitstage.size > 0 ? (arbeitstage.size - urlaubstage.size) / arbeitstage.size : 1;
-    verfuegbarkeitsFaktor.set(m.id, faktor);
-  }
+    for (const [datum, geplant] of input.arbeitstageAusserhalb?.get(m.id) ?? []) {
+      if (tage.has(datum) || !zykMonate.has(monatVon(datum))) continue;
+      tage.set(datum, geplant && datum < zeitraum.start);
+    }
 
-  // Initialize per-employee state, seeded from any pre-existing (manuell/tausch)
-  // shifts and the in-cycle hours those already contribute.
-  const stateById = new Map<Uuid, EmpState>();
-  for (const m of input.mitarbeiter) {
-    const faktor = verfuegbarkeitsFaktor.get(m.id) ?? 1;
-    const target = (m.soll_stunden ?? 0) * faktor;
+    const zaehler = new Map<string, { alle: number; urlaub: number; bis: number; bisUrlaub: number }>();
+    for (const monat of zykMonate) zaehler.set(monat, { alle: 0, urlaub: 0, bis: 0, bisUrlaub: 0 });
+    for (const [datum, zaehlt] of tage) {
+      const z = zaehler.get(monatVon(datum))!;
+      const frei = istImUrlaub(input, m.id, datum);
+      z.alle++;
+      if (frei) z.urlaub++;
+      if (zaehlt) { z.bis++; if (frei) z.bisUrlaub++; }
+    }
+
+    // Held shifts: in-cycle ones count toward this cycle's hours, earlier ones in
+    // the same month are netted out of the target and seed the preference tallies.
+    const belegt = [...(input.vorbelegung.get(m.id) ?? [])];
+    const imZyklus = new Map<string, number>();
+    const davor = new Map<string, number>();
+    let gerne = 0, ungerne = 0;
+    for (const h of belegt) {
+      const monat = monatVon(h.datum);
+      if (!zykMonate.has(monat) || !gezaehlt(m.id, h.id)) continue;
+      const d = dauerStunden(h.start_zeit, h.end_zeit);
+      if (h.datum >= zeitraum.start && h.datum <= zeitraum.ende) {
+        imZyklus.set(monat, (imZyklus.get(monat) ?? 0) + d);
+      } else if (h.datum < zeitraum.start) {
+        davor.set(monat, (davor.get(monat) ?? 0) + d);
+        const p = preferenz(input, m.id, h.schicht_vorlage_id, h.datum);
+        if (p === "gerne") gerne++;
+        else if (p === "ungerne") ungerne++;
+      }
+    }
+
+    const monate = new Map<string, MonatState>();
+    for (const [monat, z] of zaehler) {
+      // share of the month's working days left after holiday (whole month)
+      const faktor = z.alle > 0 ? (z.alle - z.urlaub) / z.alle : 1;
+      // share of the month's working days, after holiday, due by the cycle end
+      const anteil = z.alle > 0 ? (z.bis - z.bisUrlaub) / z.alle : 1;
+      const voll = (m.soll_stunden ?? 0) * faktor;
+      monate.set(monat, {
+        stunden: imZyklus.get(monat) ?? 0,
+        target: (m.soll_stunden ?? 0) * anteil - (davor.get(monat) ?? 0),
+        scale: voll > 0 ? voll : FALLBACK_SOLL,
+        capHart: m.max_stunden_hart != null ? m.max_stunden_hart * faktor : Infinity,
+      });
+    }
+
     stateById.set(m.id, {
       m,
-      stunden: input.startSaldo.get(m.id) ?? 0,
-      belegt: [...(input.vorbelegung.get(m.id) ?? [])],
-      gerne: 0,
-      ungerne: 0,
-      target,
-      scale: target > 0 ? target : FALLBACK_SOLL,
+      belegt,
+      gerne,
+      ungerne,
       gSub: gSubOf(m),
       otPen: Math.max(0, (m.ueberstunden ?? 0) - (m.toleranz_ueberstunden ?? 0)),
-      capHart: m.max_stunden_hart != null ? m.max_stunden_hart * faktor : Infinity,
+      monate,
     });
   }
 
@@ -397,9 +473,9 @@ export function solve(input: SolverInput): SolverResult {
     // urlaub; null = no cap. Summed over the calendar month of the shift, matching
     // the DB trigger. Pro-rating only ever shrinks the cap, so the solver stays
     // <= the raw cap the trigger enforces and never proposes a rejected row.
-    const cap = stateById.get(mId)!.capHart;
+    const monat = inst.datum.slice(0, 7); // 'YYYY-MM'
+    const cap = stateById.get(mId)!.monate.get(monat)!.capHart;
     if (cap !== Infinity) {
-      const monat = inst.datum.slice(0, 7); // 'YYYY-MM'
       let monatSumme = 0;
       for (const h of meine) {
         if (ignore?.has(`${mId}|${h.id}`) || h.id === inst.id) continue;
@@ -415,7 +491,7 @@ export function solve(input: SolverInput): SolverResult {
   function assign(mId: Uuid, inst: Instanz): void {
     const s = stateById.get(mId)!;
     s.belegt.push(inst);
-    s.stunden += rangeCache.get(inst.id)!.dauer;
+    s.monate.get(monatVon(inst.datum))!.stunden += rangeCache.get(inst.id)!.dauer;
     const p = preferenz(input, mId, inst.schicht_vorlage_id, inst.datum);
     if (p === "gerne") s.gerne++;
     else if (p === "ungerne") s.ungerne++;
@@ -424,7 +500,7 @@ export function solve(input: SolverInput): SolverResult {
     const s = stateById.get(mId)!;
     const i = s.belegt.findIndex((h) => h.id === inst.id);
     if (i >= 0) s.belegt.splice(i, 1);
-    s.stunden -= rangeCache.get(inst.id)!.dauer;
+    s.monate.get(monatVon(inst.datum))!.stunden -= rangeCache.get(inst.id)!.dauer;
     const p = preferenz(input, mId, inst.schicht_vorlage_id, inst.datum);
     if (p === "gerne") s.gerne--;
     else if (p === "ungerne") s.ungerne--;
@@ -436,8 +512,9 @@ export function solve(input: SolverInput): SolverResult {
     const p = preferenz(input, mId, inst.schicht_vorlage_id, inst.datum);
     const g = s.gerne + (p === "gerne" ? 1 : 0);
     const u = s.ungerne + (p === "ungerne" ? 1 : 0);
-    const h = s.stunden + rangeCache.get(inst.id)!.dauer;
-    return empCostAt(s, g, u, h) - empCost(s);
+    const monat = monatVon(inst.datum);
+    const h = s.monate.get(monat)!.stunden + rangeCache.get(inst.id)!.dauer;
+    return kosten(s, g, u, monat, h, null, 0) - empCost(s);
   }
 
   // ==========================================================================
@@ -590,8 +667,13 @@ export function solve(input: SolverInput): SolverResult {
     const pTo = preferenz(input, mId, to.schicht_vorlage_id, to.datum);
     const g = s.gerne - (pFrom === "gerne" ? 1 : 0) + (pTo === "gerne" ? 1 : 0);
     const u = s.ungerne - (pFrom === "ungerne" ? 1 : 0) + (pTo === "ungerne" ? 1 : 0);
-    const h = s.stunden - rangeCache.get(from.id)!.dauer + rangeCache.get(to.id)!.dauer;
-    return empCostAt(s, g, u, h) - empCost(s);
+    const mFrom = monatVon(from.datum), mTo = monatVon(to.datum);
+    const dFrom = rangeCache.get(from.id)!.dauer, dTo = rangeCache.get(to.id)!.dauer;
+    if (mFrom === mTo) {
+      const h = s.monate.get(mFrom)!.stunden - dFrom + dTo;
+      return kosten(s, g, u, mFrom, h, null, 0) - empCost(s);
+    }
+    return kosten(s, g, u, mFrom, s.monate.get(mFrom)!.stunden - dFrom, mTo, s.monate.get(mTo)!.stunden + dTo) - empCost(s);
   }
 
   return { zuweisungen, fehlbesetzungen };

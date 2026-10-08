@@ -166,7 +166,7 @@ These are the app's signature flows, each backed by dedicated RPCs and a `benach
 
 ## 7. Shift-generation solver (Edge Function)
 
-`supabase/functions/plan-generieren/` implements automatic roster generation. `index.ts` is the DB load/persist/HTTP layer; `solver.ts` is the pure algorithm (also `harness.ts`, `scale-harness.ts` for testing/scaling).
+`supabase/functions/plan-generieren/` implements automatic roster generation. `index.ts` is the DB load/persist/HTTP layer; `solver.ts` is the pure algorithm (also `harness.ts`, `scale-harness.ts` for testing/scaling, `woche-harness.ts` comparing one monthly cycle with four weekly cycles).
 
 **Pipeline:** load an open `planungszyklen` → materialize `schicht_instanzen` from weekly `schicht_vorlagen` across the cycle's date range → assign employees (**feasibility-first greedy fill, hardest shifts first**, then a **hill-climbing swap phase**) → write `schicht_zuweisungen` (`quelle='solver'`) and flip the cycle to `vorschlag_bereit`, recording unfilled slots as warnings.
 

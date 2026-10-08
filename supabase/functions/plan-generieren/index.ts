@@ -42,11 +42,15 @@
 //   - Moves larger than a pairwise swap (3-cycles, chains).
 //
 // CONFIRMED assumptions:
-//   - A cycle is one month; soll_stunden is the optimal monthly hours and
-//     max_stunden_hart the hard monthly cap. Both are PRO-RATED down by the share
-//     of an employee's would-be working days that approved urlaub removes, so a
-//     holiday shrinks the target instead of being crammed into the other days
-//     (see verfuegbarkeitsFaktor in solver.ts).
+//   - soll_stunden is the optimal monthly hours and max_stunden_hart the hard
+//     calendar-month cap. A cycle may be any length (one week, one month, two
+//     months): the solver works per calendar month the cycle touches. The
+//     target for a cycle is the month-to-date share of soll through the cycle
+//     end, minus what the employee already holds earlier in that month, so weekly
+//     cycles add up to the month and a short week is caught up in the next one.
+//     Approved urlaub PRO-RATES both target and cap by the would-be working days it
+//     removes — a cycle half covered by holiday halves that cycle's share (see
+//     MonatState in solver.ts).
 //   - Availability (verfuegbarkeiten) is IGNORED; only approved urlaub blocks a day.
 //   - Reruns are AVOIDED: the function only runs on a cycle in 'offen' or
 //     'deadline_erreicht'. A cycle that is already running / has a proposal /
@@ -166,10 +170,46 @@ async function materialisiereInstanzen(db: SupabaseClient, zyklus: Zyklus): Prom
   return (vorhandene ?? []) as Instanz[];
 }
 
+// PostgREST caps every response at 1000 rows. Business-wide history (all
+// instances, all assignments) outgrows that, so those reads are paged — ordered
+// by id so the pages neither overlap nor skip.
+async function alleZeilen<T>(
+  seite: (von: number, bis: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const GROESSE = 1000;
+  const alle: T[] = [];
+  for (let von = 0; ; von += GROESSE) {
+    const { data, error } = await seite(von, von + GROESSE - 1);
+    if (error) throw new Error(error.message);
+    alle.push(...(data ?? []));
+    if (!data || data.length < GROESSE) return alle;
+  }
+}
+
+const frueher = (a: IsoDate, b: IsoDate) => (a < b ? a : b);
+const spaeter = (a: IsoDate, b: IsoDate) => (a > b ? a : b);
+
 // Phase 2: gather everything the pure solver needs.
 async function ladeSolverInput(db: SupabaseClient, zyklus: Zyklus, instanzen: Instanz[]): Promise<SolverInput> {
   const instanzIds = instanzen.map((i) => i.id);
-  const vorlageIds = [...new Set(instanzen.map((i) => i.schicht_vorlage_id))];
+
+  // soll_stunden and max_stunden_hart are MONTHLY, so the solver must see every
+  // calendar month the cycle touches — a one-week cycle included. The window also
+  // spans the full Monday-based weeks at both ends (weekly legal maximum) and two
+  // days of rest-check reach.
+  const monatStart: IsoDate = `${monthKey(zyklus.zeitraum_start)}-01`;
+  const monatEnde = lastDayOfMonth(monthKey(zyklus.zeitraum_ende));
+  const montagVon = (d: IsoDate) => addDays(d, -wochentagMontagBasis(d));
+  const fensterVon = frueher(frueher(monatStart, montagVon(zyklus.zeitraum_start)), addDays(zyklus.zeitraum_start, -2));
+  const fensterBis = spaeter(spaeter(monatEnde, addDays(montagVon(zyklus.zeitraum_ende), 6)), addDays(zyklus.zeitraum_ende, 2));
+
+  const { data: alleVorlagen } = await db.from("schicht_vorlagen")
+    .select("id, wochentag")
+    .eq("betrieb_id", zyklus.betrieb_id).eq("aktiv", true);
+  const vorlageIds = [...new Set([
+    ...instanzen.map((i) => i.schicht_vorlage_id),
+    ...(alleVorlagen ?? []).map((v: any) => v.id as Uuid),
+  ].filter(Boolean))];
 
   const [
     mitarbeiterRes,
@@ -189,14 +229,16 @@ async function ladeSolverInput(db: SupabaseClient, zyklus: Zyklus, instanzen: In
     db.from("betriebe").select("land").eq("id", zyklus.betrieb_id).single(),
     db.from("rollen").select("id").eq("betrieb_id", zyklus.betrieb_id).eq("aktiv", true),
     db.from("mitarbeiter_rollen").select("mitarbeiter_id, rolle_id").eq("betrieb_id", zyklus.betrieb_id),
+    // Holidays and per-date wishes for the whole window: holidays pro-rate the
+    // monthly targets, earlier wishes seed the month's preference tallies.
     db.from("urlaub").select("mitarbeiter_id, von, bis")
       .eq("betrieb_id", zyklus.betrieb_id).eq("status", "approved")
-      .lte("von", zyklus.zeitraum_ende).gte("bis", zyklus.zeitraum_start),
+      .lte("von", fensterBis).gte("bis", fensterVon),
     db.from("mitarbeiter_schicht_vorlieben").select("mitarbeiter_id, schicht_vorlage_id, praeferenz")
       .eq("betrieb_id", zyklus.betrieb_id),
     db.from("mitarbeiter_schicht_tagesvorlieben").select("mitarbeiter_id, schicht_vorlage_id, datum, praeferenz")
       .eq("betrieb_id", zyklus.betrieb_id).is("geloescht_am", null)
-      .gte("datum", zyklus.zeitraum_start).lte("datum", zyklus.zeitraum_ende),
+      .gte("datum", fensterVon).lte("datum", fensterBis),
     db.from("schicht_vorlage_mindestbesetzung").select("schicht_vorlage_id, rolle_id, mindestanzahl")
       .eq("betrieb_id", zyklus.betrieb_id).in("schicht_vorlage_id", vorlageIds.length ? vorlageIds : ["00000000-0000-0000-0000-000000000000"]),
     db.from("schicht_instanz_mindestbesetzung").select("schicht_instanz_id, rolle_id, mindestanzahl")
@@ -228,29 +270,29 @@ async function ladeSolverInput(db: SupabaseClient, zyklus: Zyklus, instanzen: In
   // FULL calendar month ending on/before the accounting cutoff (abrechnung_bis)
   // of (hours actually worked that month − monthly soll_stunden). Emergency
   // (non-attended) shifts count only when the business opted in.
-  const [settingsRes, histInstRes] = await Promise.all([
+  const [settingsRes, histInstanzen, alleZuw] = await Promise.all([
     db.from("betriebs_einstellungen")
       .select("abrechnung_bis, notfall_stunden_anrechnen")
       .eq("betrieb_id", zyklus.betrieb_id).maybeSingle(),
-    db.from("schicht_instanzen").select("id, datum, start_zeit, end_zeit")
-      .eq("betrieb_id", zyklus.betrieb_id),
+    alleZeilen<any>((von, bis) => db.from("schicht_instanzen")
+      .select("id, schicht_vorlage_id, datum, start_zeit, end_zeit")
+      .eq("betrieb_id", zyklus.betrieb_id).order("id").range(von, bis)),
+    alleZeilen<any>((von, bis) => db.from("schicht_zuweisungen")
+      .select("id, mitarbeiter_id, schicht_instanz_id, attendet, quelle")
+      .eq("betrieb_id", zyklus.betrieb_id).order("id").range(von, bis)),
   ]);
   const cutoff = (settingsRes.data as any)?.abrechnung_bis as IsoDate | null ?? null;
   const countEmergency = (settingsRes.data as any)?.notfall_stunden_anrechnen ?? false;
+  const instById = new Map<Uuid, { schicht_vorlage_id: Uuid | null; datum: IsoDate; start_zeit: Time; end_zeit: Time }>(
+    histInstanzen.map((i: any) => [i.id, i]),
+  );
 
   const ueberstundenProMitarbeiter = new Map<Uuid, number>();
   if (cutoff) {
-    const histInst = new Map<Uuid, { datum: IsoDate; start_zeit: Time; end_zeit: Time }>(
-      (histInstRes.data ?? []).map((i: any) => [i.id, i]),
-    );
-    // Only need assignments for instances up to the cutoff month.
-    const { data: histZuw } = await db.from("schicht_zuweisungen")
-      .select("mitarbeiter_id, schicht_instanz_id, attendet")
-      .eq("betrieb_id", zyklus.betrieb_id);
     // id -> 'YYYY-MM' -> worked hours
     const monthly = new Map<Uuid, Map<string, number>>();
-    for (const z of histZuw ?? []) {
-      const inst = histInst.get(z.schicht_instanz_id);
+    for (const z of alleZuw) {
+      const inst = instById.get(z.schicht_instanz_id);
       if (!inst) continue;
       if (z.attendet === false && !countEmergency) continue;
       const ym = monthKey(inst.datum);
@@ -272,46 +314,34 @@ async function ladeSolverInput(db: SupabaseClient, zyklus: Zyklus, instanzen: In
     }
   }
 
-  // ---- Pre-existing shifts (seed overlap / rest / day-week / cycle checks) ----
+  // ---- Pre-existing shifts (seed overlap / rest / day-week-month checks) -----
   // The solver must never propose a row the HC trigger would reject, so it needs
   // to see the shifts each employee ALREADY holds: manuell/tausch assignments on
-  // this cycle, and any assignment on neighbouring cycles/dates. We load a window
-  // of ±2 days around the cycle (the rest-check reach) and drop only the stale
-  // solver rows for THIS cycle's instances (they get regenerated below).
+  // this cycle, and any assignment on neighbouring cycles/dates — across the whole
+  // window (every touched calendar month, full weeks at both ends, rest reach).
+  // Earlier shifts of the month also feed the month-to-date target. Only the stale
+  // solver rows for THIS cycle's instances are dropped (they get regenerated).
   const cycleInstanzIds = new Set(instanzen.map((i) => i.id));
-  const windowVon = addDays(zyklus.zeitraum_start, -2);
-  const windowBis = addDays(zyklus.zeitraum_ende, 2);
-  const instById = new Map<Uuid, { datum: IsoDate; start_zeit: Time; end_zeit: Time }>(
-    (histInstRes.data ?? []).map((i: any) => [i.id, i]),
-  );
-  const { data: bestehendeZuw } = await db.from("schicht_zuweisungen")
-    .select("mitarbeiter_id, schicht_instanz_id, quelle")
-    .eq("betrieb_id", zyklus.betrieb_id);
-
   const vorbelegung = new Map<Uuid, Instanz[]>();
-  const startSaldo = new Map<Uuid, number>();
-  for (const z of bestehendeZuw ?? []) {
+  const nichtGezaehlt = new Set<string>();
+  for (const z of alleZuw) {
     // Skip the stale solver rows for this cycle — we're about to redo them.
     if (cycleInstanzIds.has(z.schicht_instanz_id) && z.quelle === "solver") continue;
     const inst = instById.get(z.schicht_instanz_id);
     if (!inst) continue;
-    if (inst.datum < windowVon || inst.datum > windowBis) continue; // outside rest reach
+    if (inst.datum < fensterVon || inst.datum > fensterBis) continue;
     const held: Instanz = {
       id: z.schicht_instanz_id,
-      schicht_vorlage_id: "", // unused for legal checks
+      schicht_vorlage_id: inst.schicht_vorlage_id ?? "", // for the preference tallies
       datum: inst.datum,
       start_zeit: inst.start_zeit,
       end_zeit: inst.end_zeit,
     };
     if (!vorbelegung.has(z.mitarbeiter_id)) vorbelegung.set(z.mitarbeiter_id, []);
     vorbelegung.get(z.mitarbeiter_id)!.push(held);
-    // Count toward the monthly saldo only if it falls inside the cycle itself.
-    if (inst.datum >= zyklus.zeitraum_start && inst.datum <= zyklus.zeitraum_ende) {
-      startSaldo.set(
-        z.mitarbeiter_id,
-        (startSaldo.get(z.mitarbeiter_id) ?? 0) + dauerStunden(inst.start_zeit, inst.end_zeit),
-      );
-    }
+    // Called out: still blocks the legal checks, but only counts as worked
+    // hours when the business opted in — same rule as the overtime history.
+    if (z.attendet === false && !countEmergency) nichtGezaehlt.add(`${z.mitarbeiter_id}|${z.schicht_instanz_id}`);
   }
 
   const rollenProMitarbeiter = new Map<Uuid, Set<Uuid>>();
@@ -341,6 +371,8 @@ async function ladeSolverInput(db: SupabaseClient, zyklus: Zyklus, instanzen: In
     nSubmitted.set(p.mitarbeiter_id, (nSubmitted.get(p.mitarbeiter_id) ?? 0) + 1);
   }
   for (const p of tagesvorliebeRes.data ?? []) {
+    // Per-date wishes outside the cycle were loaded for the month's tallies only.
+    if (p.datum < zyklus.zeitraum_start || p.datum > zyklus.zeitraum_ende) continue;
     nSubmitted.set(p.mitarbeiter_id, (nSubmitted.get(p.mitarbeiter_id) ?? 0) + 1);
   }
 
@@ -369,6 +401,31 @@ async function ladeSolverInput(db: SupabaseClient, zyklus: Zyklus, instanzen: In
     bedarfProInstanz.set(inst.id, [...base].map(([rolle_id, mindestanzahl]) => ({ rolle_id, mindestanzahl })));
   }
 
+  // ---- Would-be working days outside the cycle, within its calendar months ----
+  // The denominator of the monthly pro-rating: a day counts for an employee when
+  // an active template on that weekday needs a role they hold. A day before the
+  // cycle start additionally counts toward the month-to-date target only if it
+  // was actually planned (any shift instance exists that day) — a business that
+  // starts planning mid-month must not have the first half crammed into the rest.
+  const geplanteTage = new Set<IsoDate>(histInstanzen.map((i: any) => i.datum as IsoDate));
+  const rollenProWochentag = new Map<number, Set<Uuid>>();
+  for (const v of (alleVorlagen ?? []) as { id: Uuid; wochentag: number }[]) {
+    if (!rollenProWochentag.has(v.wochentag)) rollenProWochentag.set(v.wochentag, new Set());
+    for (const b of bedarfProVorlage.get(v.id) ?? []) rollenProWochentag.get(v.wochentag)!.add(b.rolle_id);
+  }
+  const arbeitstageAusserhalb = new Map<Uuid, Map<IsoDate, boolean>>();
+  for (const m of (mitarbeiterRes.data ?? []) as any[]) {
+    const rollen = rollenProMitarbeiter.get(m.id) ?? new Set<Uuid>();
+    const tage = new Map<IsoDate, boolean>();
+    for (const datum of datumsRange(monatStart, monatEnde)) {
+      if (datum >= zyklus.zeitraum_start && datum <= zyklus.zeitraum_ende) continue;
+      const benoetigt = rollenProWochentag.get(wochentagMontagBasis(datum));
+      if (!benoetigt || ![...benoetigt].some((r) => rollen.has(r))) continue;
+      tage.set(datum, datum < zyklus.zeitraum_start && geplanteTage.has(datum));
+    }
+    arbeitstageAusserhalb.set(m.id, tage);
+  }
+
   return {
     instanzen,
     bedarfProInstanz,
@@ -386,7 +443,9 @@ async function ladeSolverInput(db: SupabaseClient, zyklus: Zyklus, instanzen: In
     vorliebe,
     tagesvorliebe,
     vorbelegung,
-    startSaldo,
+    nichtGezaehlt,
+    zeitraum: { start: zyklus.zeitraum_start, ende: zyklus.zeitraum_ende },
+    arbeitstageAusserhalb,
     gesetzlich,
   };
 }

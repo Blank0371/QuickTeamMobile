@@ -184,6 +184,10 @@ The deployed edge function may lag local code — test **local** code directly w
 - [ ] `deno run harness.ts` — small 3-person scenario (sanity, understaffing expected).
 - [ ] `deno run scale-harness.ts` — 100 employees. Assert: **0 hard-constraint violations**,
   **0 over hard cap**, high fill rate. This is the real correctness gate.
+- [ ] `deno run woche-harness.ts` (and `… cap`) — one month as ONE cycle vs FOUR weekly
+  cycles. Assert: weekly hours/soll close to the monthly run (no part-timer at 2–3× soll,
+  no full-timer near 0), **0 rows rejected by the trigger**, the holiday week shrinks
+  that person's share. Monthly cycles must stay bit-identical in the other two harnesses.
 - [ ] Hard constraints to keep green: HC-1 urlaub, HC-2 overlap, HC-4 rest (`mindestruhezeit`),
   HC-5 monthly cap (`max_stunden_hart`), daily/weekly caps **on net hours**.
 

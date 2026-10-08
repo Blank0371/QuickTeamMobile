@@ -133,7 +133,7 @@ for (const m of mitarbeiter) {
 
 const input: SolverInput = {
   instanzen, bedarfProInstanz, mitarbeiter, rollenProMitarbeiter, urlaubProMitarbeiter,
-  vorliebe, tagesvorliebe: new Map(), vorbelegung: new Map(), startSaldo: new Map(), gesetzlich: LAND,
+  vorliebe, tagesvorliebe: new Map(), vorbelegung: new Map(), gesetzlich: LAND,
 };
 
 // ---- run + time ------------------------------------------------------------
