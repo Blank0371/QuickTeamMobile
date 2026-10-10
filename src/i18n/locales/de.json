@@ -300,8 +300,8 @@
     "csSolveStarted": "Die Schichten werden erstellt. Der Vorschlag erscheint gleich.",
     "csSolveDeferred": "Planungszyklus angelegt, aber die automatische Erstellung konnte nicht starten. Sie läuft in Kürze.",
     "csGenerateFailed": "Planungszyklus konnte nicht angelegt werden. Bitte erneut versuchen.",
-    "csStartFromLast": "Beginnt am Tag nach dem letzten Planungszyklus.",
-    "csStartFromToday": "Kein vorheriger Zyklus — beginnt heute.",
+    "csStartFromLast": "Vorschlag: der Tag nach dem letzten Planungszyklus. Tippen, um ein beliebiges Datum zu wählen.",
+    "csStartFromToday": "Noch kein Zyklus — Vorschlag: heute. Tippen, um ein beliebiges Datum zu wählen.",
     "csRangeInvalid": "Bitte ein gültiges Enddatum nach dem Startdatum eingeben.",
     "solverNotStarted": "Die Schichten konnten nicht generiert werden. Bitte erneut versuchen.",
     "solverCooldown": "Bitte warte noch {{seconds}} Sekunden, bevor du die nächsten Schichten anforderst.",
@@ -437,7 +437,10 @@
     "hoursPerMonth": "Stunden pro Monat",
     "noHoursYet": "Noch keine Stunden erfasst.",
     "openingBalance": "Anfangssaldo",
-    "overtime": "Überstunden"
+    "overtime": "Überstunden",
+    "csOverlapBody": "Dieser Zeitraum überschneidet sich mit einem bestehenden Planungszyklus. Das Generieren kann doppelte Schichten erzeugen.",
+    "csStartTaken": "An diesem Datum beginnt bereits ein Planungszyklus. Bitte wähle ein anderes Startdatum.",
+    "showMore": "Mehr anzeigen"
   },
   "notifications": {
     "title": "Benachrichtigungen",
@@ -455,7 +458,14 @@
       "notfall_vertretung": "Notfallvertretung",
       "urlaub_antrag": "Urlaubsanträge",
       "urlaub_entscheidung": "Urlaubsentscheidungen",
-      "shiftReminder": "Schicht-Erinnerungen"
+      "shiftReminder": "Schicht-Erinnerungen",
+      "announcement": "Ankündigung",
+      "tasks": "Aufgabenliste",
+      "polls": "Umfrage",
+      "documents": "Dokument",
+      "emergency": "Notfallvertretung",
+      "openShift": "Offene Schicht",
+      "shiftSwitch": "Schichttausch"
     },
     "permDenied": "Benachrichtigungen sind in den Systemeinstellungen deaktiviert.",
     "permOpen": "Öffnen"

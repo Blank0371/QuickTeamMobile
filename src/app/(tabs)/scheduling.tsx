@@ -9,7 +9,8 @@ import {
   CalendarClock, CalendarDays, ChevronLeft,
   ChevronRight, Trash2, TreePalm, TriangleAlert, X,
 } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
@@ -20,6 +21,7 @@ import { Modal } from "../../components/DismissKeyboard";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { RefreshScrollView } from "../../components/RefreshScrollView";
 import { HoldButton } from "../../components/HoldButton";
+import { peekCache, readCache, writeCache } from "../../lib/cache";
 
 const WEEKDAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 const MONTHS_AHEAD = 12; // how far ahead planning/vacation may reach (from this month)
@@ -38,6 +40,16 @@ const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 const wochentagOf = (d: Date) => (d.getDay() + 6) % 7; // Monday-first 0..6
 const hhmm = (t: string) => t.slice(0, 5);
 
+// Everything the planning/vacation sections render, as cached between visits.
+type SchedCache = {
+  vorlagen: Vorlage[];
+  recurPref: Record<string, Praef>;
+  datePrefs: DatePref[];
+  vacations: Urlaub[];
+  anspruch: number;
+  vorab: number;
+};
+
 export default function SchedulingScreen() {
   const { theme } = useTheme();
   const { t, lang } = useI18n();
@@ -46,22 +58,42 @@ export default function SchedulingScreen() {
   const betrieb = activeMitarbeiter?.betrieb_id ?? null;
 
   const [tab, setTab] = useState<Tab>("emergency");
-  const [loading, setLoading] = useState(true);
 
-  const [vorlagen, setVorlagen] = useState<Vorlage[]>([]);
-  const [recurPref, setRecurPref] = useState<Record<string, Praef>>({});
-  const [datePrefs, setDatePrefs] = useState<DatePref[]>([]);
-  const [vacations, setVacations] = useState<Urlaub[]>([]);
-  const [anspruch, setAnspruch] = useState(0);
-  const [vorab, setVorab] = useState(0); // days taken before joining QuickTeam (this year)
+  // Last synced preferences/vacation for this persona: shown at once, then revalidated.
+  const cacheKey = `sched:${me}`;
+  const [initial] = useState(() => peekCache<SchedCache>(cacheKey)?.value);
+  const hydratedKey = useRef<string | null>(initial ? cacheKey : null);
+  const [loading, setLoading] = useState(!initial);
+
+  const [vorlagen, setVorlagen] = useState<Vorlage[]>(initial?.vorlagen ?? []);
+  const [recurPref, setRecurPref] = useState<Record<string, Praef>>(initial?.recurPref ?? {});
+  const [datePrefs, setDatePrefs] = useState<DatePref[]>(initial?.datePrefs ?? []);
+  const [vacations, setVacations] = useState<Urlaub[]>(initial?.vacations ?? []);
+  const [anspruch, setAnspruch] = useState(initial?.anspruch ?? 0);
+  const [vorab, setVorab] = useState(initial?.vorab ?? 0); // days taken before joining QuickTeam (this year)
+
+  const apply = (c: SchedCache) => {
+    setVorlagen(c.vorlagen);
+    setRecurPref(c.recurPref);
+    setDatePrefs(c.datePrefs);
+    setVacations(c.vacations);
+    setAnspruch(c.anspruch);
+    setVorab(c.vorab);
+  };
 
   const fmtDate = (d: string) =>
     new Date(d + "T00:00:00").toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" });
   const nameOf = (v: Vorlage) => `${v.bezeichnung} · ${hhmm(v.start_zeit)}–${hhmm(v.end_zeit)}`;
 
+  // Reloads (pull-to-refresh, after saving) keep the current section on screen
+  // and swap the data in place; the spinner is only for a first-ever load.
   const load = useCallback(async () => {
     if (!me || !betrieb) return;
-    setLoading(true);
+    if (hydratedKey.current !== cacheKey) {
+      hydratedKey.current = cacheKey;
+      const cached = await readCache<SchedCache>(cacheKey);
+      if (cached) { apply(cached.value); setLoading(false); }
+    }
 
     const [myRoles, mindest, tpl, recur, dprefs, urlaub, mitarb, vorabRes] = await Promise.all([
       supabase.from("mitarbeiter_rollen").select("rolle_id").eq("mitarbeiter_id", me),
@@ -75,6 +107,9 @@ export default function SchedulingScreen() {
       supabase.from("urlaub_vorab").select("tage").eq("mitarbeiter_id", me).eq("jahr", new Date().getFullYear()).maybeSingle(),
     ]);
 
+    // Offline / failed: keep what is on screen instead of blanking it.
+    if ([myRoles, mindest, tpl, recur, dprefs, urlaub, mitarb, vorabRes].some((r) => r.error)) { setLoading(false); return; }
+
     const roleIds = new Set((myRoles.data ?? []).map((r: any) => r.rolle_id));
     const vorlagenMitRolle = new Set(
       (mindest.data ?? []).filter((m: any) => roleIds.has(m.rolle_id)).map((m: any) => m.schicht_vorlage_id),
@@ -83,16 +118,21 @@ export default function SchedulingScreen() {
       .filter((v: any) => vorlagenMitRolle.has(v.id))
       .sort((a: any, b: any) => a.wochentag - b.wochentag || a.start_zeit.localeCompare(b.start_zeit));
 
-    setVorlagen(list as Vorlage[]);
-    setRecurPref(Object.fromEntries((recur.data ?? []).map((r: any) => [r.schicht_vorlage_id, r.praeferenz])));
-    setDatePrefs((dprefs.data ?? []) as DatePref[]);
-    setVacations((urlaub.data ?? []) as Urlaub[]);
-    setAnspruch(mitarb.data?.urlaubsanspruch_tage ?? 0);
-    setVorab(vorabRes.data?.tage ?? 0);
+    const next: SchedCache = {
+      vorlagen: list as Vorlage[],
+      recurPref: Object.fromEntries((recur.data ?? []).map((r: any) => [r.schicht_vorlage_id, r.praeferenz])),
+      datePrefs: (dprefs.data ?? []) as DatePref[],
+      vacations: (urlaub.data ?? []) as Urlaub[],
+      anspruch: mitarb.data?.urlaubsanspruch_tage ?? 0,
+      vorab: vorabRes.data?.tage ?? 0,
+    };
+    apply(next);
     setLoading(false);
-  }, [me, betrieb]);
+    writeCache(cacheKey, next);
+  }, [me, betrieb, cacheKey]);
 
-  useEffect(() => { load(); }, [load]);
+  // Revalidate on every visit (behind the cached data), not only on first mount.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
@@ -159,16 +199,19 @@ type Reported = {
 };
 
 function EmergencySection({ theme, t, lang, me, betrieb }: any) {
-  const [loading, setLoading] = useState(true);
-  const [shifts, setShifts] = useState<EmShift[]>([]);
-  const [reported, setReported] = useState<Reported[]>([]);
+  // Remounts on every switch to this section — paint the last synced lists at
+  // once and refresh behind them.
+  const cacheKey = `schedEm:${me}`;
+  const [initial] = useState(() => peekCache<{ shifts: EmShift[]; reported: Reported[] }>(cacheKey)?.value);
+  const [loading, setLoading] = useState(!initial);
+  const [shifts, setShifts] = useState<EmShift[]>(initial?.shifts ?? []);
+  const [reported, setReported] = useState<Reported[]>(initial?.reported ?? []);
   const [selected, setSelected] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
     if (!me || !betrieb) return;
-    setLoading(true);
     const today = isoDay(new Date());
 
     const [zuw, inst, vorl, notf] = await Promise.all([
@@ -177,6 +220,8 @@ function EmergencySection({ theme, t, lang, me, betrieb }: any) {
       supabase.from("schicht_vorlagen").select("id, bezeichnung").eq("betrieb_id", betrieb),
       supabase.from("notfaelle").select("id, status, schicht_instanz_id").eq("melder_id", me).neq("status", "storniert"),
     ]);
+
+    if (zuw.error || inst.error || vorl.error || notf.error) { setLoading(false); return; }
 
     const instById = new Map((inst.data ?? []).map((i: any) => [i.id, i]));
     const vorlById = new Map((vorl.data ?? []).map((v: any) => [v.id, v.bezeichnung]));
@@ -213,7 +258,8 @@ function EmergencySection({ theme, t, lang, me, betrieb }: any) {
     setReported(rep);
     setSelected((cur) => (cur && upcoming.some((s) => s.zuweisungId === cur) ? cur : null));
     setLoading(false);
-  }, [me, betrieb, t]);
+    writeCache(cacheKey, { shifts: upcoming, reported: rep });
+  }, [me, betrieb, t, cacheKey]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -403,9 +449,9 @@ function PlanningSection({ theme, t, lang, me, betrieb, vorlagen, recurPref, set
               <Text style={[styles.hint, { color: theme.muted }]}>{t("scheduling.noShiftsForRole")}</Text>
             )}
             {pickWd !== null && vorlagenFor(pickWd).map((v: Vorlage) => (
-              <View key={v.id} style={[styles.shiftRow, { borderColor: theme.border }]}>
-                <Text style={{ color: theme.text, fontWeight: "600", flex: 1 }}>{nameOf(v)}</Text>
-                <PrefToggle theme={theme} t={t} value={recurPref[v.id]} onSet={(p) => toggleRecur(v.id, p)} />
+              <View key={v.id} style={[styles.prefRow, { borderColor: theme.border }]}>
+                <Text style={{ color: theme.text, fontWeight: "600" }}>{nameOf(v)}</Text>
+                <PrefToggle wide theme={theme} t={t} value={recurPref[v.id]} onSet={(p) => toggleRecur(v.id, p)} />
               </View>
             ))}
             <Pressable style={[styles.submit, { backgroundColor: theme.accent }]} onPress={() => setPickWd(null)}>
@@ -556,9 +602,9 @@ function SpecialDates({ theme, t, lang, me, betrieb, vorlagen, datePrefs, reload
               <Text style={[styles.hint, { color: theme.muted }]}>{t("scheduling.noShiftsForRole")}</Text>
             )}
             {pickShifts.map((v: Vorlage) => (
-              <View key={v.id} style={[styles.shiftRow, { borderColor: theme.border }]}>
-                <Text style={{ color: theme.text, fontWeight: "600", flex: 1 }}>{nameOf(v)}</Text>
-                <PrefToggle theme={theme} t={t} value={staged[v.id]} onSet={(p) => toggleStaged(v.id, p)} />
+              <View key={v.id} style={[styles.prefRow, { borderColor: theme.border }]}>
+                <Text style={{ color: theme.text, fontWeight: "600" }}>{nameOf(v)}</Text>
+                <PrefToggle wide theme={theme} t={t} value={staged[v.id]} onSet={(p) => toggleStaged(v.id, p)} />
               </View>
             ))}
             <Pressable style={[styles.submit, { backgroundColor: theme.accent }]} onPress={confirmDate}>
@@ -872,6 +918,8 @@ const styles = StyleSheet.create({
   prefToggle: { flexDirection: "row", gap: 8 },
   prefBtn: { borderWidth: 1.5, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12, alignItems: "center" },
   shiftRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1.5, borderRadius: 12, padding: 12 },
+  // Name above, full-width toggle below — side by side the two buttons squeeze the name to one letter per line.
+  prefRow: { gap: 10, borderWidth: 1.5, borderRadius: 12, padding: 12 },
 
   listRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
   statusPill: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },

@@ -1,9 +1,9 @@
 // src/app/(tabs)/messages.tsx — broadcast feed (announcements, tasks, polls, docs)
 import { router, useFocusEffect } from "expo-router";
 import { CalendarPlus, Check, ChevronDown, FileText, Plus, Repeat, TriangleAlert, X } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator, Alert, Pressable, ScrollView,
+    ActivityIndicator, Alert, FlatList, Pressable, ScrollView,
     StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,8 +13,12 @@ import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../theme/ThemeProvider";
 import { Modal } from "../../components/DismissKeyboard";
 import { ScreenGradient } from "../../components/ScreenGradient";
-import { RefreshScrollView } from "../../components/RefreshScrollView";
+import { useRefreshControl } from "../../components/RefreshScrollView";
 import { HoldButton } from "../../components/HoldButton";
+import { peekCache, readCache, writeCache } from "../../lib/cache";
+
+// Broadcast types rendered as interactive cards rather than feed messages.
+const CARD_TYPES = ["notfall_vertretung", "schicht_ausschreibung", "schicht_tausch"];
 
 type Task = { id: string; text: string; erledigt_von: string | null; erledigt_am: string | null };
 type Opt = { id: string; text: string };
@@ -28,7 +32,7 @@ type Msg = {
   tasks: Task[];
   options: Opt[];
   voteCounts: Record<string, number>;
-  myVotes: Set<string>;
+  myVotes: string[];
   voters: Record<string, string[]>; // option_id → voter names (only for non-anonymous polls)
   attachments: Attach[];
   gelesen: boolean;
@@ -85,20 +89,33 @@ type OpenShift = {
   amAssigned: boolean;
 };
 
+type FeedCache = {
+  messages: Msg[];
+  total: number;
+  emergencies: EmergencyMsg[];
+  openShifts: OpenShift[];
+  swaps: SwapMsg[];
+};
+
 export default function MessagesScreen() {
   const { user, activeMitarbeiter } = useAuth();
   const { theme } = useTheme();
   const { t, lang } = useI18n();
   const isChef = activeMitarbeiter?.rolle_typ === "chef";
 
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [emergencies, setEmergencies] = useState<EmergencyMsg[]>([]);
-  const [openShifts, setOpenShifts] = useState<OpenShift[]>([]);
-  const [swaps, setSwaps] = useState<SwapMsg[]>([]);
+  // Last synced feed for this persona: shown at once, then revalidated.
+  const cacheKey = `feed:${activeMitarbeiter?.id}`;
+  const [initial] = useState(() => peekCache<FeedCache>(cacheKey)?.value);
+  const hydratedKey = useRef<string | null>(initial ? cacheKey : null);
+
+  const [messages, setMessages] = useState<Msg[]>(initial?.messages ?? []);
+  const [emergencies, setEmergencies] = useState<EmergencyMsg[]>(initial?.emergencies ?? []);
+  const [openShifts, setOpenShifts] = useState<OpenShift[]>(initial?.openShifts ?? []);
+  const [swaps, setSwaps] = useState<SwapMsg[]>(initial?.swaps ?? []);
   const [openDetail, setOpenDetail] = useState<OpenShift | null>(null);
   const [swapDetail, setSwapDetail] = useState<SwapMsg | null>(null);
   const [emergencyDetail, setEmergencyDetail] = useState<EmergencyMsg | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initial);
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<"newest" | "relevant">("newest");
   const [category, setCategory] = useState<"all" | "shifts" | "messages">("all");
@@ -106,11 +123,11 @@ export default function MessagesScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const PAGE = 10;
   const [visibleCount, setVisibleCount] = useState(PAGE);
-  const [totalMsgCount, setTotalMsgCount] = useState(0);
+  const [totalMsgCount, setTotalMsgCount] = useState(initial?.total ?? 0);
 
   // Turn notfall_vertretung broadcasts into interactive take-over cards.
   const loadEmergencies = useCallback(async (emgRows: any[]) => {
-    if (!activeMitarbeiter || emgRows.length === 0) { setEmergencies([]); return; }
+    if (!activeMitarbeiter || emgRows.length === 0) { setEmergencies([]); return [] as EmergencyMsg[]; }
     const notfallIds = emgRows.map((m: any) => m.inhalt?.notfall_id).filter(Boolean);
 
     const [notf, myRoles] = await Promise.all([
@@ -148,11 +165,12 @@ export default function MessagesScreen() {
       };
     });
     setEmergencies(built);
+    return built;
   }, [activeMitarbeiter]);
 
   // Turn schicht_ausschreibung broadcasts into interactive open-shift cards.
   const loadOpenShifts = useCallback(async (rows: any[]) => {
-    if (!activeMitarbeiter || rows.length === 0) { setOpenShifts([]); return; }
+    if (!activeMitarbeiter || rows.length === 0) { setOpenShifts([]); return [] as OpenShift[]; }
     const instIds = rows.map((m: any) => m.inhalt?.schicht_instanz_id).filter(Boolean);
 
     const [zuweis, myRoles] = await Promise.all([
@@ -192,13 +210,14 @@ export default function MessagesScreen() {
       };
     });
     setOpenShifts(built);
+    return built;
   }, [activeMitarbeiter]);
 
   // Turn schicht_tausch broadcasts into interactive swap cards. The mutable
   // state lives in schichttausch_anfragen; the card renders different actions
   // for the offerer / responder / chef depending on the anfrage status.
   const loadSwaps = useCallback(async (rows: any[]) => {
-    if (!activeMitarbeiter || rows.length === 0) { setSwaps([]); return; }
+    if (!activeMitarbeiter || rows.length === 0) { setSwaps([]); return [] as SwapMsg[]; }
     const anfrageIds = rows.map((m: any) => m.inhalt?.anfrage_id).filter(Boolean);
     const today = new Date().toISOString().slice(0, 10);
 
@@ -277,33 +296,60 @@ export default function MessagesScreen() {
       };
     });
     setSwaps(built);
+    return built;
   }, [activeMitarbeiter]);
 
   const load = useCallback(async () => {
     if (!user || !activeMitarbeiter) return;
-    const { data: rows } = await supabase
+    // Cold start: paint the feed from disk before the network answers.
+    if (hydratedKey.current !== cacheKey) {
+      hydratedKey.current = cacheKey;
+      const cached = await readCache<FeedCache>(cacheKey);
+      if (cached) {
+        const c = cached.value;
+        setMessages(c.messages); setEmergencies(c.emergencies); setOpenShifts(c.openShifts);
+        setSwaps(c.swaps); setTotalMsgCount(c.total); setLoading(false);
+      }
+    }
+    const bid = activeMitarbeiter.betrieb_id;
+    // Interactive cards (emergency / open shift / swap) and the plain feed are
+    // fetched in parallel. The feed is paged on the server: only the newest
+    // `visibleCount` rows (with their text/payload) come down, plus a count for
+    // "Load more" — instead of every broadcast the business ever sent.
+    const base = (count?: "exact") => supabase
       .from("benachrichtigungen")
-      .select("id, typ, titel, text, prioritaet, angeheftet, mehrfachauswahl, anonym, erstellt_am, autor_id, inhalt")
-      .eq("betrieb_id", activeMitarbeiter.betrieb_id)
+      .select("id, typ, titel, text, prioritaet, angeheftet, mehrfachauswahl, anonym, erstellt_am, autor_id, inhalt", { count })
+      .eq("betrieb_id", bid)
       .is("mitarbeiter_id", null)
       .is("geloescht_am", null)
       .order("angeheftet", { ascending: false })
       .order("erstellt_am", { ascending: false });
+    const [cardRes, feedRes] = await Promise.all([
+      base().in("typ", CARD_TYPES),
+      base("exact").not("typ", "in", `(${CARD_TYPES.join(",")})`).range(0, visibleCount - 1),
+    ]);
 
-    const allRows = rows ?? [];
-    // Emergency-replacement and open-shift broadcasts get their own interactive cards.
-    const emgRows = allRows.filter((m: any) => m.typ === "notfall_vertretung");
-    const openRows = allRows.filter((m: any) => m.typ === "schicht_ausschreibung");
-    const swapRows = allRows.filter((m: any) => m.typ === "schicht_tausch");
-    const fullList = allRows.filter((m: any) => !["notfall_vertretung", "schicht_ausschreibung", "schicht_tausch"].includes(m.typ));
-    await Promise.all([loadEmergencies(emgRows), loadOpenShifts(openRows), loadSwaps(swapRows)]);
+    // Offline / failed: keep whatever is on screen (cache) instead of blanking it.
+    if (cardRes.error || feedRes.error) { setLoading(false); return; }
 
-    // Only build the most recent `visibleCount` messages; "Load more" reveals older ones.
-    setTotalMsgCount(fullList.length);
-    const list = fullList.slice(0, visibleCount);
+    const cardRows = cardRes.data ?? [];
+    const cards = Promise.all([
+      loadEmergencies(cardRows.filter((m: any) => m.typ === "notfall_vertretung")),
+      loadOpenShifts(cardRows.filter((m: any) => m.typ === "schicht_ausschreibung")),
+      loadSwaps(cardRows.filter((m: any) => m.typ === "schicht_tausch")),
+    ]);
+
+    setTotalMsgCount(feedRes.count ?? 0);
+    const list = feedRes.data ?? [];
 
     const ids = list.map((m: any) => m.id);
-    if (ids.length === 0) { setMessages([]); setLoading(false); return; }
+    if (ids.length === 0) {
+      setMessages([]);
+      const [emergencies, openShifts, swaps] = await cards;
+      setLoading(false);
+      writeCache<FeedCache>(cacheKey, { messages: [], total: feedRes.count ?? 0, emergencies, openShifts, swaps });
+      return;
+    }
 
     // Which broadcasts are non-anonymous polls — for those we show voter names.
     const openPollIds = new Set(list.filter((m: any) => m.typ === "umfrage" && !m.anonym).map((m: any) => m.id));
@@ -324,7 +370,7 @@ export default function MessagesScreen() {
     const nameIds = Array.from(new Set([...autorIds, ...voterIds]));
 
     const people = nameIds.length > 0
-      ? await supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: nameIds })
+      ? await supabase.rpc("mitarbeiter_namen", { p_betrieb_id: bid, p_ids: nameIds })
       : { data: [] as any[] };
 
     const nameOf = new Map<string, string>();
@@ -350,12 +396,12 @@ export default function MessagesScreen() {
 
     const built: Msg[] = list.map((m: any) => {
       const voteCounts: Record<string, number> = {};
-      const myVotes = new Set<string>();
+      const myVotes: string[] = [];
       const voters: Record<string, string[]> = {};
       const showVoters = m.typ === "umfrage" && !m.anonym;
       (votesBy.get(m.id) ?? []).forEach((v: any) => {
         voteCounts[v.option_id] = (voteCounts[v.option_id] ?? 0) + 1;
-        if (mine.has(v.mitarbeiter_id)) myVotes.add(v.option_id);
+        if (mine.has(v.mitarbeiter_id) && !myVotes.includes(v.option_id)) myVotes.push(v.option_id);
         if (showVoters) {
           const nm = nameOf.get(v.mitarbeiter_id);
           if (nm) (voters[v.option_id] ??= []).push(nm);
@@ -374,29 +420,47 @@ export default function MessagesScreen() {
       };
     });
     setMessages(built);
+    const [emergencies, openShifts, swaps] = await cards;
     setLoading(false);
+    writeCache<FeedCache>(cacheKey, { messages: built, total: feedRes.count ?? 0, emergencies, openShifts, swaps });
 
     // opening the tab marks everything read (fire and forget)
     built.filter((m) => !m.gelesen).forEach((m) => {
       supabase.rpc("als_gelesen_markieren", { p_benachrichtigung_id: m.id });
     });
-  }, [user, activeMitarbeiter, loadEmergencies, loadOpenShifts, loadSwaps, visibleCount]);
+  }, [user, activeMitarbeiter, cacheKey, loadEmergencies, loadOpenShifts, loadSwaps, visibleCount]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const focusedRef = useRef(false);
+  useFocusEffect(useCallback(() => {
+    focusedRef.current = true;
+    load();
+    return () => { focusedRef.current = false; };
+  }, [load]));
 
   // Live updates: when anyone in the business takes an open slot (new assignment)
   // or a broadcast changes, every connected client re-loads so a taken spot is
-  // reflected for all — no manual refresh needed.
+  // reflected for all — no manual refresh needed. Bursts (publishing a plan
+  // writes many assignments at once) collapse into one reload; while the tab
+  // isn't visible nothing reloads — focusing it loads fresh anyway.
   useEffect(() => {
     if (!activeMitarbeiter) return;
     const bid = activeMitarbeiter.betrieb_id;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (!focusedRef.current) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { timer = null; load(); }, 500);
+    };
     const channel = supabase
       .channel(`feed:${bid}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "schicht_zuweisungen", filter: `betrieb_id=eq.${bid}` }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "benachrichtigungen", filter: `betrieb_id=eq.${bid}` }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "schichttausch_anfragen", filter: `betrieb_id=eq.${bid}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "schicht_zuweisungen", filter: `betrieb_id=eq.${bid}` }, schedule)
+      .on("postgres_changes", { event: "*", schema: "public", table: "benachrichtigungen", filter: `betrieb_id=eq.${bid}` }, schedule)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schichttausch_anfragen", filter: `betrieb_id=eq.${bid}` }, schedule)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
   }, [activeMitarbeiter, load]);
 
   // Keep open accept-modals in sync with live reloads.
@@ -508,11 +572,11 @@ export default function MessagesScreen() {
   const vote = async (m: Msg, optionId: string) => {
     let next: string[];
     if (m.mehrfachauswahl) {
-      next = m.myVotes.has(optionId)
-        ? [...m.myVotes].filter((o) => o !== optionId)
+      next = m.myVotes.includes(optionId)
+        ? m.myVotes.filter((o) => o !== optionId)
         : [...m.myVotes, optionId];
     } else {
-      next = m.myVotes.has(optionId) ? [] : [optionId];
+      next = m.myVotes.includes(optionId) ? [] : [optionId];
     }
     await supabase.rpc("abstimmen", { p_benachrichtigung_id: m.id, p_option_ids: next, p_mitarbeiter_id: activeMitarbeiter?.id ?? null });
     load();
@@ -520,6 +584,9 @@ export default function MessagesScreen() {
 
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString(lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+  // Hook — must run before the early loading return below.
+  const refreshControl = useRefreshControl(load);
 
   if (loading) {
     return (
@@ -532,12 +599,11 @@ export default function MessagesScreen() {
   const PRIO: Record<string, number> = { dringend: 3, wichtig: 2, normal: 1 };
   const weekAgo = Date.now() - 7 * 86400000;
   const q = query.trim().toLowerCase();
+  // True when the search is empty or any of the given texts contains it.
+  const matches = (...texts: (string | null | undefined)[]) =>
+    !q || texts.some((x) => (x ?? "").toLowerCase().includes(q));
   const displayed = messages
-    .filter((m) =>
-      !q ||
-      (m.titel ?? "").toLowerCase().includes(q) ||
-      (m.text ?? "").toLowerCase().includes(q) ||
-      m.autorName.toLowerCase().includes(q))
+    .filter((m) => matches(m.titel, m.text, m.autorName))
     .sort((a, b) => {
       if (a.angeheftet !== b.angeheftet) return a.angeheftet ? -1 : 1; // pinned first
       const ta = new Date(a.erstellt_am).getTime();
@@ -568,13 +634,18 @@ export default function MessagesScreen() {
       prio: sortMode === "relevant" && new Date(m.erstellt_am).getTime() >= weekAgo ? (PRIO[m.prioritaet] ?? 1) : 0,
       m,
     })),
-    ...emergencies.map((e) => ({ kind: "emergency" as const, ts: new Date(e.erstellt_am).getTime(), pinned: false as const, prio: 0, e })),
-    ...openShifts.map((o) => ({ kind: "open" as const, ts: new Date(o.erstellt_am).getTime(), pinned: false as const, prio: 0, o })),
+    ...emergencies
+      .filter((e) => matches(t("notifications.item.emergency"), t("messages.emTakeOverTitle"), e.melderName, e.takenByName))
+      .map((e) => ({ kind: "emergency" as const, ts: new Date(e.erstellt_am).getTime(), pinned: false as const, prio: 0, e })),
+    ...openShifts
+      .filter((o) => matches(t("notifications.item.openShift"), t("messages.osTitle"), o.kommentar, ...o.roles.map((r) => r.name)))
+      .map((o) => ({ kind: "open" as const, ts: new Date(o.erstellt_am).getTime(), pinned: false as const, prio: 0, o })),
     ...swaps
       .filter((s) => {
         // The offerer and responder always see their own swap; the chef sees it
         // once it needs approval. Everyone else only sees an OPEN offer they can
         // actually respond to — people who can't take the shift never see it.
+        if (!matches(t("notifications.item.shiftSwitch"), t("shiftSwap.cardTitle"), s.anbieterName, s.uebernehmerName)) return false;
         if (s.isAnbieter || s.isUebernehmer) return true;
         if (s.status === "offen") return s.eligible;
         if (s.status === "wartet_auf_chef") return isChef;
@@ -598,14 +669,35 @@ export default function MessagesScreen() {
       return b.ts - a.ts; // newest first
     });
 
+  const feedKey = (item: FeedItem) =>
+    item.kind === "emergency" ? `e:${item.e.id}` : item.kind === "open" ? `o:${item.o.id}` : item.kind === "swap" ? `s:${item.s.id}` : `m:${item.m.id}`;
+  const renderFeedItem = ({ item }: { item: FeedItem }) =>
+    item.kind === "emergency" ? (
+      <EmergencyCard e={item.e} theme={theme} t={t} lang={lang} onOpen={() => setEmergencyDetail(item.e)} />
+    ) : item.kind === "open" ? (
+      <OpenShiftCard o={item.o} theme={theme} t={t} lang={lang} onOpen={() => setOpenDetail(item.o)} />
+    ) : item.kind === "swap" ? (
+      <SwapCard s={item.s} theme={theme} t={t} lang={lang} isChef={isChef} onOpen={() => setSwapDetail(item.s)} />
+    ) : (
+      <SummaryCard m={item.m} theme={theme} t={t} fmt={fmt} onPress={() => setSelectedId(item.m.id)} />
+    );
+
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
       <ScreenGradient />
-      <RefreshScrollView
+      {/* Virtualized: only the cards near the viewport are mounted, however
+          long the feed (old emergency/open-shift/swap cards stay in it). */}
+      <FlatList
+        data={feed}
+        keyExtractor={feedKey}
+        renderItem={renderFeedItem}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
-        onRefresh={load}
-      >
+        refreshControl={refreshControl}
+        initialNumToRender={8}
+        windowSize={7}
+        ListHeaderComponent={
+          <View style={styles.header}>
         <Text style={[styles.title, { color: theme.text }]}>{t("tabs.messages")}</Text>
 
         <TextInput
@@ -654,21 +746,9 @@ export default function MessagesScreen() {
             ))}
           </View>
         )}
-
-        {feed.map((item) =>
-          item.kind === "emergency" ? (
-            <EmergencyCard key={item.e.id} e={item.e} theme={theme} t={t} lang={lang} onOpen={() => setEmergencyDetail(item.e)} />
-          ) : item.kind === "open" ? (
-            <OpenShiftCard key={item.o.id} o={item.o} theme={theme} t={t} lang={lang} onOpen={() => setOpenDetail(item.o)} />
-          ) : item.kind === "swap" ? (
-            <SwapCard key={item.s.id} s={item.s} theme={theme} t={t} lang={lang} isChef={isChef} onOpen={() => setSwapDetail(item.s)} />
-          ) : (
-            <SummaryCard key={item.m.id} m={item.m} theme={theme} t={t} fmt={fmt}
-              onPress={() => setSelectedId(item.m.id)} />
-          )
-        )}
-
-        {totalMsgCount > visibleCount && (
+          </View>
+        }
+        ListFooterComponent={totalMsgCount <= visibleCount ? null : (
           <Pressable
             style={[styles.loadMore, { borderColor: theme.border, backgroundColor: theme.surface }]}
             onPress={() => setVisibleCount((c) => c + PAGE)}
@@ -676,8 +756,7 @@ export default function MessagesScreen() {
             <Text style={{ color: theme.accent, fontWeight: "700", fontSize: 14 }}>{t("messages.loadMore")}</Text>
           </Pressable>
         )}
-
-      </RefreshScrollView>
+      />
 
       {activeMitarbeiter && (
         <Pressable
@@ -825,7 +904,7 @@ function DetailBody({ m, theme, t, fmt, onToggleTask, onVote }: any) {
       {/* poll */}
       {m.typ === "umfrage" && m.options.map((opt: Opt) => {
         const count = m.voteCounts[opt.id] ?? 0;
-        const picked = m.myVotes.has(opt.id);
+        const picked = m.myVotes.includes(opt.id);
         const pct = totalVotes ? Math.round((count / totalVotes) * 100) : 0;
         const voterNames: string[] = m.voters?.[opt.id] ?? [];
         return (
@@ -1234,6 +1313,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { alignItems: "center", justifyContent: "center" },
   content: { padding: 16, gap: 12, paddingBottom: 96 },
+  header: { gap: 12 },
   title: { fontSize: 28, fontWeight: "700", marginBottom: 4 },
   empty: { textAlign: "center", marginTop: 40 },
   search: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, fontSize: 15 },

@@ -300,8 +300,8 @@
     "csSolveStarted": "Turnet po gjenerohen. Do ta shohësh orarin e propozuar pas pak.",
     "csSolveDeferred": "Cikli i planifikimit u krijua, por gjenerimi automatik nuk mund të nisej. Do të nisë së shpejti.",
     "csGenerateFailed": "Cikli i planifikimit nuk mund të krijohej. Të lutem provo përsëri.",
-    "csStartFromLast": "Fillon një ditë pas ciklit të fundit të planifikimit.",
-    "csStartFromToday": "Nuk ka cikël të mëparshëm — fillon sot.",
+    "csStartFromLast": "Sugjerim: dita pas ciklit të fundit të planifikimit. Prek për të zgjedhur çdo datë.",
+    "csStartFromToday": "Ende asnjë cikël — fillimi i sugjeruar: sot. Prek për të zgjedhur çdo datë.",
     "csRangeInvalid": "Të lutem shkruaj një datë mbarimi të vlefshme pas datës së fillimit.",
     "solverNotStarted": "Turnet nuk mund të gjeneroheshin. Të lutem provo përsëri.",
     "solverCooldown": "Të lutem prit {{seconds}} sekonda para se të kërkosh turnet e radhës.",
@@ -437,7 +437,10 @@
     "hoursPerMonth": "Orë në muaj",
     "noHoursYet": "Ende nuk janë regjistruar orë.",
     "openingBalance": "Bilanci fillestar",
-    "overtime": "Orë shtesë"
+    "overtime": "Orë shtesë",
+    "csOverlapBody": "Kjo periudhë mbivendoset me një cikël ekzistues planifikimi. Gjenerimi mund të krijojë turne të dyfishta.",
+    "csStartTaken": "Një cikël planifikimi fillon tashmë në këtë datë. Zgjidh një datë tjetër fillimi.",
+    "showMore": "Shfaq më shumë"
   },
   "notifications": {
     "title": "Njoftimet",
@@ -455,7 +458,14 @@
       "notfall_vertretung": "Zëvendësim emergjence",
       "urlaub_antrag": "Kërkesat për pushime",
       "urlaub_entscheidung": "Vendimet për pushime",
-      "shiftReminder": "Kujtesat e turneve"
+      "shiftReminder": "Kujtesat e turneve",
+      "announcement": "Njoftim",
+      "tasks": "Listë detyrash",
+      "polls": "Sondazh",
+      "documents": "Dokument",
+      "emergency": "Zëvendësim urgjent",
+      "openShift": "Turn i hapur",
+      "shiftSwitch": "Ndërrim turni"
     },
     "permDenied": "Njoftimet janë çaktivizuar në cilësimet e sistemit.",
     "permOpen": "Hap"

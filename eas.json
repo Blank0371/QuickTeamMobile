@@ -29,7 +29,8 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "leo.solomon@web.de"
+        "appleId": "leo.solomon@web.de",
+        "ascAppId": "6809811877"
       },
       "android": {
         "serviceAccountKeyPath": "./play-service-account.json",

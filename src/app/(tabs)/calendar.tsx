@@ -16,7 +16,7 @@ import { ScreenGradient } from "../../components/ScreenGradient";
 import { useAuth } from "../../context/auth";
 import { useI18n } from "../../i18n/I18nProvider";
 import { supabase } from "../../lib/supabase";
-import { readCache, writeCache } from "../../lib/cache";
+import { peekCache, readCache, writeCache } from "../../lib/cache";
 import { scheduleShiftReminders } from "../../lib/notifications";
 import { useTheme } from "../../theme/ThemeProvider";
 import { ShiftDetailView } from "../shift/[id]";
@@ -103,6 +103,10 @@ const daySegments = (shifts: CalShift[], date: Date): DaySeg[] => {
   return out;
 };
 
+// Cache key of one fetched month window (month ± 7 days) for one persona.
+const calCacheKey = (betrieb: string | null, mitarbeiterId: string | undefined, d: Date) =>
+  `cal:${betrieb}:${mitarbeiterId}:${d.getFullYear()}-${d.getMonth()}`;
+
 export default function CalendarScreen() {
   const { theme } = useTheme();
   const { t, lang } = useI18n();
@@ -112,8 +116,10 @@ export default function CalendarScreen() {
 
   const [mode, setMode] = useState<ViewMode>("week");
   const [cursor, setCursor] = useState(new Date()); // the focused day
-  const [shifts, setShifts] = useState<CalShift[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Revisiting the tab paints the last synced month at once (memory cache).
+  const [initial] = useState(() => peekCache<CalShift[]>(calCacheKey(betrieb, activeMitarbeiter?.id, new Date()))?.value);
+  const [shifts, setShifts] = useState<CalShift[]>(initial ?? []);
+  const [loading, setLoading] = useState(!initial);
   const [stale, setStale] = useState(false); // showing cached data (offline / fetch failed)
   const [openShiftId, setOpenShiftId] = useState<string | null>(null); // shift shown in the detail popup
   const [confirmPublish, setConfirmPublish] = useState(false); // "confirm planned shifts" popup
@@ -156,7 +162,7 @@ export default function CalendarScreen() {
   // Reload whenever the focused month (or business) changes — the window we
   // fetch (month ± 7 days) always covers the visible day/week/month.
   const monthKey = `${cursor.getFullYear()}-${cursor.getMonth()}`;
-  const cacheKey = `cal:${betrieb}:${activeMitarbeiter?.id}:${monthKey}`;
+  const cacheKey = calCacheKey(betrieb, activeMitarbeiter?.id, cursor);
 
   // Re-schedule on-device shift reminders from the freshest shift list we have.
   const syncReminders = useCallback(async (list: CalShift[]) => {
@@ -178,9 +184,11 @@ export default function CalendarScreen() {
 
   const load = useCallback(async () => {
     if (!betrieb) return;
-    setLoading(true);
-    // Hydrate instantly from the last synced copy so the grid isn't blank.
-    const cached = await readCache<CalShift[]>(cacheKey);
+    // Hydrate instantly from the last synced copy so the grid isn't blank; the
+    // spinner only shows when there is nothing cached for this month at all.
+    const hit = peekCache<CalShift[]>(cacheKey);
+    if (!hit) setLoading(true);
+    const cached = hit ?? await readCache<CalShift[]>(cacheKey);
     if (cached) { setShifts(cached.value); setLoading(false); }
 
     const [y, mo] = monthKey.split("-").map(Number);

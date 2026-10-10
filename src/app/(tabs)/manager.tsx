@@ -11,8 +11,8 @@ import {
   Briefcase, CalendarCheck2, CalendarClock, CalendarPlus, Check, ChevronDown, ChevronRight, Clock,
   Hourglass, Megaphone, Minus, Pencil, Plus, RefreshCw, Repeat, Trash2, TriangleAlert, Users, X,
 } from "lucide-react-native";
-import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../context/auth";
@@ -23,6 +23,8 @@ import { Modal } from "../../components/DismissKeyboard";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { RefreshScrollView } from "../../components/RefreshScrollView";
 import { DateTimeField } from "../../components/DateTimeField";
+import { peekCache, readCache, writeCache } from "../../lib/cache";
+import { fetchAll } from "../../lib/fetchAll";
 
 const GREEN = "#16a34a";
 const RED = "#C1442D";
@@ -113,6 +115,31 @@ function computeOvertime(
   return ot;
 }
 
+// Everything the dashboard renders, as cached between visits.
+type ManagerCache = {
+  team: Mitarbeiter[];
+  vacations: Urlaub[];
+  vorab: Record<string, number>;
+  roleNames: Record<string, string[]>;
+  roleIds: Record<string, string[]>;
+  hoursWorked: Record<string, number>;
+  shiftsWorked: Record<string, number>;
+  monthlyHours: Record<string, Record<string, number>>;
+  overtime: Record<string, number>;
+  einstellungen: Einstellungen | null;
+  emergencies: Emergency[];
+  swapApprovals: SwapApproval[];
+  templates: Vorlage[];
+  templateReqs: Record<string, RoleReq[]>;
+  roles: Rolle[];
+  zyklen: Planungszyklus[];
+  openSlots: Record<string, number>;
+  plannedShifts: Record<string, number>;
+};
+
+// Decided vacation requests rendered per "show more" step.
+const DECIDED_PAGE = 20;
+
 export default function ManagerScreen() {
   const { theme } = useTheme();
   const { t, lang } = useI18n();
@@ -121,50 +148,91 @@ export default function ManagerScreen() {
   const betrieb = activeMitarbeiter?.betrieb_id ?? null;
 
   const [section, setSection] = useState<Section>("employees");
-  const [loading, setLoading] = useState(true);
+  // Last synced dashboard for this business: shown at once, then revalidated.
+  const cacheKey = `mgr:${betrieb}`;
+  const [initial] = useState(() => peekCache<ManagerCache>(cacheKey)?.value);
+  const hydratedKey = useRef<string | null>(initial ? cacheKey : null);
+  const [loading, setLoading] = useState(!initial); // nothing to show yet → spinner
+  const [refreshing, setRefreshing] = useState(false); // background revalidation
   const [createOpen, setCreateOpen] = useState(false);
 
-  const [team, setTeam] = useState<Mitarbeiter[]>([]);
-  const [vacations, setVacations] = useState<Urlaub[]>([]);
-  const [vorab, setVorab] = useState<Record<string, number>>({}); // mitarbeiter_id -> days taken before QuickTeam (this year)
-  const [roleNames, setRoleNames] = useState<Record<string, string[]>>({}); // mitarbeiter_id -> role names
-  const [roleIds, setRoleIds] = useState<Record<string, string[]>>({}); // mitarbeiter_id -> role ids
-  const [hoursWorked, setHoursWorked] = useState<Record<string, number>>({}); // this year
-  const [shiftsWorked, setShiftsWorked] = useState<Record<string, number>>({});
-  const [monthlyHours, setMonthlyHours] = useState<Record<string, Record<string, number>>>({}); // id -> 'YYYY-MM' -> h
-  const [overtime, setOvertime] = useState<Record<string, number>>({}); // id -> computed overtime hours
-  const [einstellungen, setEinstellungen] = useState<Einstellungen | null>(null);
-  const [emergencies, setEmergencies] = useState<Emergency[]>([]);
-  const [swapApprovals, setSwapApprovals] = useState<SwapApproval[]>([]);
-  const [templates, setTemplates] = useState<Vorlage[]>([]);
-  const [templateReqs, setTemplateReqs] = useState<Record<string, RoleReq[]>>({}); // vorlage_id -> role reqs
-  const [roles, setRoles] = useState<Rolle[]>([]);
-  const [zyklen, setZyklen] = useState<Planungszyklus[]>([]); // in-flight / awaiting-review planning cycles
-  const [openSlots, setOpenSlots] = useState<Record<string, number>>({}); // planungszyklus_id -> unfilled role-slots
-  const [plannedShifts, setPlannedShifts] = useState<Record<string, number>>({}); // planungszyklus_id -> draft (geplant) shifts
+  const [team, setTeam] = useState<Mitarbeiter[]>(initial?.team ?? []);
+  const [vacations, setVacations] = useState<Urlaub[]>(initial?.vacations ?? []);
+  const [vorab, setVorab] = useState<Record<string, number>>(initial?.vorab ?? {}); // mitarbeiter_id -> days taken before QuickTeam (this year)
+  const [roleNames, setRoleNames] = useState<Record<string, string[]>>(initial?.roleNames ?? {}); // mitarbeiter_id -> role names
+  const [roleIds, setRoleIds] = useState<Record<string, string[]>>(initial?.roleIds ?? {}); // mitarbeiter_id -> role ids
+  const [hoursWorked, setHoursWorked] = useState<Record<string, number>>(initial?.hoursWorked ?? {}); // this year
+  const [shiftsWorked, setShiftsWorked] = useState<Record<string, number>>(initial?.shiftsWorked ?? {});
+  const [monthlyHours, setMonthlyHours] = useState<Record<string, Record<string, number>>>(initial?.monthlyHours ?? {}); // id -> 'YYYY-MM' -> h
+  const [overtime, setOvertime] = useState<Record<string, number>>(initial?.overtime ?? {}); // id -> computed overtime hours
+  const [einstellungen, setEinstellungen] = useState<Einstellungen | null>(initial?.einstellungen ?? null);
+  const [emergencies, setEmergencies] = useState<Emergency[]>(initial?.emergencies ?? []);
+  const [swapApprovals, setSwapApprovals] = useState<SwapApproval[]>(initial?.swapApprovals ?? []);
+  const [templates, setTemplates] = useState<Vorlage[]>(initial?.templates ?? []);
+  const [templateReqs, setTemplateReqs] = useState<Record<string, RoleReq[]>>(initial?.templateReqs ?? {}); // vorlage_id -> role reqs
+  const [roles, setRoles] = useState<Rolle[]>(initial?.roles ?? []);
+  const [zyklen, setZyklen] = useState<Planungszyklus[]>(initial?.zyklen ?? []); // in-flight / awaiting-review planning cycles
+  const [openSlots, setOpenSlots] = useState<Record<string, number>>(initial?.openSlots ?? {}); // planungszyklus_id -> unfilled role-slots
+  const [plannedShifts, setPlannedShifts] = useState<Record<string, number>>(initial?.plannedShifts ?? {}); // planungszyklus_id -> draft (geplant) shifts
 
   const fmtDate = (d: string) =>
     new Date(d + "T00:00:00").toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" });
 
+  const apply = (c: ManagerCache) => {
+    setTeam(c.team);
+    setVacations(c.vacations);
+    setVorab(c.vorab);
+    setRoleNames(c.roleNames);
+    setRoleIds(c.roleIds);
+    setHoursWorked(c.hoursWorked);
+    setShiftsWorked(c.shiftsWorked);
+    setMonthlyHours(c.monthlyHours);
+    setOvertime(c.overtime);
+    setEinstellungen(c.einstellungen);
+    setEmergencies(c.emergencies);
+    setSwapApprovals(c.swapApprovals);
+    setTemplates(c.templates);
+    setTemplateReqs(c.templateReqs);
+    setRoles(c.roles);
+    setZyklen(c.zyklen);
+    setOpenSlots(c.openSlots);
+    setPlannedShifts(c.plannedShifts);
+  };
+
   const load = useCallback(async () => {
     if (!betrieb) return;
-    setLoading(true);
+    setRefreshing(true);
+    if (hydratedKey.current !== cacheKey) {
+      hydratedKey.current = cacheKey;
+      const cached = await readCache<ManagerCache>(cacheKey);
+      if (cached) { apply(cached.value); setLoading(false); }
+    }
+    // Collected here and applied in one go, so the screen swaps from the cached
+    // to the fresh data in a single render.
+    const next = {} as ManagerCache;
+    const put = <K extends keyof ManagerCache>(k: K, v: ManagerCache[K]) => { next[k] = v; };
     const yearStart = `${new Date().getFullYear()}-01-01`;
 
-    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, gruendeRes, vorlagen, swapReq, mindest, zyklenRes, vorabRes] = await Promise.all([
+    const [mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, gruendeRes, vorlagen, swapReq, mindest, zyklenRes, vorabRes, slotsRes] = await Promise.all([
       supabase.from("mitarbeiter")
         .select("id, vorname, nachname, email, telefon, rolle_typ, vertrag_typ, soll_stunden, ueberstunden_saldo, status, urlaubsanspruch_tage")
         .eq("betrieb_id", betrieb).order("nachname"),
       supabase.from("rollen").select("id, name, aktiv").eq("betrieb_id", betrieb),
       supabase.from("mitarbeiter_rollen").select("mitarbeiter_id, rolle_id").eq("betrieb_id", betrieb),
-      supabase.from("urlaub").select("id, mitarbeiter_id, von, bis, status, kommentar, begruendung")
-        .eq("betrieb_id", betrieb).order("von", { ascending: false }),
+      // Full request history grows with the years — paged like the shift history.
+      fetchAll((from, to, count) => supabase.from("urlaub").select("id, mitarbeiter_id, von, bis, status, kommentar, begruendung", { count })
+        .eq("betrieb_id", betrieb).order("von", { ascending: false }).order("id").range(from, to)),
       supabase.from("betriebs_einstellungen")
         .select("ask_chef_for_shift_switch, sprache_standard, verfuegbarkeit_deadline_tag, notfall_stunden_anrechnen, mitarbeiter_sehen_andere_schichten, mitarbeiter_sehen_andere_mitarbeiter, abrechnung_bis")
         .eq("betrieb_id", betrieb).single(),
-      supabase.from("schicht_zuweisungen").select("id, mitarbeiter_id, schicht_instanz_id, rolle_id, attendet").eq("betrieb_id", betrieb),
+      // Whole history (overtime spans every worked month) — paged past the 1000-row response cap.
+      fetchAll((from, to, count) => supabase.from("schicht_zuweisungen")
+        .select("id, mitarbeiter_id, schicht_instanz_id, rolle_id, attendet", { count })
+        .eq("betrieb_id", betrieb).order("id").range(from, to)),
       // All instances (not just this year) so overtime can span every worked month up to the cutoff.
-      supabase.from("schicht_instanzen").select("id, start_zeit, end_zeit, datum, schicht_vorlage_id, planungszyklus_id, status").eq("betrieb_id", betrieb),
+      fetchAll((from, to, count) => supabase.from("schicht_instanzen")
+        .select("id, start_zeit, end_zeit, datum, schicht_vorlage_id, planungszyklus_id, status", { count })
+        .eq("betrieb_id", betrieb).order("id").range(from, to)),
       supabase.from("notfaelle").select("id, status, melder_id, schicht_instanz_id, rolle_id, erstellt_am")
         .eq("betrieb_id", betrieb).in("status", ["gemeldet", "vertretung_gesucht"]).order("erstellt_am", { ascending: true }),
       // The free-text reason may be health data, so it gets its own table with
@@ -187,11 +255,19 @@ export default function ManagerScreen() {
       // Only the current year's row counts — same rule as urlaub_beantragen.
       supabase.from("urlaub_vorab").select("mitarbeiter_id, tage")
         .eq("betrieb_id", betrieb).eq("jahr", new Date().getFullYear()),
+      // Unfilled role-slots per proposal-ready cycle (derived server-side).
+      supabase.rpc("offene_stellen_pro_zyklus", { p_betrieb_id: betrieb }),
     ]);
 
-    setTeam((mitarb.data ?? []) as Mitarbeiter[]);
-    setVacations((urlaub.data ?? []) as Urlaub[]);
-    setVorab(Object.fromEntries((vorabRes.data ?? []).map((r: any) => [r.mitarbeiter_id, r.tage])));
+    // Offline / failed: keep what is on screen instead of blanking it.
+    // (notfall_gruende may legitimately fail — see the fallback below.)
+    if ([mitarb, roles, roleLinks, urlaub, settingsRow, zuweis, instanzen, notf, vorlagen, swapReq, mindest, zyklenRes, vorabRes, slotsRes].some((r) => r.error)) {
+      setLoading(false); setRefreshing(false); return;
+    }
+
+    put("team", (mitarb.data ?? []) as Mitarbeiter[]);
+    put("vacations", (urlaub.data ?? []) as Urlaub[]);
+    put("vorab", Object.fromEntries((vorabRes.data ?? []).map((r: any) => [r.mitarbeiter_id, r.tage])));
 
     const roleById = new Map((roles.data ?? []).map((r: any) => [r.id, r.name]));
     const rn: Record<string, string[]> = {};
@@ -202,8 +278,8 @@ export default function ManagerScreen() {
       if (!name) return;
       (rn[l.mitarbeiter_id] ??= []).push(name);
     });
-    setRoleNames(rn);
-    setRoleIds(ri);
+    put("roleNames", rn);
+    put("roleIds", ri);
 
     const instById = new Map((instanzen.data ?? []).map((i: any) => [i.id, i]));
     // Emergency (non-attended) shifts only count toward the caller's hours when
@@ -225,16 +301,16 @@ export default function ManagerScreen() {
         cnt[z.mitarbeiter_id] = (cnt[z.mitarbeiter_id] ?? 0) + 1;
       }
     });
-    setHoursWorked(hrs);
-    setShiftsWorked(cnt);
-    setMonthlyHours(monthly);
+    put("hoursWorked", hrs);
+    put("shiftsWorked", cnt);
+    put("monthlyHours", monthly);
 
     // Overtime per employee: opening balance + Σ(worked − soll) over full months ≤ cutoff.
     const ot: Record<string, number> = {};
     ((mitarb.data ?? []) as Mitarbeiter[]).forEach((m) => {
       ot[m.id] = computeOvertime(monthly[m.id] ?? {}, m.soll_stunden, m.ueberstunden_saldo ?? 0, cutoff);
     });
-    setOvertime(ot);
+    put("overtime", ot);
 
     const vorlById = new Map((vorlagen.data ?? []).map((v: any) => [v.id, v.bezeichnung]));
     const nameById = new Map((mitarb.data ?? []).map((m: any) => [m.id, `${m.vorname} ${m.nachname}`.trim()]));
@@ -264,7 +340,7 @@ export default function ManagerScreen() {
         grund: gruende.get(n.id) ?? null,
       };
     });
-    setEmergencies(emg);
+    put("emergencies", emg);
 
     // Shift swaps awaiting chef approval (needs the offered + given-back shift).
     const zuwById = new Map((zuweis.data ?? []).map((z: any) => [z.id, z]));
@@ -285,35 +361,38 @@ export default function ManagerScreen() {
         gegenEnd: a.gegen_end ?? "",
       };
     });
-    setSwapApprovals(swaps);
+    put("swapApprovals", swaps);
 
-    setEinstellungen((settingsRow.data ?? null) as Einstellungen | null);
+    put("einstellungen", (settingsRow.data ?? null) as Einstellungen | null);
 
     // Shift templates + their per-role minimum staffing (for the Shifts section).
-    setRoles((roles.data ?? []).map((r: any) => ({ id: r.id, name: r.name, aktiv: r.aktiv })) as Rolle[]);
-    setTemplates((vorlagen.data ?? []) as Vorlage[]);
+    put("roles", (roles.data ?? []).map((r: any) => ({ id: r.id, name: r.name, aktiv: r.aktiv })) as Rolle[]);
+    put("templates", (vorlagen.data ?? []) as Vorlage[]);
     const reqs: Record<string, RoleReq[]> = {};
     (mindest.data ?? []).forEach((m: any) => {
       (reqs[m.schicht_vorlage_id] ??= []).push({ rolle_id: m.rolle_id, mindestanzahl: m.mindestanzahl });
     });
-    setTemplateReqs(reqs);
-    setZyklen((zyklenRes.data ?? []) as Planungszyklus[]);
+    put("templateReqs", reqs);
+    put("zyklen", (zyklenRes.data ?? []) as Planungszyklus[]);
     const planned: Record<string, number> = {};
     (instanzen.data ?? []).forEach((i: any) => {
       if (i.status === "geplant" && i.planungszyklus_id) planned[i.planungszyklus_id] = (planned[i.planungszyklus_id] ?? 0) + 1;
     });
-    setPlannedShifts(planned);
+    put("plannedShifts", planned);
 
-    // Unfilled role-slots per proposal-ready cycle (derived server-side).
-    const { data: slots } = await supabase.rpc("offene_stellen_pro_zyklus", { p_betrieb_id: betrieb });
+    const slots = slotsRes.data;
     const slotMap: Record<string, number> = {};
     (slots ?? []).forEach((s: any) => { slotMap[s.planungszyklus_id] = s.offene_stellen ?? 0; });
-    setOpenSlots(slotMap);
+    put("openSlots", slotMap);
 
+    apply(next);
     setLoading(false);
-  }, [betrieb, t]);
+    setRefreshing(false);
+    writeCache(cacheKey, next);
+  }, [betrieb, t, cacheKey]);
 
-  useEffect(() => { load(); }, [load]);
+  // Revalidate on every visit (behind the cached data), not only on first mount.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.bg }]} edges={["top"]}>
@@ -322,8 +401,8 @@ export default function ManagerScreen() {
         <View style={styles.titleRow}>
           <Briefcase color={theme.accent} size={26} />
           <Text style={[styles.title, { color: theme.text }]}>{t("manager.title")}</Text>
-          <Pressable onPress={load} hitSlop={10} disabled={loading} style={styles.refreshBtn}>
-            <RefreshCw color={theme.muted} size={22} style={loading && { opacity: 0.4 }} />
+          <Pressable onPress={load} hitSlop={10} disabled={refreshing} style={styles.refreshBtn}>
+            <RefreshCw color={theme.muted} size={22} style={refreshing && { opacity: 0.4 }} />
           </Pressable>
         </View>
 
@@ -386,6 +465,8 @@ export default function ManagerScreen() {
 // =====================================================================
 function EmployeesSection({ theme, t, lang, team, vacations, vorab, roleNames, roleIds, betrieb, roles, hoursWorked, shiftsWorked, emergencies, swapApprovals, monthlyHours, overtime, abrechnungBis, reload, fmtDate }: any) {
   const [showDecided, setShowDecided] = useState(false);
+  // The decided history grows every year — render it in steps, not all at once.
+  const [decidedShown, setDecidedShown] = useState(DECIDED_PAGE);
   const [denyFor, setDenyFor] = useState<string | null>(null); // urlaub id in deny mode
   const [denyReason, setDenyReason] = useState("");
   const [detail, setDetail] = useState<Mitarbeiter | null>(null);
@@ -497,7 +578,7 @@ function EmployeesSection({ theme, t, lang, team, vacations, vorab, roleNames, r
           {decided.length === 0 ? (
             <Text style={[styles.hint, { color: theme.muted }]}>{t("manager.noDecided")}</Text>
           ) : (
-            decided.map((v: Urlaub) => (
+            decided.slice(0, decidedShown).map((v: Urlaub) => (
               <View key={v.id} style={[styles.reqRow, { borderColor: theme.border }]}>
                 <View>
                   <Text style={{ color: theme.text, fontWeight: "600" }}>{nameOf(v.mitarbeiter_id)}</Text>
@@ -550,6 +631,16 @@ function EmployeesSection({ theme, t, lang, team, vacations, vorab, roleNames, r
                 )}
               </View>
             ))
+          )}
+          {decided.length > decidedShown && (
+            <Pressable
+              style={[styles.showMore, { borderColor: theme.border }]}
+              onPress={() => setDecidedShown((n) => n + DECIDED_PAGE)}
+            >
+              <Text style={{ color: theme.accent, fontWeight: "700", fontSize: 14 }}>
+                {t("manager.showMore")} ({decided.length - decidedShown})
+              </Text>
+            </Pressable>
           )}
         </View>
       )}
@@ -1583,16 +1674,22 @@ function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }
   const addDays = (iso: string, n: number) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return isoDay(d); };
   const endOfMonth = (iso: string) => { const d = new Date(iso + "T00:00:00"); return isoDay(new Date(d.getFullYear(), d.getMonth() + 1, 0)); };
 
-  // Start is DERIVED, not editable: the day after the last planning cycle ends.
-  // If there's never been a cycle, we start from today and skip the deadline entirely.
+  // Start is SUGGESTED as the day after the last planning cycle ends (today if there's
+  // never been one, which also skips the deadline); the manager can pick any range.
   const [von, setVon] = useState<string | null>(null);
   const [bis, setBis] = useState("");
   const [hasPrevCycle, setHasPrevCycle] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Which date's calendar is open below the From/To row.
+  const [pickerOpen, setPickerOpen] = useState<"von" | "bis" | null>(null);
   // Does the chosen range overlap shifts that already exist?
   const [periodUsed, setPeriodUsed] = useState(false);
+  // …or another (non-failed) planning cycle? Generating both can double-book shifts.
+  const [cycleOverlap, setCycleOverlap] = useState(false);
+  // A non-failed cycle already starts on `von` — blocked by UNIQUE (betrieb_id, zeitraum_start).
+  const [startTaken, setStartTaken] = useState(false);
 
   const isoRe = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -1612,20 +1709,29 @@ function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }
       setHasPrevCycle(!!lastEnde);
       setVon(start);
       setBis(endOfMonth(start));
+      setPickerOpen(null);
       setLoading(false);
     })();
     return () => { alive = false; };
   }, [visible, betrieb]);
 
-  // Overlap check: concrete shifts already in the chosen range.
+  // Overlap checks: concrete shifts and other planning cycles in the chosen range.
   useEffect(() => {
-    if (!visible || !betrieb || !von || !isoRe.test(bis) || von > bis) { setPeriodUsed(false); return; }
+    if (!visible || !betrieb || !von || !isoRe.test(bis) || von > bis) {
+      setPeriodUsed(false); setCycleOverlap(false); setStartTaken(false); return;
+    }
     let alive = true;
     (async () => {
-      const { data } = await supabase.from("schicht_instanzen").select("id").eq("betrieb_id", betrieb)
-        .gte("datum", von).lte("datum", bis).limit(1);
+      const [shifts, cycles] = await Promise.all([
+        supabase.from("schicht_instanzen").select("id").eq("betrieb_id", betrieb)
+          .gte("datum", von).lte("datum", bis).limit(1),
+        supabase.from("planungszyklen").select("zeitraum_start").eq("betrieb_id", betrieb)
+          .is("solver_fehler", null).lte("zeitraum_start", bis).gte("zeitraum_ende", von),
+      ]);
       if (!alive) return;
-      setPeriodUsed((data?.length ?? 0) > 0);
+      setPeriodUsed((shifts.data?.length ?? 0) > 0);
+      setCycleOverlap((cycles.data?.length ?? 0) > 0);
+      setStartTaken((cycles.data ?? []).some((c: any) => c.zeitraum_start === von));
     })();
     return () => { alive = false; };
   }, [visible, betrieb, von, bis]);
@@ -1657,6 +1763,10 @@ function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }
   // separately, e.g. after the preferences deadline).
   const doGenerate = async () => {
     setSending(true);
+    // A hidden failed cycle on the same start date would trip UNIQUE (betrieb_id, zeitraum_start);
+    // it's a dead attempt this run replaces, so clear it out of the way.
+    await supabase.from("planungszyklen").delete()
+      .eq("betrieb_id", betrieb).eq("zeitraum_start", von).not("solver_fehler", "is", null);
 
     // Check the solver's cooldown before creating anything, so a too-quick request
     // doesn't leave a cycle behind. Same measure as the function: latest start or end
@@ -1726,6 +1836,7 @@ function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }
   // Validate, then open the in-app confirmation popup (same pattern as role deletion).
   const generate = () => {
     if (loading || !von || !isoRe.test(bis) || von >= bis) { notify(t("manager.csRangeInvalid")); return; }
+    if (startTaken) { notify(t("manager.csStartTaken")); return; }
     setConfirmOpen(true);
   };
 
@@ -1741,22 +1852,60 @@ function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }
 
           <ScrollView contentContainerStyle={{ gap: 4 }} showsVerticalScrollIndicator={false}>
           <View style={styles.timeRow}>
-            {/* Start is fixed: the day after the last cycle (or today for the first). */}
+            {/* Start defaults to the day after the last cycle (or today for the first); tap to change. */}
             <View style={[styles.field, { flex: 1 }]}>
               <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.csRangeStart")}</Text>
-              <View style={[styles.input, { justifyContent: "center", borderColor: theme.border, backgroundColor: theme.bg }]}>
+              <Pressable
+                style={[styles.input, { justifyContent: "center", borderColor: pickerOpen === "von" ? theme.accent : theme.border, backgroundColor: theme.bg }]}
+                onPress={() => setPickerOpen((o) => (o === "von" ? null : "von"))}
+                disabled={loading}
+              >
                 <Text style={{ color: theme.text, fontSize: 15, fontWeight: "600" }}>{loading ? "…" : von}</Text>
-              </View>
+              </Pressable>
               <Text style={[styles.hint, { color: theme.muted }]}>
                 {t(hasPrevCycle ? "manager.csStartFromLast" : "manager.csStartFromToday")}
               </Text>
             </View>
             <View style={[styles.field, { flex: 1 }]}>
               <Text style={[styles.fieldLabel, { color: theme.muted }]}>{t("manager.csRangeEnd")}</Text>
-              <TextInput style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
-                value={bis} onChangeText={setBis} placeholder="YYYY-MM-DD" placeholderTextColor={theme.muted} maxLength={10} keyboardType="numbers-and-punctuation" />
+              {/* Tap to open the native calendar below the row (too wide for half a row). */}
+              <Pressable
+                style={[styles.input, { justifyContent: "center", borderColor: pickerOpen === "bis" ? theme.accent : theme.border, backgroundColor: theme.bg }]}
+                onPress={() => setPickerOpen((o) => (o === "bis" ? null : "bis"))}
+                disabled={loading}
+              >
+                <Text style={{ color: theme.text, fontSize: 15, fontWeight: "600" }}>{loading ? "…" : bis}</Text>
+              </Pressable>
             </View>
           </View>
+          {/* keyed so Android's picker (initialDate only) remounts when switching fields */}
+          {pickerOpen && von && isoRe.test(bis) && (
+            <View style={styles.field}>
+              <DateTimeField
+                key={pickerOpen}
+                mode="date"
+                value={new Date((pickerOpen === "von" ? von : bis) + "T00:00:00")}
+                onChange={(d: Date) => {
+                  const iso = isoDay(d);
+                  if (pickerOpen === "bis") { setBis(iso); return; }
+                  setVon(iso);
+                  // Keep the range valid: an end on/before the new start jumps to that month's end.
+                  if (bis <= iso) setBis(endOfMonth(iso) > iso ? endOfMonth(iso) : addDays(iso, 1));
+                }}
+                accent={theme.accent} textColor={theme.text} locale={lang}
+              />
+            </View>
+          )}
+
+          {/* Overlap warning — another planning cycle already covers part of this range */}
+          {cycleOverlap && (
+            <View style={[styles.deadlineBanner, { backgroundColor: RED + "1F", borderColor: RED }]}>
+              <TriangleAlert color={RED} size={18} />
+              <Text style={{ color: RED, fontWeight: "700", fontSize: 13, flex: 1 }}>
+                {t(startTaken ? "manager.csStartTaken" : "manager.csOverlapBody")}
+              </Text>
+            </View>
+          )}
 
           {/* Preferences deadline — only meaningful once a prior cycle exists */}
           {hasPrevCycle && (
@@ -1817,6 +1966,12 @@ function CreateShiftsModal({ visible, theme, t, lang, betrieb, reload, onClose }
             <Text style={{ color: theme.text, fontSize: 15, lineHeight: 21, marginBottom: 16 }}>
               {t("manager.csConfirmBody")}{"\n\n"}{t("manager.csMethodNotify")}
             </Text>
+            {cycleOverlap && (
+              <View style={[styles.deadlineBanner, { backgroundColor: RED + "1F", borderColor: RED, marginTop: 0, marginBottom: 16 }]}>
+                <TriangleAlert color={RED} size={18} />
+                <Text style={{ color: RED, fontWeight: "700", fontSize: 13, flex: 1 }}>{t("manager.csOverlapBody")}</Text>
+              </View>
+            )}
             {periodUsed && (
               <View style={[styles.deadlineBanner, { backgroundColor: RED + "1F", borderColor: RED, marginTop: 0, marginBottom: 16 }]}>
                 <TriangleAlert color={RED} size={18} />
@@ -1862,6 +2017,7 @@ const styles = StyleSheet.create({
   btnRow: { flexDirection: "row", gap: 8, marginTop: 2 },
   smallBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1.5, borderRadius: 999, paddingVertical: 9 },
 
+  showMore: { borderWidth: 1.5, borderRadius: 999, paddingVertical: 10, alignItems: "center", marginTop: 8 },
   foldHead: { flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderRadius: 12, padding: 14 },
 
   listRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },

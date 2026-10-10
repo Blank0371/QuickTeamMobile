@@ -283,8 +283,8 @@
     "csSolveStarted": "I turni vengono generati. Vedrai l'orario proposto tra un momento.",
     "csSolveDeferred": "Ciclo di pianificazione creato, ma la generazione automatica non è potuta partire. Verrà eseguita a breve.",
     "csGenerateFailed": "Impossibile creare il ciclo di pianificazione. Riprova.",
-    "csStartFromLast": "Inizia il giorno dopo l'ultimo ciclo di pianificazione.",
-    "csStartFromToday": "Nessun ciclo precedente — inizia oggi.",
+    "csStartFromLast": "Suggerimento: il giorno dopo l'ultimo ciclo di pianificazione. Tocca per scegliere qualsiasi data.",
+    "csStartFromToday": "Nessun ciclo precedente — inizio suggerito: oggi. Tocca per scegliere qualsiasi data.",
     "csRangeInvalid": "Inserisci una data di fine valida, successiva alla data di inizio.",
     "solverNotStarted": "Non è stato possibile generare i turni. Riprova.",
     "solverCooldown": "Attendi {{seconds}} secondi prima di richiedere i prossimi turni.",
@@ -420,7 +420,10 @@
     "hoursPerMonth": "Ore al mese",
     "noHoursYet": "Ancora nessuna ora registrata.",
     "openingBalance": "Saldo iniziale",
-    "overtime": "Straordinari"
+    "overtime": "Straordinari",
+    "csOverlapBody": "Questo periodo si sovrappone a un ciclo di pianificazione esistente. Generarlo può creare turni doppi.",
+    "csStartTaken": "Un ciclo di pianificazione inizia già in questa data. Scegli un'altra data di inizio.",
+    "showMore": "Mostra altro"
   },
   "notifications": {
     "title": "Notifiche",
@@ -438,7 +441,14 @@
       "notfall_vertretung": "Copertura di emergenza",
       "urlaub_antrag": "Richieste di ferie",
       "urlaub_entscheidung": "Decisioni sulle ferie",
-      "shiftReminder": "Promemoria dei turni"
+      "shiftReminder": "Promemoria dei turni",
+      "announcement": "Annuncio",
+      "tasks": "Lista di attività",
+      "polls": "Sondaggio",
+      "documents": "Documento",
+      "emergency": "Sostituzione d'emergenza",
+      "openShift": "Turno aperto",
+      "shiftSwitch": "Scambio di turno"
     },
     "permDenied": "Le notifiche sono disattivate nelle impostazioni di sistema.",
     "permOpen": "Apri"
@@ -636,5 +646,22 @@
     "wrongPassword": "Password errata. Riprova.",
     "chefBlocked": "Gestisci ancora un team. Trasferisci o rimuovi la tua azienda prima di eliminare l'account.",
     "error": "Impossibile eliminare il tuo account. Riprova."
+  },
+  "locked": {
+    "ended": {
+      "title": "Questa attività non usa più QuickTeam",
+      "text": "L'abbonamento è terminato, quindi turni, messaggi, ferie e scambi non sono più disponibili.",
+      "deletion": "I dati dell'attività verranno eliminati una volta trascorso il periodo contrattuale. Se ti serve qualcosa, chiedi al tuo datore di lavoro.",
+      "deletionManager": "I dati dell'attività verranno eliminati una volta trascorso il periodo contrattuale. Per abbonarti di nuovo o esportare i tuoi dati, accedi a quickteam.at con il tuo account da responsabile.",
+      "others": "Fai parte anche di altre attività: passa a una di esse per continuare a lavorare."
+    },
+    "paused": {
+      "title": "La prova è terminata",
+      "text": "Non è stato aggiunto alcun metodo di pagamento, quindi la gestione di questa attività è sospesa. I tuoi dipendenti possono ancora vedere i loro turni.",
+      "more": "Per continuare, aggiungi un metodo di pagamento su quickteam.at; lì puoi anche esportare i tuoi dati. Se l'abbonamento non viene proseguito entro 90 giorni dalla fine della prova, il contratto termina e i dati dell'attività vengono eliminati una volta trascorso il periodo contrattuale.",
+      "others": "Hai altre connessioni: passa a una di esse per continuare a lavorare."
+    },
+    "openWebsite": "Apri quickteam.at",
+    "switch": "Vai alle tue connessioni"
   }
 }

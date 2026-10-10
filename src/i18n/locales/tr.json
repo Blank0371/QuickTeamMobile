@@ -283,8 +283,8 @@
     "csSolveStarted": "Vardiyalar oluşturuluyor. Öneri birazdan görünecek.",
     "csSolveDeferred": "Planlama döngüsü oluşturuldu, ancak otomatik oluşturma başlatılamadı. Kısa süre içinde çalışacak.",
     "csGenerateFailed": "Planlama döngüsü oluşturulamadı. Lütfen tekrar dene.",
-    "csStartFromLast": "Son planlama döngüsünden bir gün sonra başlar.",
-    "csStartFromToday": "Önceki döngü yok — bugün başlar.",
+    "csStartFromLast": "Öneri: son planlama döngüsünden sonraki gün. Herhangi bir tarih seçmek için dokun.",
+    "csStartFromToday": "Önceki döngü yok — önerilen başlangıç: bugün. Herhangi bir tarih seçmek için dokun.",
     "csRangeInvalid": "Lütfen başlangıçtan sonraki geçerli bir bitiş tarihi gir.",
     "solverNotStarted": "Vardiyalar oluşturulamadı. Lütfen tekrar dene.",
     "solverCooldown": "Sonraki vardiyaları istemeden önce lütfen {{seconds}} saniye bekle.",
@@ -420,7 +420,10 @@
     "hoursPerMonth": "Aylık saatler",
     "noHoursYet": "Henüz saat kaydı yok.",
     "openingBalance": "Açılış bakiyesi",
-    "overtime": "Fazla mesai"
+    "overtime": "Fazla mesai",
+    "csOverlapBody": "Bu dönem mevcut bir planlama döngüsüyle çakışıyor. Oluşturmak çift vardiyalara yol açabilir.",
+    "csStartTaken": "Bu tarihte zaten bir planlama döngüsü başlıyor. Lütfen başka bir başlangıç tarihi seç.",
+    "showMore": "Daha fazla göster"
   },
   "notifications": {
     "title": "Bildirimler",
@@ -438,7 +441,14 @@
       "notfall_vertretung": "Acil yerine geçme",
       "urlaub_antrag": "İzin talepleri",
       "urlaub_entscheidung": "İzin kararları",
-      "shiftReminder": "Vardiya hatırlatıcıları"
+      "shiftReminder": "Vardiya hatırlatıcıları",
+      "announcement": "Duyuru",
+      "tasks": "Görev listesi",
+      "polls": "Anket",
+      "documents": "Belge",
+      "emergency": "Acil durum yedeği",
+      "openShift": "Açık vardiya",
+      "shiftSwitch": "Vardiya değişimi"
     },
     "permDenied": "Bildirimler sistem ayarlarında kapalı.",
     "permOpen": "Aç"
@@ -634,5 +644,22 @@
     "wrongPassword": "Yanlış şifre. Lütfen tekrar dene.",
     "chefBlocked": "Hâlâ bir ekibi yönetiyorsun. Hesabını silmeden önce işletmeni devret veya kaldır.",
     "error": "Hesabın silinemedi. Lütfen tekrar dene."
+  },
+  "locked": {
+    "ended": {
+      "title": "Bu işletme artık QuickTeam kullanmıyor",
+      "text": "Aboneliği sona erdi; bu nedenle vardiya planı, mesajlar, izinler ve değişimler artık kullanılamıyor.",
+      "deletion": "İşletmenin verileri sözleşme süresi dolduktan sonra silinecek. Bunlardan bir şeye ihtiyacın varsa işvereninle iletişime geç.",
+      "deletionManager": "İşletmenin verileri sözleşme süresi dolduktan sonra silinecek. Yeniden abone olmak veya verilerini dışa aktarmak için yönetici hesabınla quickteam.at'e giriş yap.",
+      "others": "Başka işletmelere de bağlısın — çalışmaya devam etmek için birine geç."
+    },
+    "paused": {
+      "title": "Deneme süresi sona erdi",
+      "text": "Ödeme yöntemi eklenmediği için bu işletmenin yönetimi duraklatıldı. Çalışanların vardiya planlarını görmeye devam edebilir.",
+      "more": "Devam etmek için quickteam.at üzerinden bir ödeme yöntemi ekle; verilerini de orada dışa aktarabilirsin. Abonelik deneme süresinin bitiminden itibaren 90 gün içinde sürdürülmezse sözleşme sona erer ve işletmenin verileri sözleşme süresi dolduktan sonra silinir.",
+      "others": "Başka bağlantıların var — çalışmaya devam etmek için birine geç."
+    },
+    "openWebsite": "quickteam.at'i aç",
+    "switch": "Bağlantılarına git"
   }
 }

@@ -283,8 +283,8 @@
     "csSolveStarted": "Les services sont en cours de génération. La proposition apparaîtra dans un instant.",
     "csSolveDeferred": "Cycle de planification créé, mais la génération automatique n'a pas pu démarrer. Elle s'exécutera sous peu.",
     "csGenerateFailed": "Impossible de créer le cycle de planification. Veuillez réessayer.",
-    "csStartFromLast": "Commence le lendemain du dernier cycle de planification.",
-    "csStartFromToday": "Aucun cycle précédent — commence aujourd'hui.",
+    "csStartFromLast": "Suggestion : le lendemain du dernier cycle de planification. Touche pour choisir n'importe quelle date.",
+    "csStartFromToday": "Aucun cycle précédent — début suggéré : aujourd'hui. Touche pour choisir n'importe quelle date.",
     "csRangeInvalid": "Veuillez saisir une date de fin valide après la date de début.",
     "solverNotStarted": "Les services n'ont pas pu être générés. Veuillez réessayer.",
     "solverCooldown": "Veuillez patienter {{seconds}} secondes avant de demander les prochains services.",
@@ -420,7 +420,10 @@
     "hoursPerMonth": "Heures par mois",
     "noHoursYet": "Aucune heure enregistrée pour le moment.",
     "openingBalance": "Solde initial",
-    "overtime": "Heures supplémentaires"
+    "overtime": "Heures supplémentaires",
+    "csOverlapBody": "Cette période chevauche un cycle de planification existant. La générer peut créer des créneaux en double.",
+    "csStartTaken": "Un cycle de planification commence déjà à cette date. Choisis une autre date de début.",
+    "showMore": "Afficher plus"
   },
   "notifications": {
     "title": "Notifications",
@@ -438,7 +441,14 @@
       "notfall_vertretung": "Remplacement d'urgence",
       "urlaub_antrag": "Demandes de congé",
       "urlaub_entscheidung": "Décisions de congé",
-      "shiftReminder": "Rappels de service"
+      "shiftReminder": "Rappels de service",
+      "announcement": "Annonce",
+      "tasks": "Liste de tâches",
+      "polls": "Sondage",
+      "documents": "Document",
+      "emergency": "Remplacement d'urgence",
+      "openShift": "Créneau ouvert",
+      "shiftSwitch": "Échange de créneau"
     },
     "permDenied": "Les notifications sont désactivées dans les réglages du système.",
     "permOpen": "Ouvrir"
@@ -634,5 +644,22 @@
     "wrongPassword": "Mot de passe incorrect. Veuillez réessayer.",
     "chefBlocked": "Vous gérez encore une équipe. Transférez ou supprimez votre établissement avant de supprimer votre compte.",
     "error": "Impossible de supprimer votre compte. Veuillez réessayer."
+  },
+  "locked": {
+    "ended": {
+      "title": "Cette entreprise n'utilise plus QuickTeam",
+      "text": "Son abonnement a pris fin : le planning, les messages, les congés et les échanges ne sont plus disponibles.",
+      "deletion": "Les données de l'entreprise seront supprimées une fois la période contractuelle écoulée. Si tu as besoin de quelque chose, adresse-toi à ton employeur.",
+      "deletionManager": "Les données de l'entreprise seront supprimées une fois la période contractuelle écoulée. Pour te réabonner ou exporter tes données, connecte-toi sur quickteam.at avec ton compte responsable.",
+      "others": "Tu fais aussi partie d'autres entreprises — passe à l'une d'elles pour continuer à travailler."
+    },
+    "paused": {
+      "title": "La période d'essai est terminée",
+      "text": "Aucun moyen de paiement n'a été ajouté, la gestion de cette entreprise est donc suspendue. Tes employés voient toujours leurs plannings.",
+      "more": "Pour continuer, ajoute un moyen de paiement sur quickteam.at ; tu peux aussi y exporter tes données. Si l'abonnement n'est pas poursuivi dans les 90 jours suivant la fin de l'essai, le contrat prend fin et les données de l'entreprise sont supprimées une fois la période contractuelle écoulée.",
+      "others": "Tu as d'autres connexions — passe à l'une d'elles pour continuer à travailler."
+    },
+    "openWebsite": "Ouvrir quickteam.at",
+    "switch": "Aller à tes connexions"
   }
 }

@@ -283,8 +283,8 @@
     "csSolveStarted": "Os turnos estão a ser gerados. Verá o horário proposto dentro de momentos.",
     "csSolveDeferred": "Ciclo de planeamento criado, mas a geração automática não pôde iniciar. Irá correr em breve.",
     "csGenerateFailed": "Não foi possível criar o ciclo de planeamento. Tente novamente.",
-    "csStartFromLast": "Começa no dia seguinte ao último ciclo de planeamento.",
-    "csStartFromToday": "Sem ciclo anterior — começa hoje.",
+    "csStartFromLast": "Sugestão: o dia a seguir ao último ciclo de planeamento. Toca para escolher qualquer data.",
+    "csStartFromToday": "Ainda não há ciclos — início sugerido: hoje. Toca para escolher qualquer data.",
     "csRangeInvalid": "Introduza uma data de fim válida, posterior à data de início.",
     "solverNotStarted": "Não foi possível gerar os turnos. Tente novamente.",
     "solverCooldown": "Aguarde {{seconds}} segundos antes de pedir os próximos turnos.",
@@ -420,7 +420,10 @@
     "hoursPerMonth": "Horas por mês",
     "noHoursYet": "Ainda não há horas registadas.",
     "openingBalance": "Saldo inicial",
-    "overtime": "Horas extra"
+    "overtime": "Horas extra",
+    "csOverlapBody": "Este período sobrepõe-se a um ciclo de planeamento existente. Gerá-lo pode criar turnos duplicados.",
+    "csStartTaken": "Já existe um ciclo de planeamento que começa nesta data. Escolhe outra data de início.",
+    "showMore": "Mostrar mais"
   },
   "notifications": {
     "title": "Notificações",
@@ -438,7 +441,14 @@
       "notfall_vertretung": "Cobertura de emergência",
       "urlaub_antrag": "Pedidos de férias",
       "urlaub_entscheidung": "Decisões de férias",
-      "shiftReminder": "Lembretes de turno"
+      "shiftReminder": "Lembretes de turno",
+      "announcement": "Anúncio",
+      "tasks": "Lista de tarefas",
+      "polls": "Inquérito",
+      "documents": "Documento",
+      "emergency": "Substituição de emergência",
+      "openShift": "Turno aberto",
+      "shiftSwitch": "Troca de turno"
     },
     "permDenied": "As notificações estão desativadas nas definições do sistema.",
     "permOpen": "Abrir"
@@ -636,5 +646,22 @@
     "wrongPassword": "Palavra-passe incorreta. Tente novamente.",
     "chefBlocked": "Ainda gere uma equipa. Transfira ou remova a sua empresa antes de eliminar a conta.",
     "error": "Não foi possível eliminar a sua conta. Tente novamente."
+  },
+  "locked": {
+    "ended": {
+      "title": "Esta empresa já não usa o QuickTeam",
+      "text": "A subscrição terminou, por isso o horário, as mensagens, as férias e as trocas já não estão disponíveis.",
+      "deletion": "Os dados da empresa serão eliminados após o prazo contratual. Se precisares de algo, fala com o teu empregador.",
+      "deletionManager": "Os dados da empresa serão eliminados após o prazo contratual. Para voltares a subscrever ou exportares os teus dados, inicia sessão em quickteam.at com a tua conta de gestor.",
+      "others": "Também pertences a outras empresas — muda para uma delas para continuar a trabalhar."
+    },
+    "paused": {
+      "title": "O período experimental terminou",
+      "text": "Não foi adicionado nenhum método de pagamento, por isso a gestão desta empresa está em pausa. Os teus funcionários continuam a ver os seus horários.",
+      "more": "Para continuar, adiciona um método de pagamento em quickteam.at; lá também podes exportar os teus dados. Se a subscrição não for continuada nos 90 dias após o fim do período experimental, o contrato termina e os dados da empresa são eliminados após o prazo contratual.",
+      "others": "Tens outras ligações — muda para uma delas para continuar a trabalhar."
+    },
+    "openWebsite": "Abrir quickteam.at",
+    "switch": "Ir para as tuas ligações"
   }
 }

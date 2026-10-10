@@ -300,8 +300,8 @@
     "csSolveStarted": "Shifts are being generated. You'll see the proposed schedule in a moment.",
     "csSolveDeferred": "Planning cycle created, but automatic generation couldn't start. It will run shortly.",
     "csGenerateFailed": "Couldn't create the planning cycle. Please try again.",
-    "csStartFromLast": "Starts the day after the last planning cycle.",
-    "csStartFromToday": "No previous cycle — starts today.",
+    "csStartFromLast": "Suggested: the day after the last planning cycle. Tap to pick any date.",
+    "csStartFromToday": "No previous cycle — suggested start is today. Tap to pick any date.",
     "csRangeInvalid": "Please enter a valid end date after the start date.",
     "solverNotStarted": "Shifts couldn't be generated. Please try again.",
     "solverCooldown": "Please wait {{seconds}} seconds before requesting the next shifts.",
@@ -437,7 +437,10 @@
     "hoursPerMonth": "Hours per month",
     "noHoursYet": "No hours recorded yet.",
     "openingBalance": "Opening balance",
-    "overtime": "Overtime"
+    "overtime": "Overtime",
+    "csOverlapBody": "This period overlaps an existing planning cycle. Generating it may create double shifts.",
+    "csStartTaken": "A planning cycle already starts on this date. Please pick a different start date.",
+    "showMore": "Show more"
   },
   "notifications": {
     "title": "Notifications",
@@ -455,7 +458,14 @@
       "notfall_vertretung": "Emergency cover",
       "urlaub_antrag": "Vacation requests",
       "urlaub_entscheidung": "Vacation decisions",
-      "shiftReminder": "Shift reminders"
+      "shiftReminder": "Shift reminders",
+      "announcement": "Announcement",
+      "tasks": "Task list",
+      "polls": "Poll",
+      "documents": "Document",
+      "emergency": "Emergency cover",
+      "openShift": "Open shift",
+      "shiftSwitch": "Shift swap"
     },
     "permDenied": "Notifications are turned off in system settings.",
     "permOpen": "Open"

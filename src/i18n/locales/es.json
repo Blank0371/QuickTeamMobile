@@ -283,8 +283,8 @@
     "csSolveStarted": "Se están generando los turnos. Verás la propuesta en un momento.",
     "csSolveDeferred": "Ciclo de planificación creado, pero la generación automática no pudo iniciarse. Se ejecutará en breve.",
     "csGenerateFailed": "No se pudo crear el ciclo de planificación. Inténtalo de nuevo.",
-    "csStartFromLast": "Comienza el día después del último ciclo de planificación.",
-    "csStartFromToday": "Sin ciclo previo — comienza hoy.",
+    "csStartFromLast": "Sugerencia: el día después del último ciclo de planificación. Toca para elegir cualquier fecha.",
+    "csStartFromToday": "Aún no hay ciclos: se sugiere empezar hoy. Toca para elegir cualquier fecha.",
     "csRangeInvalid": "Introduce una fecha de fin válida posterior a la de inicio.",
     "solverNotStarted": "No se pudieron generar los turnos. Inténtalo de nuevo.",
     "solverCooldown": "Espera {{seconds}} segundos antes de solicitar los siguientes turnos.",
@@ -420,7 +420,10 @@
     "hoursPerMonth": "Horas por mes",
     "noHoursYet": "Aún no hay horas registradas.",
     "openingBalance": "Saldo inicial",
-    "overtime": "Horas extra"
+    "overtime": "Horas extra",
+    "csOverlapBody": "Este periodo se solapa con un ciclo de planificación existente. Generarlo puede crear turnos duplicados.",
+    "csStartTaken": "Ya hay un ciclo de planificación que empieza en esta fecha. Elige otra fecha de inicio.",
+    "showMore": "Mostrar más"
   },
   "notifications": {
     "title": "Notificaciones",
@@ -438,7 +441,14 @@
       "notfall_vertretung": "Sustitución de emergencia",
       "urlaub_antrag": "Solicitudes de vacaciones",
       "urlaub_entscheidung": "Decisiones de vacaciones",
-      "shiftReminder": "Recordatorios de turno"
+      "shiftReminder": "Recordatorios de turno",
+      "announcement": "Anuncio",
+      "tasks": "Lista de tareas",
+      "polls": "Encuesta",
+      "documents": "Documento",
+      "emergency": "Cobertura de emergencia",
+      "openShift": "Turno abierto",
+      "shiftSwitch": "Cambio de turno"
     },
     "permDenied": "Las notificaciones están desactivadas en los ajustes del sistema.",
     "permOpen": "Abrir"
@@ -634,5 +644,22 @@
     "wrongPassword": "Contraseña incorrecta. Inténtalo de nuevo.",
     "chefBlocked": "Todavía gestionas un equipo. Transfiere o elimina tu empresa antes de borrar tu cuenta.",
     "error": "No se pudo eliminar tu cuenta. Inténtalo de nuevo."
+  },
+  "locked": {
+    "ended": {
+      "title": "Este negocio ya no usa QuickTeam",
+      "text": "Su suscripción ha terminado, por lo que el horario, los mensajes, las vacaciones y los cambios de turno ya no están disponibles.",
+      "deletion": "Los datos del negocio se eliminarán una vez transcurrido el plazo contractual. Si necesitas algo de ellos, pregunta a tu empleador.",
+      "deletionManager": "Los datos del negocio se eliminarán una vez transcurrido el plazo contractual. Para suscribirte de nuevo o exportar tus datos, inicia sesión en quickteam.at con tu cuenta de responsable.",
+      "others": "También perteneces a otros negocios: cambia a uno de ellos para seguir trabajando."
+    },
+    "paused": {
+      "title": "La prueba ha terminado",
+      "text": "No se añadió ningún método de pago, por lo que la gestión de este negocio está en pausa. Tus empleados pueden seguir viendo sus horarios.",
+      "more": "Para continuar, añade un método de pago en quickteam.at; allí también puedes exportar tus datos. Si la suscripción no se continúa en los 90 días posteriores al fin de la prueba, el contrato termina y los datos del negocio se eliminan una vez transcurrido el plazo contractual.",
+      "others": "Tienes otras conexiones: cambia a una de ellas para seguir trabajando."
+    },
+    "openWebsite": "Abrir quickteam.at",
+    "switch": "Ir a tus conexiones"
   }
 }

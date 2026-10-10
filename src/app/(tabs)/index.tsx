@@ -3,7 +3,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
 import { CalendarCheck2, CalendarClock, CheckCheck, ChevronRight, Clock, MapPin, MessageCircle, Repeat, TreePalm, TriangleAlert } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Modal, Pressable,
   StyleSheet, Text, View,
@@ -17,6 +17,7 @@ import type { CalShift } from "./calendar";
 import { useTheme } from "../../theme/ThemeProvider";
 import { ScreenGradient } from "../../components/ScreenGradient";
 import { RefreshScrollView } from "../../components/RefreshScrollView";
+import { peekCache, readCache, writeCache } from "../../lib/cache";
 
 type UnreadMsg = {
   id: string;
@@ -83,6 +84,17 @@ const monthTarget = (soll: number, ym: string) => {
 // One row per month: 'YYYY-MM' and the hours already worked in it.
 type MonthHours = { ym: string; worked: number };
 
+// Everything Home renders, as cached between visits.
+type HomeCache = {
+  firstName: string;
+  sollStunden: number | null;
+  approvals: PendingApproval[];
+  shiftsReady: number;
+  upcoming: CalShift[];
+  monthHours: MonthHours[];
+  unread: UnreadMsg[];
+};
+
 const catKey = (typ: string) =>
   typ === "allgemein" ? "announcement"
     : typ === "aufgabenliste" ? "tasks"
@@ -98,66 +110,91 @@ export default function Home() {
 
   const isChef = activeMitarbeiter?.rolle_typ === "chef";
 
-  const [firstName, setFirstName] = useState<string>("");
-  const [unread, setUnread] = useState<UnreadMsg[]>([]);
-  const [approvals, setApprovals] = useState<PendingApproval[]>([]);
-  const [upcoming, setUpcoming] = useState<CalShift[]>([]);
-  const [shiftsReady, setShiftsReady] = useState(0); // planning cycles with a proposal awaiting review
-  const [sollStunden, setSollStunden] = useState<number | null>(null);
-  const [monthHours, setMonthHours] = useState<MonthHours[]>([]); // newest first, current month at [0]
+  const [initial] = useState(() => peekCache<HomeCache>(`home:${activeMitarbeiter?.id}`)?.value);
+  const [firstName, setFirstName] = useState<string>(initial?.firstName ?? "");
+  const [unread, setUnread] = useState<UnreadMsg[]>(initial?.unread ?? []);
+  const [approvals, setApprovals] = useState<PendingApproval[]>(initial?.approvals ?? []);
+  const [upcoming, setUpcoming] = useState<CalShift[]>(initial?.upcoming ?? []);
+  const [shiftsReady, setShiftsReady] = useState(initial?.shiftsReady ?? 0); // planning cycles with a proposal awaiting review
+  const [sollStunden, setSollStunden] = useState<number | null>(initial?.sollStunden ?? null);
+  const [monthHours, setMonthHours] = useState<MonthHours[]>(initial?.monthHours ?? []); // newest first, current month at [0]
   const [hoursExpanded, setHoursExpanded] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initial);
+
+  // Last synced Home for this persona: painted at once, then revalidated.
+  const cacheKey = `home:${activeMitarbeiter?.id}`;
+  const hydratedKey = useRef<string | null>(initial ? cacheKey : null);
+
+  const apply = (h: HomeCache) => {
+    setFirstName(h.firstName);
+    setSollStunden(h.sollStunden);
+    setApprovals(h.approvals);
+    setShiftsReady(h.shiftsReady);
+    setUpcoming(h.upcoming);
+    setMonthHours(h.monthHours);
+    setUnread(h.unread);
+  };
 
   const load = useCallback(async () => {
     if (!user || !activeMitarbeiter) return;
+    const bid = activeMitarbeiter.betrieb_id;
+
+    // Cold start: paint from disk before the network answers.
+    if (hydratedKey.current !== cacheKey) {
+      hydratedKey.current = cacheKey;
+      const cached = await readCache<HomeCache>(cacheKey);
+      if (cached) { apply(cached.value); setLoading(false); }
+    }
+
+    // Each part returns null when its fetch failed (offline) — then nothing is
+    // applied and the cached screen stays as it is.
 
     // who am I (for the greeting)
-    const { data: me } = await supabase
-      .from("mitarbeiter")
-      .select("vorname, soll_stunden")
-      .eq("id", activeMitarbeiter.id)
-      .maybeSingle();
-    setFirstName((me?.vorname ?? "").trim());
-    setSollStunden((me?.soll_stunden as number | null) ?? null);
+    const loadMe = async () => {
+      const { data: me, error } = await supabase
+        .from("mitarbeiter")
+        .select("vorname, soll_stunden")
+        .eq("id", activeMitarbeiter.id)
+        .maybeSingle();
+      if (error) return null;
+      return { firstName: (me?.vorname ?? "").trim(), sollStunden: (me?.soll_stunden as number | null) ?? null };
+    };
 
     // Managers see what they still have to decide on: vacation requests always,
     // shift swaps only when the business requires manager approval for them.
-    if (isChef) {
-      const { data: settings } = await supabase
-        .from("betriebs_einstellungen")
-        .select("ask_chef_for_shift_switch")
-        .eq("betrieb_id", activeMitarbeiter.betrieb_id)
-        .maybeSingle();
-      const swapApprovalOn = !!settings?.ask_chef_for_shift_switch;
-
-      const [vac, swaps, team, emg, ready] = await Promise.all([
+    const loadChef = async () => {
+      const [settings, vac, swaps, team, emg, ready] = await Promise.all([
+        supabase.from("betriebs_einstellungen")
+          .select("ask_chef_for_shift_switch")
+          .eq("betrieb_id", bid)
+          .maybeSingle(),
         supabase.from("urlaub")
           .select("id, mitarbeiter_id, von, bis")
-          .eq("betrieb_id", activeMitarbeiter.betrieb_id)
+          .eq("betrieb_id", bid)
           .eq("status", "requested")
           .order("von", { ascending: true }),
-        swapApprovalOn
-          ? supabase.from("schichttausch_anfragen")
-              .select("id, anbietender_mitarbeiter_id, erstellt_am")
-              .eq("betrieb_id", activeMitarbeiter.betrieb_id)
-              .eq("status", "wartet_auf_chef")
-              .order("erstellt_am", { ascending: false })
-          : Promise.resolve({ data: [] as any[] }),
+        supabase.from("schichttausch_anfragen")
+          .select("id, anbietender_mitarbeiter_id, erstellt_am")
+          .eq("betrieb_id", bid)
+          .eq("status", "wartet_auf_chef")
+          .order("erstellt_am", { ascending: false }),
         supabase.from("mitarbeiter").select("id, vorname, nachname")
-          .eq("betrieb_id", activeMitarbeiter.betrieb_id),
+          .eq("betrieb_id", bid),
         // Reported emergencies the manager still has to act on (call out a replacement).
         supabase.from("notfaelle")
           .select("id, melder_id, status, erstellt_am")
-          .eq("betrieb_id", activeMitarbeiter.betrieb_id)
+          .eq("betrieb_id", bid)
           .eq("status", "gemeldet")
           .order("erstellt_am", { ascending: true }),
         // Generated schedules waiting for the manager to review them.
         supabase.from("planungszyklen")
           .select("id")
-          .eq("betrieb_id", activeMitarbeiter.betrieb_id)
+          .eq("betrieb_id", bid)
           .eq("status", "vorschlag_bereit"),
       ]);
-      setShiftsReady((ready.data ?? []).length);
+      if (settings.error || vac.error || team.error || emg.error || ready.error) return null;
+      // Fetched alongside the setting (saves a round trip); only shown when on.
+      const swapApprovalOn = !!settings.data?.ask_chef_for_shift_switch;
 
       const nameById = new Map<string, string>();
       (team.data ?? []).forEach((p: any) => nameById.set(p.id, `${p.vorname} ${p.nachname}`.trim()));
@@ -175,39 +212,43 @@ export default function Home() {
         who: nameById.get(v.mitarbeiter_id) ?? "—",
         detail: fmtRange(v.von, v.bis, lang),
       }));
-      const swapItems: PendingApproval[] = (swaps.data ?? []).map((s: any) => ({
+      const swapItems: PendingApproval[] = (swapApprovalOn ? swaps.data ?? [] : []).map((s: any) => ({
         id: `swap:${s.id}`,
         kind: "swap",
         who: s.anbietender_mitarbeiter_id ? (nameById.get(s.anbietender_mitarbeiter_id) ?? "") : "",
         detail: "",
       }));
-      setApprovals([...emgItems, ...vacItems, ...swapItems]);
-      setUpcoming([]);
-    } else {
-      setApprovals([]);
-      setShiftsReady(0);
-      // Employees see their next few upcoming shifts plus a worked-hours bar for
-      // recent months, both drawn from the same roster RPC the calendar uses
-      // (respects the business visibility settings).
+      return {
+        approvals: [...emgItems, ...vacItems, ...swapItems],
+        shiftsReady: (ready.data ?? []).length,
+        upcoming: [] as CalShift[],
+        monthHours: [] as MonthHours[],
+      };
+    };
+
+    // Employees see their next few upcoming shifts plus a worked-hours bar for
+    // recent months, both drawn from the same roster RPC the calendar uses
+    // (respects the business visibility settings).
+    const loadEmployee = async () => {
       const now = new Date();
       const today = iso(now);
       const to = iso(new Date(Date.now() + 60 * 86400000));
       // Reach back to the start of the month six months ago so the expandable
       // bar has some history to show; go forward 60 days for upcoming shifts.
       const from = iso(new Date(now.getFullYear(), now.getMonth() - 5, 1));
-      const { data: sh } = await supabase.rpc("kalender_schichten", {
-        p_betrieb_id: activeMitarbeiter.betrieb_id,
+      const { data: sh, error } = await supabase.rpc("kalender_schichten", {
+        p_betrieb_id: bid,
         p_von: from,
         p_bis: to,
         p_mitarbeiter_id: activeMitarbeiter.id,
       });
+      if (error) return null;
       const all = (sh as CalShift[]) ?? [];
 
       const mine = all
         .filter((s) => s.mine && s.datum >= today)
         .sort((a, b) => (a.datum + a.start_zeit).localeCompare(b.datum + b.start_zeit))
         .slice(0, 3);
-      setUpcoming(mine);
 
       // Hours already worked, per month: my shifts up to and including this month,
       // summed by calendar month. A shift counts only for the time already elapsed
@@ -226,58 +267,72 @@ export default function Home() {
       const rows: MonthHours[] = Object.entries(worked)
         .map(([ym, w]) => ({ ym, worked: w }))
         .sort((a, b) => b.ym.localeCompare(a.ym)); // newest first
-      setMonthHours(rows);
-    }
+      return { approvals: [] as PendingApproval[], shiftsReady: 0, upcoming: mine, monthHours: rows };
+    };
 
-    // broadcast messages for this business, newest first
-    const { data: rows } = await supabase
-      .from("benachrichtigungen")
-      .select("id, typ, titel, erstellt_am, autor_id")
-      .eq("betrieb_id", activeMitarbeiter.betrieb_id)
-      .is("mitarbeiter_id", null)
-      .is("geloescht_am", null)
-      .order("erstellt_am", { ascending: false });
+    // New broadcast messages since this device last looked at Home.
+    const loadUnread = async () => {
+      const [{ data: rows, error }, lastSeen] = await Promise.all([
+        // broadcast messages for this business, newest first
+        supabase
+          .from("benachrichtigungen")
+          .select("id, typ, titel, erstellt_am, autor_id")
+          .eq("betrieb_id", bid)
+          .is("mitarbeiter_id", null)
+          .is("geloescht_am", null)
+          .order("erstellt_am", { ascending: false }),
+        // Timestamp of the newest message this device has already seen on Home.
+        // Anything newer counts as "new"; the first ever visit (null) shows all unread.
+        AsyncStorage.getItem(seenKey(activeMitarbeiter.id)),
+      ]);
+      if (error) return null;
 
-    const list = rows ?? [];
-    const ids = list.map((m: any) => m.id);
-    if (ids.length === 0) { setUnread([]); setLoading(false); return; }
+      const list = rows ?? [];
+      const ids = list.map((m: any) => m.id);
+      if (ids.length === 0) return { unread: [] as UnreadMsg[], newest: null };
 
-    // Timestamp of the newest message this device has already seen on Home.
-    // Anything newer counts as "new"; the first ever visit (null) shows all unread.
-    const lastSeen = await AsyncStorage.getItem(seenKey(activeMitarbeiter.id));
+      // Resolve just the broadcast authors' names (respects the roster RLS: we
+      // only ask the server to name the specific ids we already have).
+      const authorIds = Array.from(
+        new Set(list.map((m: any) => m.autor_id).filter(Boolean))
+      ) as string[];
+      const [reads, people] = await Promise.all([
+        supabase.from("benachrichtigung_gelesen").select("benachrichtigung_id").in("benachrichtigung_id", ids),
+        authorIds.length > 0
+          ? supabase.rpc("mitarbeiter_namen", { p_betrieb_id: bid, p_ids: authorIds })
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const readSet = new Set((reads.data ?? []).map((r: any) => r.benachrichtigung_id));
+      const nameOf = new Map<string, string>();
+      (people.data ?? []).forEach((p: any) => nameOf.set(p.id, p.name));
 
-    // Resolve just the broadcast authors' names (respects the roster RLS: we
-    // only ask the server to name the specific ids we already have).
-    const authorIds = Array.from(
-      new Set(list.map((m: any) => m.autor_id).filter(Boolean))
-    ) as string[];
-    const [reads, people] = await Promise.all([
-      supabase.from("benachrichtigung_gelesen").select("benachrichtigung_id").in("benachrichtigung_id", ids),
-      authorIds.length > 0
-        ? supabase.rpc("mitarbeiter_namen", { p_betrieb_id: activeMitarbeiter.betrieb_id, p_ids: authorIds })
-        : Promise.resolve({ data: [] as any[] }),
-    ]);
-    const readSet = new Set((reads.data ?? []).map((r: any) => r.benachrichtigung_id));
-    const nameOf = new Map<string, string>();
-    (people.data ?? []).forEach((p: any) => nameOf.set(p.id, p.name));
+      const unread: UnreadMsg[] = list
+        .filter((m: any) => !readSet.has(m.id))
+        .filter((m: any) => !lastSeen || m.erstellt_am > lastSeen)
+        .map((m: any) => ({
+          id: m.id,
+          typ: m.typ,
+          titel: m.titel,
+          erstellt_am: m.erstellt_am,
+          autorName: m.autor_id ? (nameOf.get(m.autor_id) ?? "") : "",
+        }));
+      // `list` is ordered newest-first, so [0] is the latest.
+      return { unread, newest: list[0].erstellt_am as string };
+    };
 
-    const unreadList: UnreadMsg[] = list
-      .filter((m: any) => !readSet.has(m.id))
-      .filter((m: any) => !lastSeen || m.erstellt_am > lastSeen)
-      .map((m: any) => ({
-        id: m.id,
-        typ: m.typ,
-        titel: m.titel,
-        erstellt_am: m.erstellt_am,
-        autorName: m.autor_id ? (nameOf.get(m.autor_id) ?? "") : "",
-      }));
-    setUnread(unreadList);
+    // The three parts are independent — fetch them in parallel.
+    const [me, role, msgs] = await Promise.all([loadMe(), isChef ? loadChef() : loadEmployee(), loadUnread()]);
+    if (!me || !role || !msgs) { setLoading(false); return; }
+
+    const next: HomeCache = { ...me, ...role, unread: msgs.unread };
+    apply(next);
     setLoading(false);
+    writeCache(cacheKey, next);
 
     // Remember the newest message so it won't be flagged "new" next time Home
-    // is viewed. `list` is ordered newest-first, so [0] is the latest.
-    await AsyncStorage.setItem(seenKey(activeMitarbeiter.id), list[0].erstellt_am);
-  }, [user, activeMitarbeiter, isChef, lang]);
+    // is viewed.
+    if (msgs.newest) await AsyncStorage.setItem(seenKey(activeMitarbeiter.id), msgs.newest);
+  }, [user, activeMitarbeiter, isChef, lang, cacheKey]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 

@@ -115,9 +115,15 @@ export async function unregisterPush(): Promise<void> {
   }
 }
 
+// Signature of the reminder set currently scheduled on this device. The calendar
+// re-syncs on every focus; when nothing changed we skip the native cancel +
+// re-schedule round trips entirely (each one crosses the bridge on iOS).
+let scheduledSig: string | null = null;
+
 /** Cancel every on-device shift reminder (e.g. the previous user's, on sign-out). */
 export async function cancelShiftReminders(): Promise<void> {
   if (Platform.OS === "web" || !Device.isDevice) return;
+  scheduledSig = null;
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (e) {
@@ -137,7 +143,8 @@ function shiftStart(datum: string, start: string): Date {
 /**
  * Cancel every previously scheduled reminder and re-schedule from scratch for the
  * user's upcoming shifts. Idempotent: call it after each calendar load so the
- * schedule always reflects the latest roster. Does nothing (only clears) when the
+ * schedule always reflects the latest roster; a no-op when the computed set
+ * matches what is already scheduled. Does nothing (only clears) when the
  * `shiftReminder` preference is off.
  *
  *   • Evening before at 18:00 — one summary per day that has shift(s).
@@ -149,10 +156,10 @@ export async function scheduleShiftReminders(
   enabled: boolean,
 ): Promise<void> {
   if (Platform.OS === "web" || !Device.isDevice) return;
-  try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    if (!enabled) return;
 
+  type Req = { title: string; body: string; shift_id: string; date: Date };
+  const reqs: Req[] = [];
+  if (enabled) {
     const now = new Date();
     const mine = shifts.filter((s) => s.mine);
 
@@ -161,14 +168,7 @@ export async function scheduleShiftReminders(
       const start = shiftStart(s.datum, s.start_zeit);
       const when = new Date(start.getTime() - 2 * 60 * 60 * 1000);
       if (when > now) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: copy.soonTitle,
-            body: copy.soonBody(s.label || copy.shiftWord, hhmm(s.start_zeit)),
-            data: { typ: "shiftReminder", shift_id: s.id },
-          },
-          trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
-        });
+        reqs.push({ title: copy.soonTitle, body: copy.soonBody(s.label || copy.shiftWord, hhmm(s.start_zeit)), shift_id: s.id, date: when });
       }
     }
 
@@ -182,16 +182,24 @@ export async function scheduleShiftReminders(
       const [y, mo, d] = datum.split("-").map(Number);
       const eve = new Date(y, (mo ?? 1) - 1, (d ?? 1) - 1, 18, 0, 0, 0); // 18:00 the day before
       if (eve > now) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: copy.eveningTitle,
-            body: copy.eveningBody(s.label || copy.shiftWord, hhmm(s.start_zeit)),
-            data: { typ: "shiftReminder", shift_id: s.id },
-          },
-          trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: eve },
-        });
+        reqs.push({ title: copy.eveningTitle, body: copy.eveningBody(s.label || copy.shiftWord, hhmm(s.start_zeit)), shift_id: s.id, date: eve });
       }
     }
+  }
+
+  const sig = JSON.stringify(reqs.map((r) => [r.title, r.body, r.shift_id, r.date.getTime()]));
+  if (sig === scheduledSig) return;
+
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    scheduledSig = null;
+    await Promise.all(reqs.map((r) =>
+      Notifications.scheduleNotificationAsync({
+        content: { title: r.title, body: r.body, data: { typ: "shiftReminder", shift_id: r.shift_id } },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: r.date },
+      })
+    ));
+    scheduledSig = sig;
   } catch (e) {
     console.warn("[push] schedule reminders failed", e);
   }

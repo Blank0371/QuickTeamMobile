@@ -17,9 +17,38 @@ This file is the changelog / feature ledger for QuickTeam. Every change to the a
 
 ---
 
-## 1.3.X — (in development, next build)
+## 1.4.X — (in development, next build)
 
-_Changes made after the `1.2.0` build land here. Add a `### 1.3.X` entry per change._
+_Changes made after the `1.3.0` build land here. Add a `### 1.4.X` entry per change._
+
+_Schwerpunkt dieser Version: **Performance** (Beschwerden über eine langsame App auf dem iPhone 13)._
+
+### 1.4.0
+- **Schicht-Erinnerungen: kein Neu-Planen ohne Änderung.** Der Kalender hat bei jedem Fokus und jedem Laden alle lokalen Erinnerungen gelöscht und danach jede einzeln (nacheinander, je ein nativer Aufruf) neu geplant — auf iOS spürbar blockierend. Jetzt wird aus Schichten + Texten eine Signatur gebildet; stimmt sie mit dem bereits geplanten Stand überein, passiert nichts. Bei Änderungen werden die Erinnerungen parallel statt nacheinander geplant. `cancelShiftReminders()` (Abmelden) setzt die Signatur zurück. — `src/lib/notifications.ts`
+
+### 1.4.1
+- **Mitteilungen: weniger Daten, weniger Wartezeit, keine Reload-Stürme.** Der Feed lud bisher *alle* Broadcasts des Betriebs (mit Text und `inhalt`) und schnitt erst auf dem Gerät auf die sichtbaren 10 zu; danach wurde zuerst auf die Karten (Notfall/Ausschreibung/Tausch) gewartet, bevor der Feed weiterlud. Jetzt: zwei parallele Abfragen — Karten-Typen komplett, normale Mitteilungen serverseitig gepaged (`range` + `count`, „Mehr laden" unverändert) — und Karten und Feed bauen parallel. Realtime-Änderungen (z. B. beim Veröffentlichen eines Plans viele `schicht_zuweisungen` auf einmal) werden auf ein Neuladen nach 500 ms zusammengefasst und nur ausgeführt, solange der Tab sichtbar ist (Fokus lädt ohnehin neu). — `src/app/(tabs)/messages.tsx`
+
+### 1.4.2
+- **Cache-first auf allen Tabs: sofort anzeigen, im Hintergrund aktualisieren.** `lib/cache` hält Einträge zusätzlich im Speicher (`peekCache`, synchron), sodass ein erneuter Tab-Besuch ohne Spinner und ohne AsyncStorage-Zugriff sofort den letzten Stand zeigt; beim Kaltstart kommt er aus AsyncStorage. Startseite, Mitteilungen, Planung (inkl. Notfall-Bereich) und Manager nutzen das jetzt wie bisher nur der Kalender: Cache anzeigen → frisch laden → ersetzen und Cache schreiben. Der Spinner erscheint nur noch, wenn gar nichts gecacht ist. Schlägt das Laden fehl (offline), bleibt der angezeigte Stand stehen statt leerer Listen. Planung und Manager laden jetzt bei jedem Tab-Besuch im Hintergrund neu (vorher nur beim ersten Öffnen), und ein Neuladen nach Aktionen (Präferenz speichern, Urlaub genehmigen …) ersetzt die Ansicht nicht mehr durch einen Spinner. Manager: alle Daten werden gesammelt und in einem Render übernommen; der Aktualisieren-Button zeigt das Hintergrund-Laden (`refreshing`). Kalender: kein Spinner mehr bei jedem Fokus, wenn der Monat im Speicher liegt. Mitteilungen: `myVotes` ist jetzt ein Array (JSON-fähig für den Cache). Cache wird beim Abmelden wie bisher komplett gelöscht. — `src/lib/cache.ts`, `src/app/(tabs)/index.tsx`, `src/app/(tabs)/messages.tsx`, `src/app/(tabs)/scheduling.tsx`, `src/app/(tabs)/manager.tsx`, `src/app/(tabs)/calendar.tsx`
+
+### 1.4.3
+- **Weniger Netzwerk-Wartekette.** Startseite: Profil, Rollen-Teil (Chef-Freigaben bzw. Mitarbeiter-Schichten/Stunden) und neue Mitteilungen laden parallel statt in bis zu vier Stufen nacheinander; beim Chef wird die Einstellung „Tausch braucht Freigabe" zusammen mit den Tausch-Anfragen geladen statt davor. Manager: `offene_stellen_pro_zyklus` läuft im selben parallelen Block statt danach. — `src/app/(tabs)/index.tsx`, `src/app/(tabs)/manager.tsx`
+
+### 1.4.4
+- **Manager: Überstunden/Stunden über das 1000-Zeilen-Limit hinaus korrekt.** Der Manager lud die komplette Historie von `schicht_zuweisungen` und `schicht_instanzen` (für Überstunden über alle Monate) in einer Abfrage — PostgREST liefert aber höchstens 1000 Zeilen pro Antwort, darüber wurden Stunden, Schichtanzahl und Überstunden stillschweigend zu niedrig berechnet (und geplante Schichten pro Zyklus falsch gezählt). Neuer Helfer `fetchAll`: erste Seite mit `count`, restliche Seiten parallel, Seitengröße folgt dem tatsächlichen Server-Limit, stabile Sortierung über `id`. Gilt auch für die Urlaubs-Historie des Betriebs. Keine DB-Änderung. — `src/lib/fetchAll.ts` (neu), `src/app/(tabs)/manager.tsx`
+
+### 1.4.5
+- **Lange Listen: nur rendern, was sichtbar ist.** Mitteilungen: der Feed ist jetzt eine virtualisierte `FlatList` statt `ScrollView` + `map` — nur Karten in der Nähe des sichtbaren Bereichs sind gemountet (alte Notfall-/Ausschreibungs-/Tausch-Karten bleiben dauerhaft im Feed, die Liste wächst also). Suche, Sortierung und Kategorie sind der Listen-Header, „Mehr laden" der Footer; Pull-to-Refresh über den neuen Hook `useRefreshControl` (auch von `RefreshScrollView` genutzt). Manager → Urlaub: die eingeklappte Liste „Entschiedene Anträge" rendert in 20er-Schritten mit „Mehr anzeigen (n)" statt der ganzen Historie auf einmal (neuer Key `manager.showMore`, alle 10 Sprachen). — `src/app/(tabs)/messages.tsx`, `src/app/(tabs)/manager.tsx`, `src/components/RefreshScrollView.tsx`, `src/i18n/locales/*.json`
+
+### 1.4.6
+- **Mitteilungen: Suche filtert auch Schicht-Karten.** Die Suche filterte nur normale Mitteilungen — Notfall-Vertretungen, offene Schichten und Schichttausch-Karten blieben immer stehen. Jetzt gilt derselbe Suchbegriff für alle Karten, abgeglichen mit dem, was die Karte zeigt: Badge und Titel (in der aktuellen Sprache, „Notfall" findet also alle Notfall-Karten), Namen (Melder/Übernehmer bzw. Anbieter/Übernehmer), bei offenen Schichten zusätzlich Kommentar und Rollennamen. — `src/app/(tabs)/messages.tsx`
+
+---
+
+## 1.3.0 — BUILT (EAS iOS production build, 2026-10-08)
+
+_This build bundles all `1.3.X` changes below. App version `1.3.0`; iOS build number auto-incremented remotely by EAS (`appVersionSource: remote`, `autoIncrement`). Built via `eas build --platform ios --profile production` and submitted to App Store Connect. Tested beforehand via internal `preview` builds (2026-10-08 ×2) and a `development` client build._
 
 ### 1.3.0
 - **Anmeldung per Telefonnummer entfernt.** Die Option „Stattdessen Telefonnummer verwenden" auf der Anmeldeseite (SMS-Code-Login, legte bei Erstnutzung auch ein Konto an) ist weg — jeder unangemeldete SMS-Versand war ein Kosten-/SMS-Pumping-Risiko. Anmeldung/Registrierung nur noch per E-Mail + Passwort. Eine Telefonnummer kann weiterhin in den Einstellungen zum bestehenden Konto hinzugefügt werden (6-stelliger SMS-Code, `phone_change`). `signInWithPhone`/`verifyPhone` aus dem Auth-Context entfernt, ungenutzte Übersetzungs-Keys (`auth.phoneTitle`, `phoneSubtitle`, `phonePlaceholder`, `usePhoneInstead`, `useEmailInstead`) aus allen 10 Sprachen gelöscht. Hinweis: Das sperrt den Endpunkt nicht serverseitig — siehe Supabase-Konfiguration. — `src/app/(auth)/index.tsx`, `src/context/auth.tsx`, `src/i18n/locales/*.json`, `DOCUMENTATION.md`
@@ -29,6 +58,18 @@ _Changes made after the `1.2.0` build land here. Add a `### 1.3.X` entry per cha
 
 ### 1.3.2
 - **Solver: Wochen-Zyklen funktionieren.** Soll-Stunden werden pro Kalendermonat berechnet: Zyklus-Soll = anteiliges Monats-Soll bis Zyklusende minus bereits geplanter Stunden desselben Monats — Wochen-Zyklen summieren sich so zum Monat, eine zu kurze Woche wird in der nächsten aufgeholt. Zyklen über zwei Monate bekommen je Monat eigenes Soll und eigene Kappung. Urlaub mindert das Soll anteilig nach Arbeitstagen (Tage mit einer Schicht, die die Person übernehmen könnte); Urlaub an Schließtagen mindert nichts. Der Solver lädt jetzt den ganzen Monat plus die vollen Mo–So-Wochen an den Rändern (vorher nur Zyklus + 2 Tage) → harte Monatskappung ohne vom DB-Trigger abgelehnte Zeilen, 48-h-Wochenlimit auch bei Zyklen, die nicht montags beginnen, Wunsch-/Ungern-Schichten über den Monat gezählt. Betriebsweite Historie wird in 1000er-Seiten geladen (Response-Limit). Feld `startSaldo` entfernt. Verhaltensänderung: herausgerufene Schichten zählen nur noch zu den Zyklus-Stunden, wenn der Betrieb Notfall-Schichten mitzählt (wie schon bei Überstunden). Ergebnis (Harness): Minijobber bei 4 Wochen-Zyklen 44 h statt 120 h (Soll 40 h), Vollzeit 166–168 h statt 0–24 h (Soll 173 h), 0 statt 34 abgelehnte Zeilen; Monats-Zyklen bit-identisch zu vorher. **Edge Function `plan-generieren` v14 deployt** (JWT-Prüfung an). — `supabase/functions/plan-generieren/{solver,index,harness,scale-harness}.ts`, `supabase/functions/plan-generieren/woche-harness.ts` (neu), `TESTING.md`, `DOCUMENTATION.md`
+
+### 1.3.3
+- **Fehlende Übersetzungen für Mitteilungs-Badges.** Die Badges in Mitteilungen/Startseite/Verfassen nutzen `notifications.item.announcement`, `tasks`, `polls`, `documents`, `emergency`, `openShift`, `shiftSwitch` — diese Keys waren seit dem Umbau der Benachrichtigungs-Einstellungen in keiner Sprache mehr vorhanden, daher erschien der rohe Key. In allen 10 Sprachen ergänzt. Außerdem fehlte der komplette `locked`-Abschnitt (Betrieb beendet / Testphase abgelaufen) in es, fr, it, pt, ru, tr, uk (fiel auf Englisch zurück) — ergänzt. — `src/i18n/locales/*.json`
+
+### 1.3.4
+- **Schichten generieren: Kalender für das Enddatum.** Das Enddatum war ein Textfeld (YYYY-MM-DD), auf dem iPhone öffnete sich kein Kalender. Jetzt öffnet ein Tipp auf das Feld den nativen Kalender (iOS SwiftUI / Android Compose via `DateTimeField`) unterhalb der Zeile; erneutes Tippen schließt ihn. Das Startdatum bleibt fest (Tag nach dem letzten Zyklus). — `src/app/(tabs)/manager.tsx`
+
+### 1.3.5
+- **Präferenzen: Schichtname nicht mehr senkrecht.** Im Wochentag- und Datums-Sheet standen Schichtname und die beiden Buttons („Lieber arbeiten" / „Lieber nicht arbeiten") nebeneinander — auf dem iPhone blieb für den Namen nur ein Buchstabe pro Zeile, das Feld wurde extrem hoch. Jetzt Name oben, Buttons darunter in voller Breite (neuer Style `prefRow`). — `src/app/(tabs)/scheduling.tsx`
+
+### 1.3.6
+- **Schichten generieren: beliebiger Zeitraum statt fester Start.** Das Startdatum war fest auf den Tag nach dem letzten Planungszyklus gesetzt. Jetzt ist das nur noch der Vorschlag — ein Tipp auf „Von" öffnet (wie bei „Bis") den nativen Kalender, jedes Datum ist wählbar. Liegt „Bis" danach vor dem neuen Start, springt es auf das Monatsende. **Überschneidungs-Warnung:** überlappt der Zeitraum einen bestehenden (nicht fehlgeschlagenen) Planungszyklus, erscheint ein roter Hinweis im Sheet und im Bestätigungs-Popup, dass doppelte Schichten entstehen können (`manager.csOverlapBody`); die bisherige Warnung bei bereits existierenden Schichten bleibt. Da die DB `UNIQUE (betrieb_id, zeitraum_start)` erzwingt, wird ein Start am selben Tag wie ein bestehender Zyklus blockiert (`manager.csStartTaken`); ein ausgeblendeter **fehlgeschlagener** Zyklus mit demselben Start wird vor dem Anlegen gelöscht, statt die Erstellung scheitern zu lassen. Hinweistexte `csStartFromLast`/`csStartFromToday` in allen 10 Sprachen angepasst. — `src/app/(tabs)/manager.tsx`, `src/i18n/locales/*.json`
 
 ---
 
